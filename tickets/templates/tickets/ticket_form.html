@@ -105,8 +105,11 @@
 
                 <!-- Attachment Field -->
                 <div class="border-t border-slate-800/60 pt-4">
-                    <label for="{{ form.attachment.id_for_label }}" class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">ไฟล์แนบ (Attachment)</label>
+                    <label for="{{ form.attachment.id_for_label }}" class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">ไฟล์แนบ (Attachment) <span class="text-xs text-slate-500 font-normal lowercase">(สูงสุด 10 MB)</span></label>
                     {{ form.attachment }}
+                    <p id="file-size-error" class="hidden text-xs text-rose-400 mt-2 font-semibold flex items-center gap-1">
+                        ⚠️ <span>ขนาดไฟล์แนบต้องไม่เกิน 10 MB</span>
+                    </p>
                     {% if object and object.attachment %}
                         <p class="text-xs text-indigo-400 mt-2 flex items-center gap-1">
                             <span>ไฟล์ปัจจุบัน:</span>
@@ -128,4 +131,43 @@
         </form>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const fileInput = document.querySelector('input[type="file"]');
+    const errorMsg = document.getElementById('file-size-error');
+    const form = document.querySelector('form');
+    const MAX_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+
+    if (fileInput) {
+        fileInput.addEventListener('change', function() {
+            if (this.files && this.files[0]) {
+                const file = this.files[0];
+                if (file.size > MAX_SIZE_BYTES) {
+                    const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+                    alert(`❌ ไฟล์แนบมีขนาดใหญ่เกินไป!\n\nไฟล์ที่คุณเลือกมีขนาด ${sizeMB} MB ซึ่งเกินโควตาที่กำหนดไว้ 10 MB\nกรุณาเลือกไฟล์แนบที่มีขนาดไม่เกิน 10 MB ครับ`);
+                    this.value = ''; // Clear selected file
+                    if (errorMsg) errorMsg.classList.remove('hidden');
+                } else {
+                    if (errorMsg) errorMsg.classList.add('hidden');
+                }
+            }
+        });
+    }
+
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            if (fileInput && fileInput.files && fileInput.files[0]) {
+                if (fileInput.files[0].size > MAX_SIZE_BYTES) {
+                    e.preventDefault();
+                    alert('❌ ไม่สามารถส่งฟอร์มได้ เนื่องจากไฟล์แนบมีขนาดเกิน 10 MB');
+                    fileInput.value = '';
+                    if (errorMsg) errorMsg.classList.remove('hidden');
+                    return false;
+                }
+            }
+        });
+    }
+});
+</script>
 {% endblock %}
