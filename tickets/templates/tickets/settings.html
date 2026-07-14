@@ -1,0 +1,271 @@
+{% extends 'tickets/base.html' %}
+
+{% block header_title %}ตั้งค่าระบบ (System Settings){% endblock %}
+
+{% block content %}
+<div class="space-y-6 max-w-5xl mx-auto">
+
+    {% if messages %}
+    <div class="space-y-2">
+        {% for message in messages %}
+        <div class="p-4 rounded-xl {% if message.tags == 'success' %}bg-emerald-500/10 border border-emerald-500/20 text-emerald-400{% else %}bg-rose-500/10 border border-rose-500/20 text-rose-400{% endif %} flex items-center gap-3">
+            <span class="text-lg">{% if message.tags == 'success' %}✅{% else %}❌{% endif %}</span>
+            <span class="text-sm font-medium">{{ message.message }}</span>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Info Banner -->
+    <div class="glass-card p-6 rounded-2xl border border-slate-800/80 flex items-center justify-between gap-6 bg-slate-900/20">
+        <div class="space-y-1">
+            <h2 class="text-xl font-bold text-white">ตั้งค่าการจัดส่งอีเมลแจ้งเตือน (Outbound SMTP Configuration)</h2>
+            <p class="text-xs text-slate-400">
+                จัดการเซิร์ฟเวอร์ SMTP สำหรับจัดส่งอีเมลจริง เช่น Gmail, Microsoft Outlook หรือ Custom Gateway ในจุดเดียว
+            </p>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+        
+        <!-- Form for creating/editing configuration -->
+        <div class="glass-panel p-6 rounded-2xl border border-slate-800/80 space-y-4 lg:col-span-1">
+            <h3 class="text-base font-bold text-white border-b border-slate-800 pb-3">
+                {% if editing_id %}⚙️ แก้ไขการตั้งค่า SMTP{% else %}➕ เพิ่มเซิร์ฟเวอร์ SMTP ใหม่{% endif %}
+            </h3>
+
+            <form method="POST" action="" class="space-y-4">
+                {% csrf_token %}
+                
+                <div>
+                    <label class="block text-xs text-slate-400 font-semibold mb-1.5 uppercase tracking-wider">ชื่อเซิร์ฟเวอร์:</label>
+                    {{ form.name }}
+                </div>
+
+                <div>
+                    <label class="block text-xs text-slate-400 font-semibold mb-1.5 uppercase tracking-wider">ผู้ให้บริการ (Provider Preset):</label>
+                    {{ form.provider }}
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs text-slate-400 font-semibold mb-1.5 uppercase tracking-wider">Host เซิร์ฟเวอร์:</label>
+                        {{ form.host }}
+                    </div>
+                    <div>
+                        <label class="block text-xs text-slate-400 font-semibold mb-1.5 uppercase tracking-wider">พอร์ต (Port):</label>
+                        {{ form.port }}
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-3">
+                    {{ form.use_tls }}
+                    <label for="id_use_tls" class="text-xs text-slate-300 font-medium">เปิดใช้งานการเข้ารหัส TLS (Use TLS)</label>
+                </div>
+
+                <div>
+                    <label class="block text-xs text-slate-400 font-semibold mb-1.5 uppercase tracking-wider">ชื่อผู้ใช้ (SMTP Username / Email):</label>
+                    {{ form.username }}
+                </div>
+
+                <div>
+                    <label class="block text-xs text-slate-400 font-semibold mb-1.5 uppercase tracking-wider">รหัสผ่านแอป (App Password / SMTP Secret):</label>
+                    <div class="relative">
+                        {{ form.password }}
+                        <button type="button" onclick="togglePasswordVisibility('{{ form.password.id_for_label }}')" class="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-500 hover:text-white cursor-pointer" title="แสดง/ซ่อนรหัสผ่าน">
+                            <!-- eye icon SVG -->
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                            </svg>
+                        </button>
+                    </div>
+                    <p class="text-[10px] text-slate-500 mt-1">
+                        * สำหรับ Gmail หรือ Microsoft โปรดป้อนรหัสผ่านแอป 16 หลัก ที่สร้างจากความปลอดภัยของบัญชี
+                    </p>
+                </div>
+
+                <div class="flex items-center gap-3 border-t border-slate-800/80 pt-4">
+                    {{ form.is_active }}
+                    <label for="id_is_active" class="text-xs text-theme-accent font-bold">เปิดใช้งานเซิร์ฟเวอร์นี้ทันที (Set Active)</label>
+                </div>
+
+                <div class="flex items-center justify-between pt-2">
+                    {% if editing_id %}
+                    <a href="{% url 'system_settings' %}" class="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-400 bg-slate-800 hover:text-white transition-all cursor-pointer">
+                        ยกเลิกแก้ไข
+                    </a>
+                    {% endif %}
+                    <button type="submit" class="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-theme-gradient shadow-theme-glow hover:opacity-90 transition-all flex items-center gap-1.5 cursor-pointer ml-auto">
+                        💾 บันทึกตั้งค่า
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Configurations List Table/Grid -->
+        <div class="glass-panel p-6 rounded-2xl border border-slate-800/80 space-y-4 lg:col-span-2">
+            <h3 class="text-base font-bold text-white border-b border-slate-800 pb-3">
+                🗂️ รายการเซิร์ฟเวอร์ SMTP ทั้งหมดในระบบ
+            </h3>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse text-xs">
+                    <thead>
+                        <tr class="bg-slate-900/60 border-b border-slate-800 text-slate-400 font-semibold uppercase">
+                            <th class="px-4 py-3">ชื่อ / ประเภท</th>
+                            <th class="px-4 py-3">SMTP Host</th>
+                            <th class="px-4 py-3">ผู้ส่งข้อมูล</th>
+                            <th class="px-4 py-3 text-center">สถานะ</th>
+                            <th class="px-4 py-3 text-right">ดำเนินการ</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-800/60 text-slate-300">
+                        {% for config in configs %}
+                        <tr class="hover:bg-slate-800/20 {% if config.is_active %}bg-slate-900/20{% endif %}">
+                            <td class="px-4 py-4">
+                                <span class="font-bold text-white block">{{ config.name }}</span>
+                                <span class="text-[10px] text-slate-500 font-medium block mt-0.5">{{ config.get_provider_display }}</span>
+                            </td>
+                            <td class="px-4 py-4 font-mono">
+                                {{ config.host }}:{{ config.port }}
+                                {% if config.use_tls %}<span class="text-[10px] text-teal-400 font-bold ml-1">TLS</span>{% endif %}
+                            </td>
+                            <td class="px-4 py-4 font-mono text-slate-400">
+                                {{ config.username|default:"N/A (Simulation)" }}
+                            </td>
+                            <td class="px-4 py-4 text-center">
+                                {% if config.is_active %}
+                                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-theme-accent/20 text-theme-accent border border-theme-border animate-pulse">ACTIVE</span>
+                                {% else %}
+                                <span class="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-800 text-slate-500 border border-slate-700">INACTIVE</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-4 text-right">
+                                <div class="flex items-center justify-end gap-2">
+                                    <!-- Toggle Active Form -->
+                                    <form method="POST" action="{% url 'smtp_toggle_active' config.id %}" class="inline">
+                                        {% csrf_token %}
+                                        <button type="submit" class="px-2.5 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700/60 text-slate-300 hover:text-white hover:border-slate-500 text-[10px] font-bold transition-all cursor-pointer">
+                                            {% if config.is_active %}ปิดใช้งาน{% else %}เปิดใช้งาน{% endif %}
+                                        </button>
+                                    </form>
+
+                                    <!-- Edit Link -->
+                                    <a href="?edit={{ config.id }}" class="px-2.5 py-1.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 hover:bg-indigo-500/20 text-[10px] font-bold transition-all cursor-pointer">
+                                        แก้ไข
+                                    </a>
+
+                                    <!-- Delete Form -->
+                                    <form method="POST" action="{% url 'smtp_delete' config.id %}" class="inline" onsubmit="return confirm('คุณแน่ใจหรือไม่ที่จะลบเซิร์ฟเวอร์ SMTP นี้?')">
+                                        {% csrf_token %}
+                                        <button type="submit" class="px-2.5 py-1.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20 text-[10px] font-bold transition-all cursor-pointer">
+                                            ลบ
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="px-6 py-6 text-center text-slate-500">
+                                ยังไม่มีการเพิ่มเซิร์ฟเวอร์ SMTP ใดๆ ในระบบ (ระบบจะรันส่งอีเมลแบบ Simulation เป็นหลัก)
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Guide Section -->
+        <div class="glass-panel p-6 rounded-2xl border border-slate-800/80 space-y-4 lg:col-span-2">
+            <h3 class="text-sm font-bold text-white border-b border-slate-850 pb-3 flex items-center gap-2">
+                📖 คู่มือขอรับรหัสผ่านสำหรับแอป (App Password Setup Guide)
+            </h3>
+            
+            <div class="flex border-b border-slate-850 text-xs gap-4">
+                <button type="button" onclick="switchGuideTab('gmail-tab')" id="btn-gmail-tab" class="px-4 py-2 text-theme-accent border-b-2 border-theme-accent font-semibold transition-all cursor-pointer">
+                    📧 Google Gmail
+                </button>
+                <button type="button" onclick="switchGuideTab('microsoft-tab')" id="btn-microsoft-tab" class="px-4 py-2 text-slate-400 border-b-2 border-transparent font-semibold hover:text-white transition-all cursor-pointer">
+                    💻 Microsoft Outlook / Office 365
+                </button>
+            </div>
+
+            <div id="gmail-tab" class="guide-content space-y-2 text-xs text-slate-300 pt-2 leading-relaxed">
+                <p class="font-bold text-white">ขั้นตอนการรับรหัสผ่านแอป 16 หลักสำหรับ Gmail (Google):</p>
+                <ol class="list-decimal pl-4 space-y-1.5">
+                    <li>เข้าสู่หน้าจัดการบัญชี <a href="https://myaccount.google.com/apppasswords" target="_blank" class="text-theme-accent hover:underline">Google Account</a> ของคุณ</li>
+                    <li>เลือกเมนู <strong class="text-white">"ความปลอดภัย" (Security)</strong> ในแท็บด้านซ้าย</li>
+                    <li>ตรวจสอบให้แน่ใจว่าได้เปิดใช้งาน <strong class="text-white">"การยืนยันสองขั้นตอน" (2-Step Verification)</strong> แล้ว</li>
+                    <li>คลิกเข้าไปที่เมนู <strong class="text-white">"การยืนยันสองขั้นตอน"</strong> เลื่อนลงมาล่างสุด แล้วกดเลือกปุ่ม <strong class="text-white">"รหัสผ่านสำหรับแอป" (App passwords)</strong></li>
+                    <li>ป้อนชื่อจำแนกแอปพลิเคชัน (เช่น <code class="bg-slate-900 px-1 py-0.5 rounded text-theme-accent">TicketSolve SMTP</code>) แล้วคลิกปุ่ม <strong class="text-white">"สร้าง" (Create)</strong></li>
+                    <li>ระบบ Google จะแสดงรหัสผ่านแอปสุ่มขึ้นมาความยาว <strong class="text-theme-accent font-mono text-sm">16 ตัวอักษร</strong></li>
+                    <li>คัดลอกรหัสผ่านนี้ไปป้อนลงในช่อง <strong class="text-white">รหัสผ่านแอป</strong> ของหน้าเว็บ TicketSolve</li>
+                </ol>
+            </div>
+
+            <div id="microsoft-tab" class="guide-content hidden space-y-2 text-xs text-slate-300 pt-2 leading-relaxed">
+                <p class="font-bold text-white">ขั้นตอนการรับรหัสผ่านแอป 16 หลักสำหรับ Outlook / Office 365 / Microsoft 365:</p>
+                <ol class="list-decimal pl-4 space-y-1.5">
+                    <li>เข้าสู่หน้าจัดการความปลอดภัยบัญชี <a href="https://account.microsoft.com/security" target="_blank" class="text-theme-accent hover:underline">Microsoft Account Security</a></li>
+                    <li>ลงชื่อเข้าใช้งาน และเลือกเมนู <strong class="text-white">"ตัวเลือกความปลอดภัยขั้นสูง" (Advanced security options)</strong></li>
+                    <li>ตรวจสอบให้แน่ใจว่าได้เปิดใช้งาน <strong class="text-white">"การตรวจสอบสองขั้นตอน" (Two-step verification)</strong> แล้ว</li>
+                    <li>เลื่อนลงไปด้านล่างจนเจอหัวข้อ <strong class="text-white">"รหัสผ่านของแอป" (App passwords)</strong> จากนั้นคลิกปุ่ม <strong class="text-white">"สร้างรหัสผ่านแอปใหม่" (Create a new app password)</strong></li>
+                    <li>ระบบ Microsoft จะทำการสุ่มรหัสผ่านความปลอดภัยความยาว <strong class="text-theme-accent font-mono text-sm">16 หลัก</strong> ให้ทันที</li>
+                    <li>คัดลอกรหัสผ่านนี้ไปป้อนลงในช่อง <strong class="text-white">รหัสผ่านแอป</strong> ของหน้าเว็บ TicketSolve</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Tab switcher function for SMTP guides
+    function switchGuideTab(tabId) {
+        document.querySelectorAll('.guide-content').forEach(el => el.classList.add('hidden'));
+        document.getElementById(tabId).classList.remove('hidden');
+
+        const btnGmail = document.getElementById('btn-gmail-tab');
+        const btnMicrosoft = document.getElementById('btn-microsoft-tab');
+
+        if (tabId === 'gmail-tab') {
+            btnGmail.className = "px-4 py-2 text-theme-accent border-b-2 border-theme-accent font-semibold transition-all cursor-pointer";
+            btnMicrosoft.className = "px-4 py-2 text-slate-400 border-b-2 border-transparent font-semibold hover:text-white transition-all cursor-pointer";
+        } else {
+            btnMicrosoft.className = "px-4 py-2 text-theme-accent border-b-2 border-theme-accent font-semibold transition-all cursor-pointer";
+            btnGmail.className = "px-4 py-2 text-slate-400 border-b-2 border-transparent font-semibold hover:text-white transition-all cursor-pointer";
+        }
+    }
+
+    // Autofill settings based on provider presets
+    document.addEventListener('DOMContentLoaded', function() {
+        const providerSelect = document.getElementById('id_provider');
+        const hostInput = document.getElementById('id_host');
+        const portInput = document.getElementById('id_port');
+        const tlsCheckbox = document.getElementById('id_use_tls');
+
+        function updateSMTPFields() {
+            const provider = providerSelect.value;
+            if (provider === 'GMAIL') {
+                hostInput.value = 'smtp.gmail.com';
+                portInput.value = '587';
+                tlsCheckbox.checked = true;
+            } else if (provider === 'MICROSOFT') {
+                hostInput.value = 'smtp.office365.com';
+                portInput.value = '587';
+                tlsCheckbox.checked = true;
+            } else if (provider === 'SIMULATION') {
+                hostInput.value = 'localhost';
+                providerSelect.value === 'SIMULATION' ? (portInput.value = '1025') : (portInput.value = '587');
+                tlsCheckbox.checked = false;
+            }
+        }
+
+        if (providerSelect) {
+            providerSelect.addEventListener('change', updateSMTPFields);
+        }
+    });
+</script>
+{% endblock %}

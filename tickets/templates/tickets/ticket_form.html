@@ -1,0 +1,131 @@
+{% extends 'tickets/base.html' %}
+
+{% block title %}
+    {% if object %}{{ t.edit_ticket_title }} #{{ object.id }} - TicketSolve{% else %}{{ t.open_new_ticket_title }} - TicketSolve{% endif %}
+{% endblock %}
+
+{% block header_title %}
+    {% if object %}{{ t.edit_ticket_title }} #{{ object.id }}{% else %}{{ t.open_new_ticket_title }}{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto">
+    <!-- Breadcrumb back link -->
+    <a href="{% url 'dashboard' %}" class="inline-flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-sm font-medium mb-6 group">
+        <svg class="w-4 h-4 transform group-hover:translate-x-[-3px] transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+        </svg>
+        {{ t.back_to_dashboard }}
+    </a>
+
+    <!-- Main Glassmorphic Form Card -->
+    <div class="glass-panel p-6 sm:p-8 rounded-2xl border border-slate-800/80 shadow-2xl relative">
+        <div class="absolute w-64 h-64 bg-indigo-600/5 rounded-full blur-3xl -z-10 right-0 top-0"></div>
+
+        <div class="border-b border-slate-800 pb-5 mb-6">
+            <h2 class="text-xl font-bold text-white">
+                {% if object %}{{ t.update_ticket_status }}{% else %}{{ t.create_new_ticket }}{% endif %}
+            </h2>
+            <p class="text-sm text-slate-400 mt-1">
+                {% if object %}{{ t.edit_ticket_desc }}{% else %}{{ t.create_ticket_desc }}{% endif %}
+            </p>
+        </div>
+
+        <!-- Form errors -->
+        {% if form.errors %}
+        <div class="bg-rose-500/10 border border-rose-500/20 text-rose-400 p-4 rounded-xl text-sm mb-6 space-y-1">
+            <span class="font-semibold block">{{ t.input_error }}:</span>
+            {% for field in form %}
+                {% for error in field.errors %}
+                    <p>• {{ field.label }}: {{ error }}</p>
+                {% endfor %}
+            {% endfor %}
+            {% for error in form.non_field_errors %}
+                <p>• {{ error }}</p>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Form Object -->
+        <form method="POST" enctype="multipart/form-data" class="space-y-6">
+            {% csrf_token %}
+
+            <div class="space-y-5">
+                <!-- Title Field -->
+                <div>
+                    <label for="{{ form.title.id_for_label }}" class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">{{ t.title }}</label>
+                    {{ form.title }}
+                    {% if form.title.help_text %}
+                        <p class="text-xs text-slate-500 mt-1">{{ form.title.help_text }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- Description Field -->
+                <div>
+                    <label for="{{ form.description.id_for_label }}" class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">{{ t.description }}</label>
+                    {{ form.description }}
+                    {% if form.description.help_text %}
+                        <p class="text-xs text-slate-500 mt-1">{{ form.description.help_text }}</p>
+                    {% endif %}
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <!-- Priority Field -->
+                    <div>
+                        <label for="{{ form.priority.id_for_label }}" class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">{{ t.priority }}</label>
+                        {{ form.priority }}
+                    </div>
+
+                    <!-- Category Field -->
+                    <div>
+                        <label for="{{ form.category.id_for_label }}" class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">{{ t.category }}</label>
+                        {{ form.category }}
+                    </div>
+                </div>
+
+                <!-- Status & Assignee Fields (Only if update form and field exists) -->
+                {% if form.status or form.assigned_to %}
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    {% if form.status %}
+                    <div>
+                        <label for="{{ form.status.id_for_label }}" class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">{{ t.status }}</label>
+                        {{ form.status }}
+                    </div>
+                    {% endif %}
+
+                    {% if form.assigned_to %}
+                    <div>
+                        <label for="{{ form.assigned_to.id_for_label }}" class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">{{ t.assigned_to }}</label>
+                        {{ form.assigned_to }}
+                        <p class="text-[11px] text-slate-500 mt-1">{{ t.assignee_desc }}</p>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                <!-- Attachment Field -->
+                <div class="border-t border-slate-800/60 pt-4">
+                    <label for="{{ form.attachment.id_for_label }}" class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">ไฟล์แนบ (Attachment)</label>
+                    {{ form.attachment }}
+                    {% if object and object.attachment %}
+                        <p class="text-xs text-indigo-400 mt-2 flex items-center gap-1">
+                            <span>ไฟล์ปัจจุบัน:</span>
+                            <a href="{{ object.attachment.url }}" class="hover:underline font-semibold" target="_blank">{{ object.attachment.name }}</a>
+                        </p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="pt-6 border-t border-slate-800 flex items-center justify-end gap-4">
+                <a href="{% url 'dashboard' %}" class="px-5 py-2.5 rounded-lg text-sm font-semibold border border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800 transition-all">
+                    {{ t.cancel }}
+                </a>
+                <button type="submit" class="px-5 py-2.5 rounded-lg text-sm font-semibold text-white bg-theme-gradient hover:opacity-90 shadow-theme-glow active:scale-[0.98] transition-all">
+                    {% if object %}{{ t.save_changes }}{% else %}{{ t.submit_ticket }}{% endif %}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

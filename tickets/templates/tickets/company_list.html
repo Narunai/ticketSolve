@@ -1,0 +1,64 @@
+{% extends 'tickets/base.html' %}
+
+{% block title %}จัดการองค์กรและบริษัท - TicketSolve{% endblock %}
+{% block header_title %}จัดการองค์กรและบริษัท (Company Management){% endblock %}
+
+{% block content %}
+<!-- Welcome & Quick Action Header -->
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900/40 p-6 rounded-2xl border border-slate-800/80 glass-card">
+    <div>
+        <h2 class="text-xl font-bold text-white">รายชื่อบริษัท/องค์กรลูกค้าในระบบทั้งหมด</h2>
+        <p class="text-sm text-slate-400 mt-1">ผู้ดูแลระบบส่วนกลาง (System Admin) สามารถสร้างบริษัท หรือแก้ไขบริษัทลูกค้า เพื่อรองรับการทำงานของแอดมินย่อยได้ที่นี่</p>
+    </div>
+    <div>
+        <a href="{% url 'company_create' %}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold text-white bg-theme-gradient hover:opacity-90 shadow-theme-glow active:scale-[0.98] transition-all">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+            </svg>
+            เพิ่มบริษัทใหม่
+        </a>
+    </div>
+</div>
+
+<!-- Companies List Table -->
+<div class="glass-panel rounded-2xl border border-slate-800/80 overflow-hidden shadow-xl">
+    <div class="px-6 py-5 border-b border-slate-800/80 flex items-center justify-between">
+        <h3 class="font-bold text-white text-base">บริษัทลูกค้าทั้งหมด</h3>
+        <span class="text-xs px-2.5 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-400 font-medium">รวม {{ companies_list.count }} บริษัท</span>
+    </div>
+
+    <!-- Table -->
+    <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+            <thead>
+                <tr class="bg-slate-900/60 border-b border-slate-800 text-slate-400 text-xs font-semibold uppercase tracking-wider">
+                    <th class="px-6 py-4">ID</th>
+                    <th class="px-6 py-4">ชื่อบริษัท/องค์กร (Company Name)</th>
+                    <th class="px-6 py-4">วันที่เพิ่มในระบบ</th>
+                    <th class="px-6 py-4 text-center">จัดการ</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800/50 text-sm">
+                {% for company in companies_list %}
+                <tr class="hover:bg-slate-800/20 transition-colors">
+                    <td class="px-6 py-4 font-mono font-bold text-indigo-400">#{{ company.id }}</td>
+                    <td class="px-6 py-4 font-semibold text-white">{{ company.name }}</td>
+                    <td class="px-6 py-4 text-slate-400">{{ company.created_at|date:"d M Y, H:i" }}</td>
+                    <td class="px-6 py-4 text-center">
+                        <a href="{% url 'company_update' company.id %}" class="inline-flex items-center px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-indigo-600 hover:text-white border border-slate-700 text-slate-300 text-xs font-semibold transition-all">
+                            แก้ไขชื่อบริษัท
+                        </a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="4" class="px-6 py-12 text-center text-slate-500">
+                        <span class="block font-medium">ไม่พบรายชื่อบริษัทลูกค้าในระบบ</span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

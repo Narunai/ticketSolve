@@ -1,0 +1,31 @@
+# รายการสิ่งที่ต้องทำสำหรับการปรับปรุง (Tasks List)
+
+- [x] **Phase 1: การเตรียมโครงสร้างระบบและฐานข้อมูล (Django Setup & DB Schema)**
+  - [x] ตรวจสอบสภาพแวดล้อม Python และติดตั้ง Django
+  - [x] สร้างโปรเจกต์ Django `ticket_system` และแอป `tickets`
+  - [x] สร้างโมเดล `Company`, `CustomUser`, และ `Ticket` ใน `tickets/models.py`
+  - [x] ทำการสร้างฐานข้อมูลเบื้องต้น (Migrations)
+- [x] **Phase 2: ระบบควบคุมผู้ใช้ย่อยและองค์กรคัสตอม (Custom Admin Views & Forms)**
+  - [x] สร้าง Forms `CompanyForm` และ `CustomUserForm`
+  - [x] สร้าง Views จัดการบริษัทสำหรับ System Admin (`CompanyListView`, `CompanyCreateView`, `CompanyUpdateView`)
+  - [x] สร้าง Views จัดการผู้ใช้สำหรับ Client Admin (`UserListView`, `UserCreateView`, `UserUpdateView`)
+  - [x] เพิ่มเส้นทาง URL Mappings ใน `tickets/urls.py`
+- [x] **Phase 3: เทมเพลตหน้าจอระบบควบคุมแบบ Custom (Custom Admin Templates & UI)**
+  - [x] สร้างและตกแต่งเทมเพลตสำหรับการจัดการบริษัท (`company_list.html`, `company_form.html`)
+  - [x] สร้างและตกแต่งเทมเพลตสำหรับการจัดการผู้ใช้ (`user_list.html`, `user_form.html`)
+  - [x] ปรับปรุงการนำทาง (Sidebar Links) ใน `base.html` เพื่อซ่อน/แสดงตามระดับผู้ใช้
+- [x] **Phase 4: ระบบสัญญาณและการทำงานเสริม (Signals & Commands)**
+  - [x] สร้าง Django Signals ใน `tickets/signals.py` สำหรับจำลองการส่งเมลแจ้งเตือน
+  - [x] สร้าง Django Management Command สำหรับส่งรายงานประจำเดือน
+- [x] **Phase 5: การทดสอบความถูกต้องและเอกสาร (Verification & Custom Tests)**
+  - [x] แก้ไข Unit Tests ใน `tickets/tests.py` เพื่อตรวจสอบความปลอดภัยของ Custom Admin Panels
+  - [x] ทดสอบความถูกต้องของสิทธิ์การเข้าถึง (403 Forbidden)
+  - [x] อัปเดตเอกสาร `testing_guide.md` และ `walkthrough.md`
+- [x] **Phase 6: ระบบรายงานประจำเดือนในรูปแบบ PDF (Monthly PDF Report System)**
+  - [x] เพิ่มไลบรารี `xhtml2pdf` ใน `requirements.txt`
+  - [x] พัฒนาฟังก์ชันแปลง HTML เป็น PDF ด้วย Tahoma Font ใน `views.py`
+  - [x] พัฒนาหน้าแดชบอร์ดรายงาน `MonthlyReportView` และวิวพรีวิว PDF `GeneratePDFReportView`
+  - [x] พัฒนาปุ่มแอคชันจัดส่งเมลรายงาน `SendMonthlyReportView`
+  - [x] สร้างหน้าเทมเพลต `report_dashboard.html` และ `report_pdf_template.html`
+  - [x] แมปเส้นทาง URLs และลิงก์ปุ่มใน Sidebar เมนูหลัก
+  - [x] เขียน Unit Tests ครอบคลุมการออกรายงานและพรีวิวไฟล์ PDF

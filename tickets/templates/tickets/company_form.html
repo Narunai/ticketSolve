@@ -1,0 +1,77 @@
+{% extends 'tickets/base.html' %}
+
+{% block title %}
+    {% if object %}แก้ไขชื่อบริษัท - {{ object.name }} - TicketSolve{% else %}เพิ่มบริษัทใหม่ - TicketSolve{% endif %}
+{% endblock %}
+
+{% block header_title %}
+    {% if object %}แก้ไขบริษัท{% else %}เพิ่มบริษัทใหม่{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <!-- Back Link -->
+    <a href="{% url 'company_list' %}" class="inline-flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-sm font-medium mb-6 group">
+        <svg class="w-4 h-4 transform group-hover:translate-x-[-3px] transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+        </svg>
+        กลับไปยังรายชื่อบริษัททั้งหมด
+    </a>
+
+    <!-- Form Card -->
+    <div class="glass-panel p-6 sm:p-8 rounded-2xl border border-slate-800/80 shadow-2xl relative">
+        <div class="absolute w-64 h-64 bg-indigo-600/5 rounded-full blur-3xl -z-10 right-0 top-0"></div>
+
+        <div class="border-b border-slate-800 pb-5 mb-6">
+            <h2 class="text-xl font-bold text-white">
+                {% if object %}แก้ไขบริษัท: {{ object.name }}{% else %}สร้างข้อมูลองค์กรใหม่{% endif %}
+            </h2>
+            <p class="text-sm text-slate-400 mt-1">
+                {% if object %}
+                    ทำการปรับเปลี่ยนชื่อบริษัทอย่างสมบูรณ์ในระดับระบบฐานข้อมูล
+                {% else %}
+                    เพิ่มบริษัทลูกค้าผู้เช่ารายใหม่เพื่อขยายโครงข่ายการใช้งาน Multi-tenant
+                {% endif %}
+            </p>
+        </div>
+
+        <!-- Form errors -->
+        {% if form.errors %}
+        <div class="bg-rose-500/10 border border-rose-500/20 text-rose-400 p-4 rounded-xl text-sm mb-6 space-y-1">
+            <span class="font-semibold block">เกิดข้อผิดพลาดในการกรอกข้อมูล:</span>
+            {% for field in form %}
+                {% for error in field.errors %}
+                    <p>• {{ field.label }}: {{ error }}</p>
+                {% endfor %}
+            {% endfor %}
+            {% for error in form.non_field_errors %}
+                <p>• {{ error }}</p>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Form -->
+        <form method="POST" class="space-y-6">
+            {% csrf_token %}
+
+            <div class="space-y-5">
+                <!-- Company Name -->
+                <div>
+                    <label for="{{ form.name.id_for_label }}" class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">ชื่อบริษัท/องค์กร (Company Name)</label>
+                    {{ form.name }}
+                </div>
+            </div>
+
+            <!-- Action buttons -->
+            <div class="pt-6 border-t border-slate-800 flex items-center justify-end gap-4">
+                <a href="{% url 'company_list' %}" class="px-5 py-2.5 rounded-lg text-sm font-semibold border border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800 transition-all">
+                    ยกเลิก
+                </a>
+                <button type="submit" class="px-5 py-2.5 rounded-lg text-sm font-semibold text-white bg-theme-gradient hover:opacity-90 shadow-theme-glow active:scale-[0.98] transition-all">
+                    บันทึกข้อมูล
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

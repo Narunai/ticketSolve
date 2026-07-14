@@ -1,0 +1,206 @@
+{% extends 'tickets/base.html' %}
+
+{% block title %}{{ t.ticket_details }} #{{ ticket.id }} - TicketSolve{% endblock %}
+{% block header_title %}{{ t.ticket_details }} #{{ ticket.id }}{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6">
+    <!-- Navigation Back Link -->
+    <a href="{% url 'dashboard' %}" class="inline-flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-sm font-medium group">
+        <svg class="w-4 h-4 transform group-hover:translate-x-[-3px] transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+        </svg>
+        {{ t.back_to_dashboard }}
+    </a>
+
+    <!-- Top Summary Banner -->
+    <div class="glass-panel p-6 rounded-2xl border border-slate-800/80 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+            <div class="flex items-center gap-2 mb-1.5">
+                <span class="text-xs font-semibold px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 uppercase tracking-wider">{{ ticket.company.name }}</span>
+                <span class="text-slate-500 text-xs font-mono font-semibold">TICKET ID: #{{ ticket.id }}</span>
+            </div>
+            <h2 class="text-2xl font-bold text-white tracking-wide">{{ ticket.title }}</h2>
+        </div>
+        <div class="flex items-center gap-3">
+            <!-- Edit Button -->
+            <a href="{% url 'ticket_update' ticket.id %}" class="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-theme-gradient hover:opacity-90 shadow-theme-glow transition-all">
+                {{ t.edit_or_update }}
+            </a>
+        </div>
+    </div>
+
+    <!-- Ticket Grid Details -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Main Issue Description & Comments Column -->
+        <div class="lg:col-span-2 space-y-6">
+            <!-- Description Card -->
+            <div class="glass-panel p-6 rounded-2xl border border-slate-800/80 space-y-4">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">{{ t.description }}</h3>
+                <div class="bg-slate-900/40 p-4 rounded-xl border border-slate-800 text-slate-300 leading-relaxed text-sm whitespace-pre-wrap">
+                    {{ ticket.description }}
+                </div>
+            </div>
+
+            <!-- Comments Card -->
+            <div class="glass-panel p-6 rounded-2xl border border-slate-800/80 space-y-6">
+                <h3 class="font-bold text-white text-base flex items-center gap-2 border-b border-slate-800 pb-3">
+                    <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+                    </svg>
+                    {{ t.comments_title }} ({{ comments.count }})
+                </h3>
+                
+                <!-- Comment list -->
+                <div class="space-y-4">
+                    {% for comment in comments %}
+                    <div class="p-4 rounded-xl border border-slate-800 bg-slate-900/40 space-y-2">
+                        <div class="flex items-center justify-between text-xs border-b border-slate-800 pb-2">
+                            <span class="font-bold text-indigo-400 flex items-center gap-1.5">
+                                <span class="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
+                                {{ comment.author.username }} ({{ comment.author.get_role_display }})
+                            </span>
+                            <span class="text-slate-500 font-mono">{{ comment.created_at|date:"d M Y, H:i" }}</span>
+                        </div>
+                        <p class="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap pt-1">{{ comment.content }}</p>
+                    </div>
+                    {% empty %}
+                    <div class="text-center py-6 text-slate-500 text-sm italic">
+                        {{ t.no_comments }}
+                    </div>
+                    {% endfor %}
+                </div>
+                
+                <!-- Comment form -->
+                <form method="POST" class="border-t border-slate-800 pt-5 space-y-4">
+                    {% csrf_token %}
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">{{ t.write_comment }}</label>
+                        <textarea name="content" required rows="3" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all text-sm" placeholder="{{ t.write_comment_placeholder }}"></textarea>
+                    </div>
+                    <div class="flex justify-end">
+                        <button type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold text-white bg-theme-gradient hover:opacity-90 shadow-theme-glow active:scale-[0.98] transition-all">
+                            {{ t.submit_comment }}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Sidebar Attributes -->
+        <div class="glass-panel p-6 rounded-2xl border border-slate-800/80 space-y-5 text-sm">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">{{ t.ticket_info }}</h3>
+            
+            <div class="space-y-4">
+                <!-- Status -->
+                <div class="flex items-center justify-between py-2 border-b border-slate-800/60">
+                    <span class="text-slate-500">{{ t.status_label }}:</span>
+                    <div>
+                        {% if ticket.status == 'OPEN' %}
+                            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">Open</span>
+                        {% elif ticket.status == 'IN_PROGRESS' %}
+                            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">In Progress</span>
+                        {% elif ticket.status == 'RESOLVED' %}
+                            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Resolved</span>
+                        {% else %}
+                            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-500/10 text-slate-400 border border-slate-700/20">Closed</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Priority -->
+                <div class="flex items-center justify-between py-2 border-b border-slate-800/60">
+                    <span class="text-slate-500">{{ t.priority_label }}:</span>
+                    <div>
+                        {% if ticket.priority == 'HIGH' %}
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20">High</span>
+                        {% elif ticket.priority == 'MEDIUM' %}
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">Medium</span>
+                        {% else %}
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-sky-500/10 text-sky-400 border border-sky-500/20">Low</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Category -->
+                <div class="flex items-center justify-between py-2 border-b border-slate-800/60">
+                    <span class="text-slate-500">{{ t.category }}:</span>
+                    <span class="text-white font-semibold">{{ ticket.get_category_display }}</span>
+                </div>
+
+                <!-- Creator -->
+                <div class="flex items-center justify-between py-2 border-b border-slate-800/60">
+                    <span class="text-slate-500">{{ t.creator_label }}:</span>
+                    <span class="text-white font-semibold">{{ ticket.created_by.username }}</span>
+                </div>
+
+                <!-- Assignee -->
+                <div class="flex items-center justify-between py-2 border-b border-slate-800/60">
+                    <span class="text-slate-500">{{ t.assignee_label }}:</span>
+                    <span class="text-white font-semibold">
+                        {% if ticket.assigned_to %}
+                            {{ ticket.assigned_to.username }}
+                        {% else %}
+                            <span class="text-slate-500 italic font-normal text-xs">{{ t.no_assignee }}</span>
+                        {% endif %}
+                    </span>
+                </div>
+
+                <!-- Attachment -->
+                <div class="flex items-center justify-between py-2 border-b border-slate-800/60">
+                    <span class="text-slate-500">{{ t.attachment_label }}:</span>
+                    <div>
+                        {% if ticket.attachment %}
+                            <a href="{{ ticket.attachment.url }}" class="inline-flex items-center gap-1 text-indigo-400 hover:text-indigo-300 font-semibold hover:underline" target="_blank">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
+                                </svg>
+                                {{ t.download_label }}
+                            </a>
+                        {% else %}
+                            <span class="text-slate-500 italic text-xs">{{ t.no_attachment }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Timestamps -->
+                <div class="space-y-1.5 pt-2">
+                    <div class="flex justify-between text-xs">
+                        <span class="text-slate-500">{{ t.created_at_label }}:</span>
+                        <span class="text-slate-400">{{ ticket.created_at|date:"d M Y, H:i" }}</span>
+                    </div>
+                    <div class="flex justify-between text-xs">
+                        <span class="text-slate-500">{{ t.updated_at_label }}:</span>
+                        <span class="text-slate-400">{{ ticket.updated_at|date:"d M Y, H:i" }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Audit Trail & Action Timeline -->
+        <div class="glass-card p-6 rounded-2xl border border-slate-800 space-y-4">
+            <h3 class="font-bold text-white text-base flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-indigo-500"></span>
+                {{ t.audit_trail_history }}
+            </h3>
+            <div class="space-y-4 relative pl-4 border-l-2 border-slate-800">
+                {% for log in ticket.audit_logs.all %}
+                <div class="relative group">
+                    <div class="w-3 h-3 rounded-full bg-indigo-500 absolute -left-[23px] top-1"></div>
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <span class="text-xs font-semibold text-white">
+                            {% if log.actor %}{{ log.actor.username }} ({{ log.actor.get_role_display }}){% else %}System Process{% endif %}
+                        </span>
+                        <span class="text-[11px] text-slate-500 font-mono">{{ log.created_at|date:"d M Y, H:i:s" }}</span>
+                    </div>
+                    <p class="text-xs text-slate-300 mt-1 bg-slate-900/60 p-2.5 rounded-lg border border-slate-800 font-medium">
+                        {{ log.details }}
+                    </p>
+                </div>
+                {% empty %}
+                <p class="text-xs text-slate-500 italic">{{ t.no_audit_trail }}</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>{% endblock %}

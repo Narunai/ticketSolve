@@ -1,0 +1,19 @@
+เพิ่มระบบ subadmin ของตัวระบบเอง ไม่เกี่ยวกับบริษัท 
+และให้ ภายใต้ systemadmin เท่านั้นเพิ่มได้โดยแอดมินมีสิทใกล้เคียงกันแต่ต่ำกว่า system admin 
+
+เพิ่มระบบการกรอก 
+# Gmail SMTP Configuration for Real Email Delivery
+EMAIL_SERVICE=smtp
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=587
+EMAIL_USE_TLS=True
+EMAIL_HOST_USER=narunaithaisenee@gmail.com
+
+# 🔑 ใส่รหัสผ่านแอป (App Password) 16 หลักจาก Google Account ของคุณที่นี่:
+# (วิธีเอา App Password: ไปที่ บัญชี Google -> ความปลอดภัย -> การยืนยันสองขั้นตอน -> รหัสผ่านสำหรับแอป)
+EMAIL_HOST_PASSWORD=xqpu ibhg nwon xpqe
+แบบนี้ในหน้าเว็บได้เลย เพิ่มฝั่งของmicrosoft ด้วยและสามารถเลือกได้ว่าจะใช้เมลอะไรส่ง
+
+
+
+คู่มือขอรับรหัสผ่านแอป Gmail (App Password 16 หลัก) ทำของ outlook  หรือ microsoft ด้วย

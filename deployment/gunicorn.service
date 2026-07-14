@@ -1,0 +1,12 @@
+[Unit]
+Description=gunicorn daemon for TicketSolve
+After=network.target
+
+[Service]
+User=ubuntu
+Group=www-data
+WorkingDirectory=/var/www/ticketSolve
+ExecStart=/var/www/ticketSolve/venv/bin/gunicorn --workers 4 --bind unix:/run/gunicorn.sock ticket_system.wsgi:application
+
+[Install]
+WantedBy=multi-user.target
