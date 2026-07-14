@@ -6,7 +6,7 @@ After=network.target
 User=ubuntu
 Group=www-data
 WorkingDirectory=/var/www/ticketSolve
-ExecStart=/var/www/ticketSolve/venv/bin/gunicorn --workers 4 --bind unix:/tmp/gunicorn.sock ticket_system.wsgi:application
+ExecStart=/var/www/ticketSolve/venv/bin/gunicorn --workers 4 --bind unix:/var/www/ticketSolve/gunicorn.sock ticket_system.wsgi:application
 
 [Install]
 WantedBy=multi-user.target
