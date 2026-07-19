@@ -996,6 +996,70 @@ class MultiTenantTicketTests(TestCase):
             event_type=EmailLog.ACTION_COMMENT_ADDED
         ))
 
+    def test_status_change_sends_creator_to_and_assignee_cc_only(self):
+        self.ticket_a.assigned_to = self.admin_a
+        self.ticket_a.save(update_fields=['assigned_to'])
+        mail.outbox = []
+
+        self.ticket_a.status = Ticket.STATUS_RESOLVED
+        self.ticket_a.save(update_fields=['status'])
+
+        status_emails = [message for message in mail.outbox if 'อัปเดตความคืบหน้า' in message.subject]
+        self.assertEqual(len(status_emails), 1)
+        self.assertEqual(status_emails[0].to, [self.user_a.email])
+        self.assertEqual(status_emails[0].cc, [self.admin_a.email])
+        self.assertNotIn(self.system_admin.email, status_emails[0].recipients())
+
+        delivery_logs = EmailLog.objects.filter(
+            action_type=EmailLog.ACTION_TICKET_UPDATED,
+            subject=status_emails[0].subject,
+        )
+        self.assertEqual(delivery_logs.count(), 2)
+        self.assertEqual(delivery_logs.values('delivery_group').distinct().count(), 1)
+        self.assertTrue(delivery_logs.get(recipient=self.user_a.email).success)
+        self.assertEqual(
+            delivery_logs.get(recipient=self.admin_a.email).recipient_type,
+            EmailLog.RECIPIENT_CC,
+        )
+
+    def test_status_change_applies_notification_rule_to_assignee_cc(self):
+        from .models import NotificationConfig
+
+        config = NotificationConfig.objects.create(
+            name='Disable assignee status email',
+            company=self.company_a,
+            status_notification_mode=NotificationConfig.STATUS_NOTIFY_NONE,
+        )
+        config.target_users.add(self.admin_a)
+        self.ticket_a.assigned_to = self.admin_a
+        self.ticket_a.save(update_fields=['assigned_to'])
+        mail.outbox = []
+
+        self.ticket_a.status = Ticket.STATUS_RESOLVED
+        self.ticket_a.save(update_fields=['status'])
+
+        status_email = next(message for message in mail.outbox if 'อัปเดตความคืบหน้า' in message.subject)
+        self.assertEqual(status_email.to, [self.user_a.email])
+        self.assertEqual(status_email.cc, [])
+        assignee_log = EmailLog.objects.filter(
+            action_type=EmailLog.ACTION_TICKET_UPDATED,
+            recipient=self.admin_a.email,
+        ).latest('sent_at')
+        self.assertFalse(assignee_log.success)
+        self.assertEqual(assignee_log.recipient_type, EmailLog.RECIPIENT_CC)
+        self.assertIn('Notification Filtered', assignee_log.error_message)
+
+    def test_non_status_ticket_edit_does_not_send_status_email(self):
+        mail.outbox = []
+        before_count = EmailLog.objects.filter(action_type=EmailLog.ACTION_TICKET_UPDATED).count()
+        self.ticket_a.title = 'Title changed without status change'
+        self.ticket_a.save(update_fields=['title'])
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertEqual(
+            EmailLog.objects.filter(action_type=EmailLog.ACTION_TICKET_UPDATED).count(),
+            before_count,
+        )
+
     def test_create_monthly_report_schedule_with_cc(self):
         self.client.login(username="admin_a", password="password123")
         response = self.client.post(reverse('report_schedule_save'), {

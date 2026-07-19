@@ -1,6 +1,6 @@
-from django.db.models.signals import post_save, post_migrate
+from django.db.models.signals import pre_save, post_save, post_migrate
 from django.dispatch import receiver
-from django.core.mail import send_mail
+from django.core.mail import EmailMessage, send_mail
 from django.conf import settings
 import uuid
 from .models import Ticket, CustomUser, Company, EmailLog, get_smtp_connection, get_smtp_from_email, should_send_email_notification
@@ -64,6 +64,88 @@ def log_and_send_email(subject, message, recipient_list, action_type, ticket=Non
         )
 
 
+def send_status_change_email(ticket, subject, message):
+    """Send one status email: ticket creator in To and assignee in CC."""
+    delivery_group = uuid.uuid4()
+    candidates = []
+    creator_email = ticket.created_by.email if ticket.created_by else ''
+    assignee_email = ticket.assigned_to.email if ticket.assigned_to else ''
+
+    if creator_email:
+        candidates.append((creator_email, EmailLog.RECIPIENT_TO))
+    if assignee_email and assignee_email != creator_email:
+        candidates.append((assignee_email, EmailLog.RECIPIENT_CC))
+
+    allowed = []
+    for email, recipient_type in candidates:
+        if should_send_email_notification(
+            email,
+            ticket=ticket,
+            event_type=EmailLog.ACTION_TICKET_UPDATED,
+            new_status=ticket.status,
+        ):
+            allowed.append((email, recipient_type))
+        else:
+            EmailLog.objects.create(
+                recipient=email,
+                recipient_type=recipient_type,
+                delivery_group=delivery_group,
+                subject=subject,
+                message=message,
+                action_type=EmailLog.ACTION_TICKET_UPDATED,
+                success=False,
+                error_message='ข้ามการส่งตามกฎตั้งค่าการแจ้งเตือนของผู้รับ/บริษัท (Notification Filtered)',
+            )
+
+    if not allowed:
+        return
+
+    to_recipients = [email for email, kind in allowed if kind == EmailLog.RECIPIENT_TO]
+    cc_recipients = [email for email, kind in allowed if kind == EmailLog.RECIPIENT_CC]
+    connection = get_smtp_connection()
+    from_email = get_smtp_from_email('noreply@ticketsolve.com')
+    success = False
+    error_message = ''
+    try:
+        email_message = EmailMessage(
+            subject=subject,
+            body=message,
+            from_email=from_email,
+            to=to_recipients,
+            cc=cc_recipients,
+            connection=connection,
+        )
+        sent_count = email_message.send(fail_silently=False)
+        if sent_count <= 0:
+            raise RuntimeError('SMTP ไม่ยืนยันการส่งอีเมล (ส่งได้ 0 ฉบับ)')
+        success = True
+    except Exception as exc:
+        error_message = str(exc)
+        print(f"[Status Email Error] Ticket #{ticket.id}: {exc}")
+
+    for email, recipient_type in allowed:
+        EmailLog.objects.create(
+            recipient=email,
+            recipient_type=recipient_type,
+            delivery_group=delivery_group,
+            subject=subject,
+            message=message,
+            action_type=EmailLog.ACTION_TICKET_UPDATED,
+            success=success,
+            error_message=error_message,
+        )
+
+
+@receiver(pre_save, sender=Ticket)
+def remember_previous_ticket_status(sender, instance, **kwargs):
+    if not instance.pk:
+        instance._previous_status = None
+        return
+    instance._previous_status = Ticket.objects.filter(
+        pk=instance.pk
+    ).values_list('status', flat=True).first()
+
+
 
 
 
@@ -105,7 +187,11 @@ def send_ticket_notifications(sender, instance, created, **kwargs):
                 
         log_and_send_email(subject, message, list(recipients), EmailLog.ACTION_TICKET_CREATED, ticket=instance)
     else:
-        # Action 2: แจ้งเตือนเมื่อมีการอัปเดตสถานะหรือรายละเอียด Ticket
+        previous_status = getattr(instance, '_previous_status', None)
+        if previous_status == instance.status:
+            return
+
+        # Action 2: แจ้งเตือนเฉพาะเมื่อสถานะ Ticket เปลี่ยนจริง
         if instance.status == Ticket.STATUS_DEPLOYMENT_REQUESTED:
             confirm_url = f"http://127.0.0.1:8000/ticket/{instance.id}/confirm-deployment/"
             subject = f"[TicketSolve Approval Required] ร้องขอการ Deploy งาน: Ticket #{instance.id} - {instance.title}"
@@ -141,32 +227,7 @@ def send_ticket_notifications(sender, instance, created, **kwargs):
                 f"TicketSolve Support Team"
             )
                   
-        recipients = set()
-        if instance.created_by and instance.created_by.email:
-            recipients.add(instance.created_by.email)
-            
-        if instance.assigned_to and instance.assigned_to.email:
-            recipients.add(instance.assigned_to.email)
-
-        if instance.company:
-            client_admins = CustomUser.objects.filter(company=instance.company, role=CustomUser.CLIENT_ADMIN)
-            for admin in client_admins:
-                if admin.email:
-                    recipients.add(admin.email)
-
-        # Include System Admins & System Sub Admins for all status updates
-        from django.db import models
-        system_admins = CustomUser.objects.filter(
-            models.Q(is_superuser=True) |
-            models.Q(role__in=[CustomUser.SYSTEM_ADMIN, CustomUser.SYSTEM_SUB_ADMIN])
-        ).exclude(email='').values_list('email', flat=True)
-        for sa_email in system_admins:
-            recipients.add(sa_email)
-
-        if not recipients:
-            print(f"[Email Warning] Cannot send notification for Ticket #{instance.id}: No valid recipient email addresses found.")
-
-        log_and_send_email(subject, message, list(recipients), EmailLog.ACTION_TICKET_UPDATED, ticket=instance, new_status=instance.status)
+        send_status_change_email(instance, subject, message)
 
 
 
