@@ -382,12 +382,14 @@
                     </svg>
                     ตั้งค่าแจ้งเตือน (Email Config)
                 </a>
+                {% if user.role == 'SYSTEM_ADMIN' or user.role == 'SYSTEM_SUB_ADMIN' or user.is_superuser %}
                 <a href="{% url 'ticket_automation_list' %}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/50 transition-all font-medium {% if request.resolver_match.url_name == 'ticket_automation_list' or request.resolver_match.url_name == 'ticket_automation_create' or request.resolver_match.url_name == 'ticket_automation_edit' %}bg-theme-bg border border-theme-border text-theme-accent{% endif %}">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                     </svg>
                     Ticket Auto Schedule
                 </a>
+                {% endif %}
                 {% endif %}
 
 
@@ -497,6 +499,15 @@
 
         <!-- Core Page Content -->
         <div class="flex-1 p-6 md:p-8 space-y-6">
+            {% if messages %}
+            <div class="space-y-2">
+                {% for message in messages %}
+                <div class="px-4 py-3 rounded-xl border text-sm font-medium {% if message.tags == 'error' %}bg-rose-500/10 border-rose-500/30 text-rose-300{% elif message.tags == 'warning' %}bg-amber-500/10 border-amber-500/30 text-amber-300{% elif message.tags == 'success' %}bg-emerald-500/10 border-emerald-500/30 text-emerald-300{% else %}bg-indigo-500/10 border-indigo-500/30 text-indigo-300{% endif %}">
+                    {{ message }}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
             {% block content %}{% endblock %}
         </div>
     </main>

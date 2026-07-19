@@ -881,11 +881,20 @@ class MultiTenantTicketTests(TestCase):
         response = self.client.get(reverse('ticket_delete_manage'))
         self.assertEqual(response.status_code, 403)
 
+        # Company admin must not see server disk usage or ticket deletion tools.
+        self.client.logout()
+        self.client.login(username="admin_a", password="password123")
+        response = self.client.get(reverse('ticket_delete_manage'))
+        self.assertEqual(response.status_code, 403)
+
         # System admin can access
+        self.client.logout()
         self.client.login(username="system_admin", password="password123")
         response = self.client.get(reverse('ticket_delete_manage'))
         self.assertEqual(response.status_code, 200)
         self.assertIn("จัดการและลบ Ticket", response.content.decode('utf-8'))
+        self.assertIn('disk_usage', response.context)
+        self.assertGreater(response.context['disk_usage']['total_gb'], 0)
 
         # Test filtering by company and year
         response = self.client.get(reverse('ticket_delete_manage'), {'company_id': self.company_a.id, 'year': 2026})
@@ -911,6 +920,32 @@ class MultiTenantTicketTests(TestCase):
         response = self.client.post(reverse('ticket_delete', kwargs={'pk': t3.pk}))
         self.assertEqual(response.status_code, 302)
         self.assertFalse(Ticket.objects.filter(id=t3.id).exists())
+
+    def test_ticket_delete_reports_freed_attachment_megabytes(self):
+        import tempfile
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from django.test import override_settings
+
+        with tempfile.TemporaryDirectory() as media_root, override_settings(MEDIA_ROOT=media_root):
+            ticket = Ticket.objects.create(
+                title='Delete attachment size',
+                description='One MB attachment',
+                company=self.company_a,
+                created_by=self.user_a,
+                attachment=SimpleUploadedFile('one_mb.bin', b'x' * (1024 ** 2)),
+            )
+            attachment_path = ticket.attachment.path
+            self.assertTrue(os.path.isfile(attachment_path))
+            self.client.login(username='system_admin', password='password123')
+
+            response = self.client.post(
+                reverse('ticket_delete', kwargs={'pk': ticket.pk}),
+                follow=True,
+            )
+
+            self.assertEqual(response.status_code, 200)
+            self.assertContains(response, '1.00 MB')
+            self.assertFalse(os.path.exists(attachment_path))
 
     def test_deployment_requested_and_confirm_flow(self):
         t = Ticket.objects.create(
@@ -1360,7 +1395,7 @@ class MultiTenantTicketTests(TestCase):
         self.assertEqual(child_ticket.status, Ticket.STATUS_OPEN)
 
     def test_ticket_automation_settings_page_and_create(self):
-        self.client.login(username='admin_a', password='password123')
+        self.client.login(username='system_admin', password='password123')
         list_response = self.client.get(reverse('ticket_automation_list'))
         self.assertEqual(list_response.status_code, 200)
         response = self.client.post(reverse('ticket_automation_create'), {
@@ -1373,7 +1408,37 @@ class MultiTenantTicketTests(TestCase):
         self.assertRedirects(response, reverse('ticket_automation_list'))
         config = TicketAutomationConfig.objects.get(company=self.company_a)
         self.assertEqual(config.open_age_value, 6)
-        self.assertEqual(config.created_by, self.admin_a)
+        self.assertEqual(config.created_by, self.system_admin)
+
+    def test_ticket_automation_is_restricted_to_system_staff(self):
+        config = TicketAutomationConfig.objects.create(
+            company=self.company_a,
+            open_age_value=5,
+            open_age_unit=TicketAutomationConfig.UNIT_MINUTES,
+        )
+        self.client.login(username='admin_a', password='password123')
+        self.assertEqual(self.client.get(reverse('ticket_automation_list')).status_code, 403)
+        self.assertEqual(self.client.get(reverse('ticket_automation_create')).status_code, 403)
+        self.assertEqual(
+            self.client.get(reverse('ticket_automation_edit', args=[config.pk])).status_code,
+            403,
+        )
+        self.assertEqual(
+            self.client.post(reverse('ticket_automation_delete', args=[config.pk])).status_code,
+            403,
+        )
+        self.assertTrue(TicketAutomationConfig.objects.filter(pk=config.pk).exists())
+
+        system_sub_admin = User.objects.create_user(
+            username='automation_sub_admin',
+            email='automation-sub@system.com',
+            password='password123',
+            role=User.SYSTEM_SUB_ADMIN,
+            is_staff=True,
+        )
+        self.client.logout()
+        self.client.login(username=system_sub_admin.username, password='password123')
+        self.assertEqual(self.client.get(reverse('ticket_automation_list')).status_code, 200)
 
     def test_manual_status_change_resets_status_clock(self):
         import datetime

@@ -20,6 +20,27 @@
         </div>
     </div>
 
+    <!-- Server Disk Usage -->
+    <div class="glass-panel p-5 rounded-2xl border border-slate-800 space-y-4">
+        <div class="flex items-center justify-between gap-3">
+            <div>
+                <h3 class="text-sm font-bold text-white">พื้นที่ดิสก์ของเซิร์ฟเวอร์</h3>
+                <p class="text-xs text-slate-500 mt-1">ตรวจจากดิสก์ที่เก็บไฟล์ Media ของระบบ{% if disk_usage.path %} · {{ disk_usage.path }}{% endif %}</p>
+            </div>
+            <span class="text-xs font-bold {% if disk_usage.used_percent >= 90 %}text-rose-400{% elif disk_usage.used_percent >= 75 %}text-amber-400{% else %}text-emerald-400{% endif %}">
+                ใช้ไป {{ disk_usage.used_percent|floatformat:1 }}%
+            </span>
+        </div>
+        <div class="h-2.5 rounded-full bg-slate-900 overflow-hidden border border-slate-800">
+            <div class="h-full {% if disk_usage.used_percent >= 90 %}bg-rose-500{% elif disk_usage.used_percent >= 75 %}bg-amber-500{% else %}bg-emerald-500{% endif %}" style="width: {{ disk_usage.used_percent|floatformat:1 }}%"></div>
+        </div>
+        <div class="grid grid-cols-3 gap-3 text-center">
+            <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-3"><p class="text-[10px] text-slate-500 uppercase">ทั้งหมด</p><p class="font-bold text-white mt-1">{{ disk_usage.total_gb|floatformat:2 }} GB</p></div>
+            <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-3"><p class="text-[10px] text-slate-500 uppercase">ใช้แล้ว</p><p class="font-bold text-amber-300 mt-1">{{ disk_usage.used_gb|floatformat:2 }} GB</p></div>
+            <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-3"><p class="text-[10px] text-slate-500 uppercase">เหลือ</p><p class="font-bold text-emerald-300 mt-1">{{ disk_usage.free_gb|floatformat:2 }} GB</p></div>
+        </div>
+    </div>
+
     <!-- Filter Card -->
     <div class="glass-panel p-5 rounded-2xl border border-slate-800 space-y-4">
         <h3 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">

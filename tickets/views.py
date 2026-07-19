@@ -15,6 +15,7 @@ from django import forms
 
 
 import os
+import shutil
 import datetime
 import uuid
 
@@ -1159,6 +1160,46 @@ class TicketDetailView(LoginRequiredMixin, DetailView):
 
 
 
+def _delete_ticket_files(ticket):
+    """Delete all physical files for a ticket and return bytes actually removed."""
+    paths = set()
+    if ticket.attachment and hasattr(ticket.attachment, 'path'):
+        paths.add(ticket.attachment.path)
+    for attachment in ticket.attachments.all():
+        if attachment.file and hasattr(attachment.file, 'path'):
+            paths.add(attachment.file.path)
+    for comment in ticket.comments.all():
+        for attachment in comment.attachments.all():
+            if attachment.file and hasattr(attachment.file, 'path'):
+                paths.add(attachment.file.path)
+
+    deleted_bytes = 0
+    for path in paths:
+        if not os.path.isfile(path):
+            continue
+        try:
+            file_size = os.path.getsize(path)
+            os.remove(path)
+            deleted_bytes += file_size
+        except OSError:
+            continue
+    return deleted_bytes
+
+
+def _server_disk_usage():
+    disk_path = settings.MEDIA_ROOT if os.path.exists(settings.MEDIA_ROOT) else settings.BASE_DIR
+    usage = shutil.disk_usage(disk_path)
+    gib = 1024 ** 3
+    used_percent = (usage.used / usage.total * 100) if usage.total else 0
+    return {
+        'path': str(disk_path),
+        'total_gb': usage.total / gib,
+        'used_gb': usage.used / gib,
+        'free_gb': usage.free / gib,
+        'used_percent': used_percent,
+    }
+
+
 class TicketDeleteManagementView(LoginRequiredMixin, SystemStaffRequiredMixin, View):
     template_name = 'tickets/ticket_delete_list.html'
 
@@ -1233,6 +1274,7 @@ class TicketDeleteManagementView(LoginRequiredMixin, SystemStaffRequiredMixin, V
             'selected_date': date_str,
             'search_query': search_query,
             'total_count': queryset.count(),
+            'disk_usage': _server_disk_usage(),
         }
         return render(request, self.template_name, context)
 
@@ -1241,36 +1283,26 @@ class TicketDeleteManagementView(LoginRequiredMixin, SystemStaffRequiredMixin, V
         ticket_ids = request.POST.getlist('ticket_ids')
 
         if action == 'delete_selected' and ticket_ids:
-            tickets_to_delete = Ticket.objects.filter(id__in=ticket_ids)
+            tickets_to_delete = Ticket.objects.filter(id__in=ticket_ids).prefetch_related(
+                'attachments', 'comments__attachments'
+            )
             count = tickets_to_delete.count()
+            deleted_bytes = 0
 
             for t in tickets_to_delete:
-                for att in t.attachments.all():
-                    if att.file and hasattr(att.file, 'path') and os.path.isfile(att.file.path):
-                        try:
-                            os.remove(att.file.path)
-                        except Exception:
-                            pass
-                if t.attachment and hasattr(t.attachment, 'path') and os.path.isfile(t.attachment.path):
-                    try:
-                        os.remove(t.attachment.path)
-                    except Exception:
-                        pass
-
-                for comment in t.comments.all():
-                    for catt in comment.attachments.all():
-                        if catt.file and hasattr(catt.file, 'path') and os.path.isfile(catt.file.path):
-                            try:
-                                os.remove(catt.file.path)
-                            except Exception:
-                                pass
+                deleted_bytes += _delete_ticket_files(t)
 
             id_summary = ", ".join([f"#{t.id}" for t in tickets_to_delete[:10]])
             if count > 10:
                 id_summary += f" และอื่นๆ อีก {count - 10} รายการ"
 
             tickets_to_delete.delete()
-            messages.success(request, f"ลบ Ticket จำนวน {count} รายการ ({id_summary}) สำเร็จเรียบร้อยแล้ว")
+            deleted_mb = deleted_bytes / (1024 ** 2)
+            messages.success(
+                request,
+                f"ลบ Ticket จำนวน {count} รายการ ({id_summary}) สำเร็จ "
+                f"คืนพื้นที่จากไฟล์แนบ {deleted_mb:.2f} MB"
+            )
         else:
             messages.warning(request, "กรุณาเลือก Ticket ที่ต้องการลบอย่างน้อย 1 รายการ")
 
@@ -1285,30 +1317,18 @@ class TicketDeleteView(LoginRequiredMixin, SystemStaffRequiredMixin, View):
     def post(self, request, pk, *args, **kwargs):
         ticket = get_object_or_404(Ticket, pk=pk)
 
-        for att in ticket.attachments.all():
-            if att.file and hasattr(att.file, 'path') and os.path.isfile(att.file.path):
-                try:
-                    os.remove(att.file.path)
-                except Exception:
-                    pass
-        if ticket.attachment and hasattr(ticket.attachment, 'path') and os.path.isfile(ticket.attachment.path):
-            try:
-                os.remove(ticket.attachment.path)
-            except Exception:
-                pass
-        for comment in ticket.comments.all():
-            for catt in comment.attachments.all():
-                if catt.file and hasattr(catt.file, 'path') and os.path.isfile(catt.file.path):
-                    try:
-                        os.remove(catt.file.path)
-                    except Exception:
-                        pass
+        deleted_bytes = _delete_ticket_files(ticket)
 
         ticket_id = ticket.id
         ticket_title = ticket.title
         ticket.delete()
 
-        messages.success(request, f"ลบ Ticket #{ticket_id} ('{ticket_title}') เรียบร้อยแล้ว")
+        deleted_mb = deleted_bytes / (1024 ** 2)
+        messages.success(
+            request,
+            f"ลบ Ticket #{ticket_id} ('{ticket_title}') เรียบร้อยแล้ว "
+            f"คืนพื้นที่จากไฟล์แนบ {deleted_mb:.2f} MB"
+        )
         next_url = request.POST.get('next') or reverse('dashboard')
         return redirect(next_url)
 
@@ -2768,7 +2788,7 @@ class TicketAutomationConfigForm(forms.ModelForm):
         self.fields['company'].queryset = allowed_companies
 
 
-class TicketAutomationListView(LoginRequiredMixin, AdminRequiredMixin, ListView):
+class TicketAutomationListView(LoginRequiredMixin, SystemStaffRequiredMixin, ListView):
     model = TicketAutomationConfig
     template_name = 'tickets/ticket_automation_list.html'
     context_object_name = 'configs'
@@ -2783,7 +2803,7 @@ class TicketAutomationListView(LoginRequiredMixin, AdminRequiredMixin, ListView)
         return queryset.none()
 
 
-class TicketAutomationCreateView(LoginRequiredMixin, AdminRequiredMixin, CreateView):
+class TicketAutomationCreateView(LoginRequiredMixin, SystemStaffRequiredMixin, CreateView):
     model = TicketAutomationConfig
     form_class = TicketAutomationConfigForm
     template_name = 'tickets/ticket_automation_form.html'
@@ -2800,7 +2820,7 @@ class TicketAutomationCreateView(LoginRequiredMixin, AdminRequiredMixin, CreateV
         return super().form_valid(form)
 
 
-class TicketAutomationUpdateView(LoginRequiredMixin, AdminRequiredMixin, UpdateView):
+class TicketAutomationUpdateView(LoginRequiredMixin, SystemStaffRequiredMixin, UpdateView):
     model = TicketAutomationConfig
     form_class = TicketAutomationConfigForm
     template_name = 'tickets/ticket_automation_form.html'
@@ -2819,7 +2839,7 @@ class TicketAutomationUpdateView(LoginRequiredMixin, AdminRequiredMixin, UpdateV
         return super().form_valid(form)
 
 
-class TicketAutomationDeleteView(LoginRequiredMixin, AdminRequiredMixin, View):
+class TicketAutomationDeleteView(LoginRequiredMixin, SystemStaffRequiredMixin, View):
     def post(self, request, pk, *args, **kwargs):
         queryset = TicketAutomationListView.get_queryset(self)
         config = get_object_or_404(queryset, pk=pk)
