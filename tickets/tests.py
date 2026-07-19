@@ -938,6 +938,15 @@ class MultiTenantTicketTests(TestCase):
             self.assertTrue(os.path.isfile(attachment_path))
             self.client.login(username='system_admin', password='password123')
 
+            page_response = self.client.get(reverse('ticket_delete_manage'))
+            listed_ticket = next(
+                item for item in page_response.context['tickets'] if item.pk == ticket.pk
+            )
+            self.assertEqual(listed_ticket.storage_size_mb, 1.0)
+            self.assertAlmostEqual(page_response.context['disk_usage']['ticket_used_mb'], 1.0)
+            self.assertContains(page_response, 'Ticket (ไฟล์แนบ)')
+            self.assertContains(page_response, '1.00 MB')
+
             response = self.client.post(
                 reverse('ticket_delete', kwargs={'pk': ticket.pk}),
                 follow=True,

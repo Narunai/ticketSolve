@@ -1160,8 +1160,7 @@ class TicketDetailView(LoginRequiredMixin, DetailView):
 
 
 
-def _delete_ticket_files(ticket):
-    """Delete all physical files for a ticket and return bytes actually removed."""
+def _ticket_file_paths(ticket):
     paths = set()
     if ticket.attachment and hasattr(ticket.attachment, 'path'):
         paths.add(ticket.attachment.path)
@@ -1172,6 +1171,23 @@ def _delete_ticket_files(ticket):
         for attachment in comment.attachments.all():
             if attachment.file and hasattr(attachment.file, 'path'):
                 paths.add(attachment.file.path)
+    return paths
+
+
+def _existing_files_size(paths):
+    total_bytes = 0
+    for path in paths:
+        try:
+            if os.path.isfile(path):
+                total_bytes += os.path.getsize(path)
+        except OSError:
+            continue
+    return total_bytes
+
+
+def _delete_ticket_files(ticket):
+    """Delete all physical files for a ticket and return bytes actually removed."""
+    paths = _ticket_file_paths(ticket)
 
     deleted_bytes = 0
     for path in paths:
@@ -1186,17 +1202,23 @@ def _delete_ticket_files(ticket):
     return deleted_bytes
 
 
-def _server_disk_usage():
+def _server_disk_usage(ticket_used_bytes=0):
     disk_path = settings.MEDIA_ROOT if os.path.exists(settings.MEDIA_ROOT) else settings.BASE_DIR
     usage = shutil.disk_usage(disk_path)
     gib = 1024 ** 3
+    mib = 1024 ** 2
     used_percent = (usage.used / usage.total * 100) if usage.total else 0
+    system_used_bytes = max(usage.used - ticket_used_bytes, 0)
     return {
         'path': str(disk_path),
         'total_gb': usage.total / gib,
         'used_gb': usage.used / gib,
         'free_gb': usage.free / gib,
         'used_percent': used_percent,
+        'ticket_used_bytes': ticket_used_bytes,
+        'ticket_used_mb': ticket_used_bytes / mib,
+        'ticket_used_gb': ticket_used_bytes / gib,
+        'system_used_gb': system_used_bytes / gib,
     }
 
 
@@ -1258,8 +1280,25 @@ class TicketDeleteManagementView(LoginRequiredMixin, SystemStaffRequiredMixin, V
             years_list.append(current_year)
             years_list.sort(reverse=True)
 
+        all_tickets = list(Ticket.objects.all().prefetch_related(
+            'attachments', 'comments__attachments'
+        ))
+        ticket_size_by_id = {}
+        all_ticket_paths = set()
+        for ticket in all_tickets:
+            paths = _ticket_file_paths(ticket)
+            all_ticket_paths.update(paths)
+            ticket_size_by_id[ticket.pk] = _existing_files_size(paths)
+        ticket_used_bytes = _existing_files_size(all_ticket_paths)
+
+        displayed_tickets = list(queryset.prefetch_related(
+            'attachments', 'comments__attachments'
+        ))
+        for ticket in displayed_tickets:
+            ticket.storage_size_mb = ticket_size_by_id.get(ticket.pk, 0) / (1024 ** 2)
+
         context = {
-            'tickets': queryset,
+            'tickets': displayed_tickets,
             'companies': Company.objects.all().order_by('name'),
             'years_list': years_list,
             'months_list': [
@@ -1273,8 +1312,8 @@ class TicketDeleteManagementView(LoginRequiredMixin, SystemStaffRequiredMixin, V
             'selected_month': int(month) if (month and month.isdigit()) else '',
             'selected_date': date_str,
             'search_query': search_query,
-            'total_count': queryset.count(),
-            'disk_usage': _server_disk_usage(),
+            'total_count': len(displayed_tickets),
+            'disk_usage': _server_disk_usage(ticket_used_bytes),
         }
         return render(request, self.template_name, context)
 

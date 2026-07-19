@@ -34,11 +34,14 @@
         <div class="h-2.5 rounded-full bg-slate-900 overflow-hidden border border-slate-800">
             <div class="h-full {% if disk_usage.used_percent >= 90 %}bg-rose-500{% elif disk_usage.used_percent >= 75 %}bg-amber-500{% else %}bg-emerald-500{% endif %}" style="width: {{ disk_usage.used_percent|floatformat:1 }}%"></div>
         </div>
-        <div class="grid grid-cols-3 gap-3 text-center">
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-3 text-center">
             <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-3"><p class="text-[10px] text-slate-500 uppercase">ทั้งหมด</p><p class="font-bold text-white mt-1">{{ disk_usage.total_gb|floatformat:2 }} GB</p></div>
             <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-3"><p class="text-[10px] text-slate-500 uppercase">ใช้แล้ว</p><p class="font-bold text-amber-300 mt-1">{{ disk_usage.used_gb|floatformat:2 }} GB</p></div>
+            <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-3"><p class="text-[10px] text-slate-500 uppercase">ระบบ / OS / DB / Log</p><p class="font-bold text-indigo-300 mt-1">{{ disk_usage.system_used_gb|floatformat:2 }} GB</p></div>
+            <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-3"><p class="text-[10px] text-slate-500 uppercase">Ticket (ไฟล์แนบ)</p><p class="font-bold text-sky-300 mt-1">{{ disk_usage.ticket_used_mb|floatformat:2 }} MB</p></div>
             <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-3"><p class="text-[10px] text-slate-500 uppercase">เหลือ</p><p class="font-bold text-emerald-300 mt-1">{{ disk_usage.free_gb|floatformat:2 }} GB</p></div>
         </div>
+        <p class="text-[11px] text-slate-500">Ticket นับเฉพาะไฟล์แนบที่ยังมีอยู่จริง; ส่วนระบบรวม OS, โค้ด, ฐานข้อมูล, Log และไฟล์อื่นๆ</p>
     </div>
 
     <!-- Filter Card -->
@@ -142,6 +145,7 @@
                             <th class="p-4">บริษัท / องค์กร</th>
                             <th class="p-4">ผู้เปิดเคส</th>
                             <th class="p-4">วันที่สร้าง</th>
+                            <th class="p-4">พื้นที่ไฟล์</th>
                             <th class="p-4">สถานะ</th>
                             <th class="p-4 text-center w-28">การจัดการ</th>
                         </tr>
@@ -170,6 +174,9 @@
                             <td class="p-4 text-slate-400 font-mono">
                                 {{ ticket.created_at|date:"d M Y, H:i" }}
                             </td>
+                            <td class="p-4 font-mono text-sky-300 whitespace-nowrap">
+                                {{ ticket.storage_size_mb|floatformat:2 }} MB
+                            </td>
                             <td class="p-4">
                                 {% if ticket.status == 'OPEN' %}
                                     <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-500/10 text-sky-400 border border-sky-500/20">Open</span>
@@ -194,7 +201,7 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="8" class="p-8 text-center text-slate-500 italic">
+                            <td colspan="9" class="p-8 text-center text-slate-500 italic">
                                 ไม่พบรายการ Ticket ตามเงื่อนไขการค้นหา
                             </td>
                         </tr>
