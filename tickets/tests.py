@@ -1049,6 +1049,41 @@ class MultiTenantTicketTests(TestCase):
         self.assertEqual(assignee_log.recipient_type, EmailLog.RECIPIENT_CC)
         self.assertIn('Notification Filtered', assignee_log.error_message)
 
+    def test_status_rule_uses_actual_assignee_when_email_is_shared(self):
+        from .models import NotificationConfig
+
+        shared_email = self.system_admin.email
+        assigned_user = CustomUser.objects.create_user(
+            username='assigned_with_shared_email',
+            email=shared_email,
+            password='password123',
+            role=CustomUser.CLIENT_USER,
+            company=self.company_a,
+        )
+        config = NotificationConfig.objects.create(
+            name='Block shared-email assignee',
+            company=self.company_a,
+            status_notification_mode=NotificationConfig.STATUS_NOTIFY_NONE,
+        )
+        config.target_users.add(assigned_user)
+        self.ticket_a.assigned_to = assigned_user
+        self.ticket_a.save(update_fields=['assigned_to'])
+        mail.outbox = []
+
+        self.ticket_a.status = Ticket.STATUS_RESOLVED
+        self.ticket_a.save(update_fields=['status'])
+
+        status_email = next(message for message in mail.outbox if 'อัปเดตความคืบหน้า' in message.subject)
+        self.assertEqual(status_email.to, [self.user_a.email])
+        self.assertEqual(status_email.cc, [])
+        assignee_log = EmailLog.objects.filter(
+            action_type=EmailLog.ACTION_TICKET_UPDATED,
+            recipient=shared_email,
+        ).latest('sent_at')
+        self.assertFalse(assignee_log.success)
+        self.assertEqual(assignee_log.recipient_type, EmailLog.RECIPIENT_CC)
+        self.assertIn('Notification Filtered', assignee_log.error_message)
+
     def test_non_status_ticket_edit_does_not_send_status_email(self):
         mail.outbox = []
         before_count = EmailLog.objects.filter(action_type=EmailLog.ACTION_TICKET_UPDATED).count()

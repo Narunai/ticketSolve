@@ -763,14 +763,24 @@ class NotificationConfig(models.Model):
         return f"{self.name} - {self.company.name}"
 
 
-def should_send_email_notification(recipient_email, ticket=None, event_type=None, new_status=None):
+def should_send_email_notification(recipient_email, ticket=None, event_type=None, new_status=None, recipient_user=None):
     """
     ตรวจสอบว่า recipient_email ควรได้รับอีเมลตามเงื่อนไข notification_configs หรือไม่
     """
     if not recipient_email:
         return False
 
-    user = CustomUser.objects.filter(email=recipient_email).first()
+    user = recipient_user
+    if user is None:
+        candidates = CustomUser.objects.filter(email=recipient_email)
+        if ticket:
+            participant_ids = [ticket.created_by_id, ticket.assigned_to_id]
+            user = candidates.filter(id__in=[pk for pk in participant_ids if pk]).first()
+            if user is None and ticket.company:
+                company_ids = [ticket.company_id] + [company.id for company in ticket.company.get_parents()]
+                user = candidates.filter(company_id__in=company_ids).first()
+        if user is None:
+            user = candidates.first()
     company = None
     if user and user.company:
         company = user.company

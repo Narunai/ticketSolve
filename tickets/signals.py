@@ -68,21 +68,24 @@ def send_status_change_email(ticket, subject, message):
     """Send one status email: ticket creator in To and assignee in CC."""
     delivery_group = uuid.uuid4()
     candidates = []
-    creator_email = ticket.created_by.email if ticket.created_by else ''
-    assignee_email = ticket.assigned_to.email if ticket.assigned_to else ''
+    creator = ticket.created_by
+    assignee = ticket.assigned_to
+    creator_email = creator.email if creator else ''
+    assignee_email = assignee.email if assignee else ''
 
     if creator_email:
-        candidates.append((creator_email, EmailLog.RECIPIENT_TO))
+        candidates.append((creator, creator_email, EmailLog.RECIPIENT_TO))
     if assignee_email and assignee_email != creator_email:
-        candidates.append((assignee_email, EmailLog.RECIPIENT_CC))
+        candidates.append((assignee, assignee_email, EmailLog.RECIPIENT_CC))
 
     allowed = []
-    for email, recipient_type in candidates:
+    for recipient_user, email, recipient_type in candidates:
         if should_send_email_notification(
             email,
             ticket=ticket,
             event_type=EmailLog.ACTION_TICKET_UPDATED,
             new_status=ticket.status,
+            recipient_user=recipient_user,
         ):
             allowed.append((email, recipient_type))
         else:
