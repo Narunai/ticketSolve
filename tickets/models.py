@@ -695,7 +695,7 @@ def get_smtp_connection():
             username=config.username,
             password=config.password,
             use_tls=config.use_tls,
-            fail_silently=True
+            fail_silently=False
         )
     return None
 

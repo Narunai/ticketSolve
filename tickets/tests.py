@@ -1039,6 +1039,31 @@ class MultiTenantTicketTests(TestCase):
         self.assertIsNotNone(schedule.last_sent_at)
         self.assertEqual(schedule.last_error, '')
 
+    def test_report_schedule_does_not_mark_zero_delivery_as_sent(self):
+        from unittest.mock import patch
+
+        schedule = MonthlyReportSchedule.objects.create(
+            name='Zero delivery report',
+            company=self.company_a,
+            day_of_month=31,
+            send_time='17:00',
+            created_by=self.admin_a,
+        )
+        schedule.recipients.add(self.admin_a)
+
+        with patch('tickets.views.EmailMessage.send', return_value=0):
+            call_command('process_report_schedules', '--schedule-id', schedule.id, '--force')
+
+        schedule.refresh_from_db()
+        self.assertIsNone(schedule.last_sent_at)
+        self.assertIn('ส่งได้ 0 ฉบับ', schedule.last_error)
+        failed_log = EmailLog.objects.filter(
+            action_type=EmailLog.ACTION_MONTHLY_REPORT,
+            recipient=self.admin_a.email,
+            success=False,
+        ).latest('sent_at')
+        self.assertIn('ส่งได้ 0 ฉบับ', failed_log.error_message)
+
     def test_schedule_day_31_uses_last_day_for_short_month(self):
         import datetime
         schedule = MonthlyReportSchedule(

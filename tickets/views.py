@@ -1893,7 +1893,9 @@ def send_scheduled_monthly_report(schedule):
     delivery_group = uuid.uuid4()
 
     try:
-        email.send(fail_silently=False)
+        sent_count = email.send(fail_silently=False)
+        if sent_count <= 0:
+            raise RuntimeError('SMTP ไม่ยืนยันการส่งอีเมล (ส่งได้ 0 ฉบับ)')
     except Exception as exc:
         for recipient_type, addresses in (
             (EmailLog.RECIPIENT_TO, recipient_emails),
@@ -2118,7 +2120,9 @@ class SendMonthlyReportView(LoginRequiredMixin, AdminRequiredMixin, View):
         try:
             if connection:
                 email.connection = connection
-            email.send(fail_silently=False)
+            sent_count = email.send(fail_silently=False)
+            if sent_count <= 0:
+                raise RuntimeError('SMTP ไม่ยืนยันการส่งอีเมล (ส่งได้ 0 ฉบับ)')
             
             for recipient_type, addresses in (
                 (EmailLog.RECIPIENT_TO, recipient_emails),
