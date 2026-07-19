@@ -254,9 +254,11 @@ class CompanyTicketField(models.Model):
 class TicketAutomationConfig(models.Model):
     """Company rule for automatically moving stale OPEN tickets to IN_PROGRESS."""
 
+    UNIT_MINUTES = 'MINUTES'
     UNIT_HOURS = 'HOURS'
     UNIT_DAYS = 'DAYS'
     UNIT_CHOICES = [
+        (UNIT_MINUTES, 'นาที'),
         (UNIT_HOURS, 'ชั่วโมง'),
         (UNIT_DAYS, 'วัน'),
     ]
@@ -296,6 +298,8 @@ class TicketAutomationConfig(models.Model):
             raise ValidationError({'open_age_value': 'ระยะเวลาต้องมากกว่าหรือเท่ากับ 1'})
 
     def threshold_delta(self):
+        if self.open_age_unit == self.UNIT_MINUTES:
+            return datetime.timedelta(minutes=self.open_age_value)
         if self.open_age_unit == self.UNIT_DAYS:
             return datetime.timedelta(days=self.open_age_value)
         return datetime.timedelta(hours=self.open_age_value)

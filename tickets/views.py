@@ -1350,7 +1350,7 @@ class ConfirmDeploymentView(LoginRequiredMixin, View):
         return redirect('ticket_detail', pk=ticket.id)
 
 
-class ResendEmailView(LoginRequiredMixin, AdminRequiredMixin, View):
+class ResendEmailView(LoginRequiredMixin, SystemStaffRequiredMixin, View):
     def post(self, request, pk, *args, **kwargs):
         return self._resend_email(request, pk)
 
@@ -1623,21 +1623,16 @@ def _delivery_logs_for(log, scoped_queryset=None):
     return queryset.filter(pk=log.pk)
 
 
-class LogListView(LoginRequiredMixin, AdminRequiredMixin, TemplateView):
+class LogListView(LoginRequiredMixin, SystemStaffRequiredMixin, TemplateView):
     template_name = 'tickets/log_list.html'
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         user = self.request.user
 
-        if user.is_superuser or user.role in [CustomUser.SYSTEM_ADMIN, CustomUser.SYSTEM_SUB_ADMIN]:
-            audit_logs = TicketAuditLog.objects.select_related('ticket', 'actor', 'ticket__company').all()
-        else:
-            if user.company:
-                sub_ids = user.company.get_all_subsidiary_ids()
-                audit_logs = TicketAuditLog.objects.select_related('ticket', 'actor', 'ticket__company').filter(ticket__company_id__in=sub_ids)
-            else:
-                audit_logs = TicketAuditLog.objects.none()
+        audit_logs = TicketAuditLog.objects.select_related(
+            'ticket', 'actor', 'ticket__company'
+        ).all()
 
         context['email_logs'] = _group_email_logs(_email_logs_for_user(user))
         context['email_log_count'] = len(context['email_logs'])
@@ -1645,7 +1640,7 @@ class LogListView(LoginRequiredMixin, AdminRequiredMixin, TemplateView):
         return context
 
 
-class EmailLogDetailView(LoginRequiredMixin, AdminRequiredMixin, TemplateView):
+class EmailLogDetailView(LoginRequiredMixin, SystemStaffRequiredMixin, TemplateView):
     template_name = 'tickets/email_log_detail.html'
 
     def get_context_data(self, **kwargs):

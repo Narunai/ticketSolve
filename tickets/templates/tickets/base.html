@@ -349,7 +349,7 @@
                 {% endif %}
 
 
-                {% if user.role == 'SYSTEM_ADMIN' or user.role == 'SYSTEM_SUB_ADMIN' or user.role == 'CLIENT_ADMIN' or user.is_superuser %}
+                {% if user.role == 'SYSTEM_ADMIN' or user.role == 'SYSTEM_SUB_ADMIN' or user.is_superuser %}
                 <a href="{% url 'log_list' %}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/50 transition-all font-medium {% if request.resolver_match.url_name == 'log_list' %}bg-theme-bg border border-theme-border text-theme-accent{% endif %}">
                     <!-- Clipboard List Audit Log Icon SVG -->
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">

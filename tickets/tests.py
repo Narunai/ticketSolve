@@ -1222,6 +1222,8 @@ class MultiTenantTicketTests(TestCase):
             [EmailLog.RECIPIENT_TO, EmailLog.RECIPIENT_CC],
         )
 
+        self.client.logout()
+        self.client.login(username="system_admin", password="password123")
         list_response = self.client.get(reverse('log_list'))
         self.assertEqual(list_response.status_code, 200)
         groups = list_response.context['email_logs']
@@ -1233,6 +1235,35 @@ class MultiTenantTicketTests(TestCase):
         self.assertEqual(detail_response.status_code, 200)
         self.assertContains(detail_response, self.admin_a.email)
         self.assertContains(detail_response, self.user_a.email)
+
+    def test_logs_are_restricted_to_system_staff(self):
+        email_log = EmailLog.objects.first()
+
+        self.client.login(username='admin_a', password='password123')
+        self.assertEqual(self.client.get(reverse('log_list')).status_code, 403)
+        self.assertEqual(
+            self.client.get(reverse('email_log_detail', args=[email_log.pk])).status_code,
+            403,
+        )
+        self.assertEqual(
+            self.client.post(reverse('resend_email', args=[email_log.pk])).status_code,
+            403,
+        )
+
+        system_sub_admin = User.objects.create_user(
+            username='system_sub_admin',
+            email='subadmin@system.com',
+            password='password123',
+            role=User.SYSTEM_SUB_ADMIN,
+            is_staff=True,
+        )
+        self.client.logout()
+        self.client.login(username=system_sub_admin.username, password='password123')
+        self.assertEqual(self.client.get(reverse('log_list')).status_code, 200)
+        self.assertEqual(
+            self.client.get(reverse('email_log_detail', args=[email_log.pk])).status_code,
+            200,
+        )
 
     def test_ticket_automation_changes_due_open_ticket_and_writes_audit_log(self):
         import datetime
@@ -1279,6 +1310,23 @@ class MultiTenantTicketTests(TestCase):
             actor__isnull=True,
             new_status=Ticket.STATUS_IN_PROGRESS,
         ).exists())
+
+    def test_ticket_automation_supports_minutes(self):
+        import datetime
+
+        TicketAutomationConfig.objects.create(
+            company=self.company_a,
+            open_age_value=5,
+            open_age_unit=TicketAutomationConfig.UNIT_MINUTES,
+        )
+        Ticket.objects.filter(pk=self.ticket_a.pk).update(
+            status_changed_at=timezone.now() - datetime.timedelta(minutes=6)
+        )
+
+        call_command('process_ticket_automations')
+
+        self.ticket_a.refresh_from_db()
+        self.assertEqual(self.ticket_a.status, Ticket.STATUS_IN_PROGRESS)
 
     def test_ticket_automation_parent_rule_and_local_opt_out(self):
         child = Company.objects.create(name='Company A Branch', parent=self.company_a)
