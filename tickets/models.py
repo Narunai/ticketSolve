@@ -251,6 +251,75 @@ class CompanyTicketField(models.Model):
 
 
 
+class TicketAutomationConfig(models.Model):
+    """Company rule for automatically moving stale OPEN tickets to IN_PROGRESS."""
+
+    UNIT_HOURS = 'HOURS'
+    UNIT_DAYS = 'DAYS'
+    UNIT_CHOICES = [
+        (UNIT_HOURS, 'ชั่วโมง'),
+        (UNIT_DAYS, 'วัน'),
+    ]
+
+    company = models.OneToOneField(
+        Company,
+        on_delete=models.CASCADE,
+        related_name='ticket_automation_config',
+        verbose_name='บริษัท',
+    )
+    open_age_value = models.PositiveIntegerField(default=24, verbose_name='ระยะเวลา')
+    open_age_unit = models.CharField(
+        max_length=10,
+        choices=UNIT_CHOICES,
+        default=UNIT_HOURS,
+        verbose_name='หน่วย',
+    )
+    is_active = models.BooleanField(default=True, verbose_name='เปิดใช้งาน')
+    apply_to_subsidiaries = models.BooleanField(default=True, verbose_name='ใช้กับบริษัทลูก')
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_ticket_automation_configs',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    last_applied_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['company__name']
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if self.open_age_value < 1:
+            raise ValidationError({'open_age_value': 'ระยะเวลาต้องมากกว่าหรือเท่ากับ 1'})
+
+    def threshold_delta(self):
+        if self.open_age_unit == self.UNIT_DAYS:
+            return datetime.timedelta(days=self.open_age_value)
+        return datetime.timedelta(hours=self.open_age_value)
+
+    @classmethod
+    def resolve_for_company(cls, company):
+        """Return the nearest applicable rule; a local disabled rule is an opt-out."""
+        if not company:
+            return None
+        local_rule = cls.objects.filter(company=company).first()
+        if local_rule:
+            return local_rule if local_rule.is_active else None
+        for parent in company.get_parents():
+            parent_rule = cls.objects.filter(company=parent).first()
+            if parent_rule:
+                if parent_rule.is_active and parent_rule.apply_to_subsidiaries:
+                    return parent_rule
+                return None
+        return None
+
+    def __str__(self):
+        return f"{self.company.name}: OPEN {self.open_age_value} {self.get_open_age_unit_display()} -> IN_PROGRESS"
+
+
 class Ticket(models.Model):
     STATUS_OPEN = 'OPEN'
     STATUS_IN_PROGRESS = 'IN_PROGRESS'
@@ -353,6 +422,7 @@ class Ticket(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    status_changed_at = models.DateTimeField(default=timezone.now, db_index=True)
 
     def get_ticket_code(self):
         if hasattr(self.company, 'ticket_config') and self.company.ticket_config.ticket_prefix:

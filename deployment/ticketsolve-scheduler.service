@@ -1,5 +1,5 @@
 [Unit]
-Description=Process TicketSolve automatic monthly email schedules
+Description=Process TicketSolve automatic schedules
 After=network.target postgresql.service
 
 [Service]
@@ -9,3 +9,4 @@ Group=www-data
 WorkingDirectory=/var/www/ticketSolve
 Environment=TIME_ZONE=Asia/Bangkok
 ExecStart=/var/www/ticketSolve/venv/bin/python manage.py process_report_schedules
+ExecStart=/var/www/ticketSolve/venv/bin/python manage.py process_ticket_automations

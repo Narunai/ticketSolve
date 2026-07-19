@@ -6,8 +6,9 @@ from django.core import mail
 from django.core.management import call_command
 from django.contrib.admin.sites import AdminSite
 from django.core.exceptions import PermissionDenied
+from django.utils import timezone
 
-from .models import Company, Ticket, CustomUser, EmailLog, MonthlyReportSchedule
+from .models import Company, Ticket, CustomUser, EmailLog, MonthlyReportSchedule, TicketAuditLog, TicketAutomationConfig
 
 from .admin import CustomUserAdmin, TicketAdmin
 
@@ -1232,6 +1233,110 @@ class MultiTenantTicketTests(TestCase):
         self.assertEqual(detail_response.status_code, 200)
         self.assertContains(detail_response, self.admin_a.email)
         self.assertContains(detail_response, self.user_a.email)
+
+    def test_ticket_automation_changes_due_open_ticket_and_writes_audit_log(self):
+        import datetime
+
+        TicketAutomationConfig.objects.create(
+            company=self.company_a,
+            open_age_value=2,
+            open_age_unit=TicketAutomationConfig.UNIT_HOURS,
+            created_by=self.admin_a,
+        )
+        self.ticket_a.assigned_to = self.admin_a
+        self.ticket_a.save(update_fields=['assigned_to'])
+        Ticket.objects.filter(pk=self.ticket_a.pk).update(
+            status_changed_at=timezone.now() - datetime.timedelta(hours=3)
+        )
+        mail.outbox = []
+
+        call_command('process_ticket_automations')
+
+        self.ticket_a.refresh_from_db()
+        self.assertEqual(self.ticket_a.status, Ticket.STATUS_IN_PROGRESS)
+        audit = TicketAuditLog.objects.filter(ticket=self.ticket_a).latest('created_at')
+        self.assertIsNone(audit.actor)
+        self.assertEqual(audit.old_status, Ticket.STATUS_OPEN)
+        self.assertEqual(audit.new_status, Ticket.STATUS_IN_PROGRESS)
+        self.assertIn('Ticket Auto Schedule', audit.details)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, [self.user_a.email])
+        self.assertEqual(mail.outbox[0].cc, [self.admin_a.email])
+
+    def test_ticket_automation_does_not_change_ticket_before_due_time(self):
+        TicketAutomationConfig.objects.create(
+            company=self.company_a,
+            open_age_value=1,
+            open_age_unit=TicketAutomationConfig.UNIT_DAYS,
+        )
+
+        call_command('process_ticket_automations')
+
+        self.ticket_a.refresh_from_db()
+        self.assertEqual(self.ticket_a.status, Ticket.STATUS_OPEN)
+        self.assertFalse(TicketAuditLog.objects.filter(
+            ticket=self.ticket_a,
+            actor__isnull=True,
+            new_status=Ticket.STATUS_IN_PROGRESS,
+        ).exists())
+
+    def test_ticket_automation_parent_rule_and_local_opt_out(self):
+        child = Company.objects.create(name='Company A Branch', parent=self.company_a)
+        child_user = User.objects.create_user(
+            username='branch_user',
+            email='branch@example.com',
+            password='password123',
+            company=child,
+        )
+        child_ticket = Ticket.objects.create(
+            title='Branch issue',
+            description='Waiting too long',
+            company=child,
+            created_by=child_user,
+        )
+        parent_rule = TicketAutomationConfig.objects.create(
+            company=self.company_a,
+            open_age_value=1,
+            apply_to_subsidiaries=True,
+        )
+        self.assertEqual(TicketAutomationConfig.resolve_for_company(child), parent_rule)
+
+        TicketAutomationConfig.objects.create(
+            company=child,
+            open_age_value=1,
+            is_active=False,
+        )
+        self.assertIsNone(TicketAutomationConfig.resolve_for_company(child))
+        call_command('process_ticket_automations', '--ticket-id', child_ticket.pk, '--force')
+        child_ticket.refresh_from_db()
+        self.assertEqual(child_ticket.status, Ticket.STATUS_OPEN)
+
+    def test_ticket_automation_settings_page_and_create(self):
+        self.client.login(username='admin_a', password='password123')
+        list_response = self.client.get(reverse('ticket_automation_list'))
+        self.assertEqual(list_response.status_code, 200)
+        response = self.client.post(reverse('ticket_automation_create'), {
+            'company': self.company_a.pk,
+            'open_age_value': 6,
+            'open_age_unit': TicketAutomationConfig.UNIT_HOURS,
+            'is_active': 'on',
+            'apply_to_subsidiaries': 'on',
+        })
+        self.assertRedirects(response, reverse('ticket_automation_list'))
+        config = TicketAutomationConfig.objects.get(company=self.company_a)
+        self.assertEqual(config.open_age_value, 6)
+        self.assertEqual(config.created_by, self.admin_a)
+
+    def test_manual_status_change_resets_status_clock(self):
+        import datetime
+
+        old_clock = timezone.now() - datetime.timedelta(days=4)
+        Ticket.objects.filter(pk=self.ticket_a.pk).update(status_changed_at=old_clock)
+        self.ticket_a.refresh_from_db()
+        self.ticket_a.status = Ticket.STATUS_IN_PROGRESS
+        self.ticket_a.save(update_fields=['status'])
+        self.ticket_a.refresh_from_db()
+        self.assertGreater(self.ticket_a.status_changed_at, old_clock)
 
 
 

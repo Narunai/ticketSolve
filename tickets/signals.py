@@ -2,6 +2,7 @@ from django.db.models.signals import pre_save, post_save, post_migrate
 from django.dispatch import receiver
 from django.core.mail import EmailMessage, send_mail
 from django.conf import settings
+from django.utils import timezone
 import uuid
 from .models import Ticket, CustomUser, Company, EmailLog, get_smtp_connection, get_smtp_from_email, should_send_email_notification
 
@@ -147,6 +148,8 @@ def remember_previous_ticket_status(sender, instance, **kwargs):
     instance._previous_status = Ticket.objects.filter(
         pk=instance.pk
     ).values_list('status', flat=True).first()
+    if instance._previous_status != instance.status:
+        instance.status_changed_at = timezone.now()
 
 
 
@@ -193,6 +196,9 @@ def send_ticket_notifications(sender, instance, created, **kwargs):
         previous_status = getattr(instance, '_previous_status', None)
         if previous_status == instance.status:
             return
+
+        # Keep the status clock correct when save(update_fields=['status']) is used.
+        Ticket.objects.filter(pk=instance.pk).update(status_changed_at=instance.status_changed_at)
 
         # Action 2: แจ้งเตือนเฉพาะเมื่อสถานะ Ticket เปลี่ยนจริง
         if instance.status == Ticket.STATUS_DEPLOYMENT_REQUESTED:

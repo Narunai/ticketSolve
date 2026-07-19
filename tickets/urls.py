@@ -43,6 +43,12 @@ urlpatterns = [
     path('notification-configs/<int:pk>/edit/', views.NotificationConfigUpdateView.as_view(), name='notification_config_edit'),
     path('notification-configs/<int:pk>/delete/', views.NotificationConfigDeleteView.as_view(), name='notification_config_delete'),
 
+    # Ticket status automation URLs
+    path('ticket-automations/', views.TicketAutomationListView.as_view(), name='ticket_automation_list'),
+    path('ticket-automations/create/', views.TicketAutomationCreateView.as_view(), name='ticket_automation_create'),
+    path('ticket-automations/<int:pk>/edit/', views.TicketAutomationUpdateView.as_view(), name='ticket_automation_edit'),
+    path('ticket-automations/<int:pk>/delete/', views.TicketAutomationDeleteView.as_view(), name='ticket_automation_delete'),
+
     # Company Ticket Customization URLs
 
     path('company/design/', views.CompanyTicketDesignView.as_view(), name='company_ticket_design'),

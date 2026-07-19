@@ -6,7 +6,7 @@ from django.views.generic import CreateView, UpdateView, DetailView, TemplateVie
 from django.urls import reverse, reverse_lazy
 
 from django.core.exceptions import PermissionDenied
-from .models import Ticket, CustomUser, Company, EmailLog, TicketAuditLog, ReportViewLog, MonthlyReportSchedule, SMTPConfiguration, get_smtp_connection, get_smtp_from_email, TicketComment, TicketCategory, ResolutionCategory, TicketStatusConfig, CompanyTicketConfig, CompanyTicketField, NotificationConfig, should_send_email_notification
+from .models import Ticket, CustomUser, Company, EmailLog, TicketAuditLog, ReportViewLog, MonthlyReportSchedule, TicketAutomationConfig, SMTPConfiguration, get_smtp_connection, get_smtp_from_email, TicketComment, TicketCategory, ResolutionCategory, TicketStatusConfig, CompanyTicketConfig, CompanyTicketField, NotificationConfig, should_send_email_notification
 
 
 from django.db import models
@@ -2741,6 +2741,96 @@ class NotificationConfigDeleteView(LoginRequiredMixin, View):
         config.delete()
         messages.success(request, f"ลบกฎการตั้งค่าแจ้งเตือน '{name}' เรียบร้อยแล้ว!")
         return redirect('notification_config_list')
+
+
+class TicketAutomationConfigForm(forms.ModelForm):
+    class Meta:
+        model = TicketAutomationConfig
+        fields = ['company', 'open_age_value', 'open_age_unit', 'is_active', 'apply_to_subsidiaries']
+        widgets = {
+            'company': forms.Select(attrs={'class': 'w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-white'}),
+            'open_age_value': forms.NumberInput(attrs={'min': 1, 'class': 'w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-white'}),
+            'open_age_unit': forms.Select(attrs={'class': 'w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-white'}),
+            'is_active': forms.CheckboxInput(attrs={'class': 'rounded bg-slate-900 border-slate-700 text-indigo-600 h-4 w-4'}),
+            'apply_to_subsidiaries': forms.CheckboxInput(attrs={'class': 'rounded bg-slate-900 border-slate-700 text-indigo-600 h-4 w-4'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        user = kwargs.pop('user')
+        super().__init__(*args, **kwargs)
+        if user.is_superuser or user.role in [CustomUser.SYSTEM_ADMIN, CustomUser.SYSTEM_SUB_ADMIN]:
+            allowed_companies = Company.objects.all().order_by('name')
+        elif user.company:
+            allowed_companies = Company.objects.filter(id__in=user.company.get_all_subsidiary_ids()).order_by('name')
+        else:
+            allowed_companies = Company.objects.none()
+        if self.instance and self.instance.pk:
+            allowed_companies = allowed_companies.filter(
+                models.Q(ticket_automation_config__isnull=True) | models.Q(pk=self.instance.company_id)
+            )
+        else:
+            allowed_companies = allowed_companies.filter(ticket_automation_config__isnull=True)
+        self.fields['company'].queryset = allowed_companies
+
+
+class TicketAutomationListView(LoginRequiredMixin, AdminRequiredMixin, ListView):
+    model = TicketAutomationConfig
+    template_name = 'tickets/ticket_automation_list.html'
+    context_object_name = 'configs'
+
+    def get_queryset(self):
+        queryset = TicketAutomationConfig.objects.select_related('company', 'created_by')
+        user = self.request.user
+        if user.is_superuser or user.role in [CustomUser.SYSTEM_ADMIN, CustomUser.SYSTEM_SUB_ADMIN]:
+            return queryset
+        if user.company:
+            return queryset.filter(company_id__in=user.company.get_all_subsidiary_ids())
+        return queryset.none()
+
+
+class TicketAutomationCreateView(LoginRequiredMixin, AdminRequiredMixin, CreateView):
+    model = TicketAutomationConfig
+    form_class = TicketAutomationConfigForm
+    template_name = 'tickets/ticket_automation_form.html'
+    success_url = reverse_lazy('ticket_automation_list')
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        return kwargs
+
+    def form_valid(self, form):
+        form.instance.created_by = self.request.user
+        messages.success(self.request, 'บันทึก Ticket Auto Schedule เรียบร้อยแล้ว')
+        return super().form_valid(form)
+
+
+class TicketAutomationUpdateView(LoginRequiredMixin, AdminRequiredMixin, UpdateView):
+    model = TicketAutomationConfig
+    form_class = TicketAutomationConfigForm
+    template_name = 'tickets/ticket_automation_form.html'
+    success_url = reverse_lazy('ticket_automation_list')
+
+    def get_queryset(self):
+        return TicketAutomationListView.get_queryset(self)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        return kwargs
+
+    def form_valid(self, form):
+        messages.success(self.request, 'อัปเดต Ticket Auto Schedule เรียบร้อยแล้ว')
+        return super().form_valid(form)
+
+
+class TicketAutomationDeleteView(LoginRequiredMixin, AdminRequiredMixin, View):
+    def post(self, request, pk, *args, **kwargs):
+        queryset = TicketAutomationListView.get_queryset(self)
+        config = get_object_or_404(queryset, pk=pk)
+        config.delete()
+        messages.success(request, 'ลบ Ticket Auto Schedule เรียบร้อยแล้ว')
+        return redirect('ticket_automation_list')
 
 
 

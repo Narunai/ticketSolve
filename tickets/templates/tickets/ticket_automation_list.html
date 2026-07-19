@@ -1,0 +1,58 @@
+{% extends 'tickets/base.html' %}
+
+{% block header_title %}Ticket Auto Schedule{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="glass-card p-6 rounded-2xl border border-slate-800/80 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+            <h2 class="text-xl font-bold text-white">Ticket Auto Schedule</h2>
+            <p class="text-sm text-slate-400 mt-1">ตั้งเวลาให้ Ticket ที่ค้างสถานะ Open เปลี่ยนเป็น In Progress อัตโนมัติ ระบบตรวจสอบทุก 1 นาที</p>
+        </div>
+        <a href="{% url 'ticket_automation_create' %}" class="px-4 py-2.5 rounded-xl font-bold text-xs bg-indigo-600 hover:bg-indigo-500 text-white">+ สร้าง Auto Schedule</a>
+    </div>
+
+    <div class="glass-panel rounded-2xl border border-slate-800/80 overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm">
+                <thead class="bg-slate-900/70 text-slate-400 text-xs uppercase">
+                    <tr>
+                        <th class="px-5 py-4">บริษัท</th>
+                        <th class="px-5 py-4">เงื่อนไข</th>
+                        <th class="px-5 py-4">ขอบเขต</th>
+                        <th class="px-5 py-4">สถานะ</th>
+                        <th class="px-5 py-4">ใช้งานล่าสุด</th>
+                        <th class="px-5 py-4 text-right">จัดการ</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800">
+                    {% for config in configs %}
+                    <tr class="text-slate-300 hover:bg-slate-900/40">
+                        <td class="px-5 py-4 font-semibold text-white">{{ config.company.name }}</td>
+                        <td class="px-5 py-4"><span class="text-amber-300">OPEN</span> ครบ {{ config.open_age_value }} {{ config.get_open_age_unit_display }} → <span class="text-blue-300">IN PROGRESS</span></td>
+                        <td class="px-5 py-4">{% if config.apply_to_subsidiaries %}บริษัทนี้และบริษัทลูก{% else %}เฉพาะบริษัทนี้{% endif %}</td>
+                        <td class="px-5 py-4">{% if config.is_active %}<span class="text-emerald-400 font-bold">● เปิดใช้งาน</span>{% else %}<span class="text-slate-500 font-bold">● ปิดใช้งาน</span>{% endif %}</td>
+                        <td class="px-5 py-4">{% if config.last_applied_at %}{{ config.last_applied_at|date:"d/m/Y H:i" }}{% else %}<span class="text-slate-500">ยังไม่เคยเปลี่ยน Ticket</span>{% endif %}</td>
+                        <td class="px-5 py-4">
+                            <div class="flex justify-end gap-2">
+                                <a href="{% url 'ticket_automation_edit' config.pk %}" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700">แก้ไข</a>
+                                <form method="post" action="{% url 'ticket_automation_delete' config.pk %}" onsubmit="return confirm('ยืนยันการลบ Auto Schedule นี้?');">
+                                    {% csrf_token %}
+                                    <button class="px-3 py-1.5 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20">ลบ</button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="6" class="px-5 py-12 text-center text-slate-500">ยังไม่มี Ticket Auto Schedule ที่บันทึกไว้</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="p-4 rounded-xl border border-indigo-500/20 bg-indigo-500/5 text-xs text-slate-400">
+        เมื่อระบบเปลี่ยนสถานะ จะสร้าง Audit Log โดยผู้ดำเนินการเป็น System และการส่งอีเมลจะใช้กฎ Notification Email Configs เดิม
+    </div>
+</div>
+{% endblock %}

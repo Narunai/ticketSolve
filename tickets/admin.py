@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import Company, CustomUser, Ticket, MonthlyReportSchedule
+from .models import Company, CustomUser, Ticket, MonthlyReportSchedule, TicketAutomationConfig
 
 class CompanyAdmin(admin.ModelAdmin):
     list_display = ('name', 'created_at')
@@ -105,6 +105,12 @@ class MonthlyReportScheduleAdmin(admin.ModelAdmin):
     list_filter = ('is_active', 'timezone_name', 'company')
     search_fields = ('name', 'recipients__username', 'recipients__email')
     filter_horizontal = ('recipients', 'cc_recipients')
+
+
+@admin.register(TicketAutomationConfig)
+class TicketAutomationConfigAdmin(admin.ModelAdmin):
+    list_display = ('company', 'open_age_value', 'open_age_unit', 'is_active', 'apply_to_subsidiaries', 'last_applied_at')
+    list_filter = ('is_active', 'open_age_unit', 'apply_to_subsidiaries')
 
 admin.site.register(Company, CompanyAdmin)
 admin.site.register(CustomUser, CustomUserAdmin)
