@@ -7,7 +7,8 @@ from django.core.management import call_command
 from django.contrib.admin.sites import AdminSite
 from django.core.exceptions import PermissionDenied
 
-from .models import Company, Ticket, CustomUser
+from .models import Company, Ticket, CustomUser, EmailLog, MonthlyReportSchedule
+
 from .admin import CustomUserAdmin, TicketAdmin
 
 User = get_user_model()
@@ -80,7 +81,9 @@ class MultiTenantTicketTests(TestCase):
         # Verify custom signal triggered email sending (at least to creator and admins)
         self.assertTrue(len(mail.outbox) > 0)
         self.assertIn("Billing Query", mail.outbox[0].subject)
-        self.assertIn(self.user_a.email, mail.outbox[0].to)
+        all_to = [to_addr for m in mail.outbox for to_addr in m.to]
+        self.assertIn(self.user_a.email, all_to)
+
 
     def test_data_isolation_regular_user_a_cannot_see_b_data(self):
         # Log in as user_b
@@ -250,6 +253,311 @@ class MultiTenantTicketTests(TestCase):
         self.client.login(username="user_a", password="password123")
         response = self.client.get(reverse('monthly_report'))
         self.assertEqual(response.status_code, 403)
+
+    def test_parent_subsidiary_company_hierarchy_and_clean_validation(self):
+        from django.core.exceptions import ValidationError
+
+        holding = Company.objects.create(name="Holding Group")
+        subsidiary = Company.objects.create(name="Subsidiary Alpha", parent=holding)
+        sub_unit = Company.objects.create(name="Sub Unit A1", parent=subsidiary)
+
+        # Verify get_all_subsidiary_ids
+        self.assertCountEqual(holding.get_all_subsidiary_ids(), [holding.id, subsidiary.id, sub_unit.id])
+        self.assertCountEqual(subsidiary.get_all_subsidiary_ids(), [subsidiary.id, sub_unit.id])
+        self.assertCountEqual(sub_unit.get_all_subsidiary_ids(), [sub_unit.id])
+
+        # Verify get_full_path
+        self.assertEqual(sub_unit.get_full_path(), "Holding Group > Subsidiary Alpha > Sub Unit A1")
+
+        # Test self-parenting validation
+        holding.parent = holding
+        with self.assertRaises(ValidationError):
+            holding.clean()
+
+        # Test circular loop validation (subsidiary parent set to sub_unit)
+        holding.parent = None
+        subsidiary.parent = sub_unit
+        with self.assertRaises(ValidationError):
+            subsidiary.clean()
+
+    def test_parent_company_admin_can_view_subsidiary_tickets_and_users(self):
+        parent_comp = Company.objects.create(name="Parent Corp")
+        child_comp = Company.objects.create(name="Child Corp", parent=parent_comp)
+
+        parent_admin = User.objects.create_user(
+            username="parent_admin",
+            email="padmin@parent.com",
+            password="password123",
+            role=User.CLIENT_ADMIN,
+            company=parent_comp,
+            is_staff=True
+        )
+
+        child_user = User.objects.create_user(
+            username="child_user",
+            email="cuser@child.com",
+            password="password123",
+            role=User.CLIENT_USER,
+            company=child_comp
+        )
+
+        child_ticket = Ticket.objects.create(
+            title="Child Company Issue",
+            description="Child details",
+            company=child_comp,
+            created_by=child_user
+        )
+
+        parent_ticket = Ticket.objects.create(
+            title="Parent Secret Ticket",
+            description="Parent details",
+            company=parent_comp,
+            created_by=parent_admin
+        )
+
+        # Parent Admin logs in
+        self.client.login(username="parent_admin", password="password123")
+
+        # Parent Admin can see child's ticket detail
+        response = self.client.get(reverse('ticket_detail', args=[child_ticket.id]))
+        self.assertEqual(response.status_code, 200)
+
+        # Parent Admin user_list contains child_user
+        response = self.client.get(reverse('user_list'))
+        self.assertContains(response, "child_user")
+
+        # Child User logs in
+        self.client.login(username="child_user", password="password123")
+
+        # Child User CANNOT see parent's ticket detail
+        response = self.client.get(reverse('ticket_detail', args=[parent_ticket.id]))
+        self.assertEqual(response.status_code, 403)
+
+        response = self.client.get(reverse('monthly_report'))
+        self.assertEqual(response.status_code, 403)
+
+    def test_dynamic_category_and_resolution_management(self):
+        from .models import TicketCategory, ResolutionCategory
+        
+        self.client.login(username="admin_a", password="password123")
+        
+        # Access category list
+        response = self.client.get(reverse('category_list'))
+        self.assertEqual(response.status_code, 200)
+
+        # Create company ticket category
+        response = self.client.post(reverse('ticket_category_create'), {
+            'name': 'Custom Billing Issue',
+            'description': 'Billing and payment problems',
+            'icon_code': 'credit-card',
+            'color_code': '#ef4444',
+            'is_active': True
+        })
+        self.assertEqual(response.status_code, 302)
+
+        created_cat = TicketCategory.objects.filter(name='Custom Billing Issue').first()
+        self.assertIsNotNone(created_cat)
+        self.assertEqual(created_cat.company, self.company_a)
+
+        # Create resolution category
+        response = self.client.post(reverse('resolution_category_create'), {
+            'name': 'Account Reset Completed',
+            'description': 'Reset user account credentials',
+            'is_active': True
+        })
+        self.assertEqual(response.status_code, 302)
+        res_cat = ResolutionCategory.objects.filter(name='Account Reset Completed').first()
+        self.assertIsNotNone(res_cat)
+        self.assertEqual(res_cat.company, self.company_a)
+
+    def test_company_ticket_config_and_prefix(self):
+        from .models import CompanyTicketConfig, ResolutionCategory, TicketCategory
+
+        config = CompanyTicketConfig.objects.create(
+            company=self.company_a,
+            ticket_prefix="SEC-",
+            require_resolution_note=True
+        )
+
+        ticket_code = self.ticket_a.get_ticket_code()
+        self.assertTrue(ticket_code.startswith("SEC-"))
+
+        res_cat = ResolutionCategory.objects.create(name="Replaced Hardware", company=self.company_a)
+        cat = TicketCategory.objects.create(name="Hardware Fault", company=self.company_a)
+
+        self.client.login(username="admin_a", password="password123")
+
+        # Try resolving ticket without resolution notes (should fail validation)
+        response = self.client.post(reverse('ticket_update', args=[self.ticket_a.id]), {
+            'title': self.ticket_a.title,
+            'description': self.ticket_a.description,
+            'status': Ticket.STATUS_RESOLVED,
+            'priority': self.ticket_a.priority,
+            'ticket_category': cat.id,
+            'resolution_category': res_cat.id,
+            'resolution_notes': ''
+        })
+        self.assertEqual(response.status_code, 200) # Form re-rendered with error
+        self.assertIn('resolution_notes', response.context['form'].errors)
+        self.assertIn('กรุณาระบุรายละเอียดสรุปวิธีแก้ไขปัญหาก่อนเปลี่ยนสถานะเป็น Resolved/Closed', response.context['form'].errors['resolution_notes'])
+
+
+        # Now resolve with resolution notes (should succeed)
+        response = self.client.post(reverse('ticket_update', args=[self.ticket_a.id]), {
+            'title': self.ticket_a.title,
+            'description': self.ticket_a.description,
+            'status': Ticket.STATUS_RESOLVED,
+            'priority': self.ticket_a.priority,
+            'ticket_category': cat.id,
+            'resolution_category': res_cat.id,
+            'resolution_notes': 'Replaced broken RAM stick'
+        })
+        self.assertEqual(response.status_code, 302)
+        self.ticket_a.refresh_from_db()
+        self.assertEqual(self.ticket_a.status, Ticket.STATUS_RESOLVED)
+        self.assertEqual(self.ticket_a.resolution_notes, 'Replaced broken RAM stick')
+
+    def test_company_field_customization_and_ordering(self):
+        from .models import CompanyTicketField, TicketCategory
+
+        self.client.login(username="admin_a", password="password123")
+
+        # Access company ticket design page
+        response = self.client.get(reverse('company_ticket_design'))
+        self.assertEqual(response.status_code, 200)
+
+        # Check default baseline fields seeded
+        fields = CompanyTicketField.objects.filter(company=self.company_a).order_by('order', 'id')
+        self.assertEqual(fields.count(), 5)
+
+        # Add custom field (Location)
+        response = self.client.post(reverse('company_ticket_design'), {
+            'action': 'add_custom_field',
+            'label': 'อาคารและสถานที่',
+            'field_key': 'location',
+            'field_type': 'TEXT',
+            'placeholder': 'ระบุชั้นและเลขห้อง...',
+            'is_required': 'on',
+            'order': 60
+        })
+        self.assertEqual(response.status_code, 302)
+
+        custom_f = CompanyTicketField.objects.filter(company=self.company_a, field_key='location').first()
+        self.assertIsNotNone(custom_f)
+        self.assertTrue(custom_f.is_custom)
+
+        # Move custom field UP
+        response = self.client.post(reverse('company_ticket_design'), {
+            'action': 'move_field',
+            'field_id': custom_f.id,
+            'direction': 'up'
+        })
+        self.assertEqual(response.status_code, 302)
+
+        # Create ticket with custom field data
+        cat = TicketCategory.objects.create(name="Office Equipment", company=self.company_a)
+        response = self.client.post(reverse('ticket_create'), {
+            'title': 'Broken Air Conditioner',
+            'description': 'Leaking water',
+            'priority': 'HIGH',
+            'ticket_category': cat.id,
+            'location': 'Building B, Floor 4, Room 402'
+        })
+        self.assertEqual(response.status_code, 302)
+
+
+
+        created_ticket = Ticket.objects.get(title='Broken Air Conditioner')
+        self.assertEqual(created_ticket.custom_fields_data.get('location'), 'Building B, Floor 4, Room 402')
+
+    def test_system_admin_without_company_ticket_and_category_creation(self):
+        from .models import TicketCategory
+
+        # System admin with company=None
+        self.system_admin.company = None
+        self.system_admin.save()
+        self.client.login(username="system_admin", password="password123")
+
+
+
+        # Category creation without icon_code & color_code
+        response = self.client.post(reverse('ticket_category_create'), {
+            'name': 'Global IT Support',
+            'description': 'General IT Issues'
+        })
+        self.assertEqual(response.status_code, 302)
+
+
+        cat = TicketCategory.objects.get(name='Global IT Support')
+        self.assertEqual(cat.icon_code, 'folder')
+        self.assertEqual(cat.color_code, '#6366f1')
+
+        # Ticket creation by System Admin without company
+        response = self.client.post(reverse('ticket_create'), {
+            'title': 'Server Maintenance',
+            'description': 'Upgrading OS kernel',
+            'priority': 'HIGH',
+            'ticket_category': cat.id,
+            'company': self.company_a.id
+        })
+        self.assertEqual(response.status_code, 302)
+
+
+        ticket = Ticket.objects.get(title='Server Maintenance')
+        self.assertEqual(ticket.company, self.company_a)
+
+    def test_category_list_company_filtering(self):
+        from .models import TicketCategory
+
+        cat_global = TicketCategory.objects.create(name="Global Network", company=None)
+        cat_b = TicketCategory.objects.create(name="Company B Special", company=self.company_b)
+
+        self.client.login(username="system_admin", password="password123")
+
+
+        # Filter by Company B
+        response = self.client.get(reverse('category_list') + f"?company_id={self.company_b.id}")
+        self.assertEqual(response.status_code, 200)
+        t_cats = list(response.context['ticket_categories'])
+        self.assertIn(cat_global, t_cats)
+        self.assertIn(cat_b, t_cats)
+        self.assertEqual(response.context['selected_company'], self.company_b)
+
+    def test_multiple_attachments_for_tickets_and_comments(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from .models import TicketAttachment, CommentAttachment, TicketComment, TicketCategory
+
+        self.client.login(username="user_a", password="password123")
+
+        f1 = SimpleUploadedFile("doc1.pdf", b"content1", content_type="application/pdf")
+        f2 = SimpleUploadedFile("doc2.jpg", b"content2", content_type="image/jpeg")
+
+        # Create ticket with multiple files
+        response = self.client.post(reverse('ticket_create'), {
+            'title': 'Ticket with multiple files',
+            'description': 'Description text',
+            'priority': 'MEDIUM',
+            'category': 'HARDWARE',
+            'attachments': [f1, f2]
+        })
+        self.assertEqual(response.status_code, 302)
+
+        ticket = Ticket.objects.get(title='Ticket with multiple files')
+        self.assertEqual(ticket.attachments.count(), 2)
+
+        # Add comment with multiple files
+        c_f1 = SimpleUploadedFile("log1.txt", b"log data 1", content_type="text/plain")
+        c_f2 = SimpleUploadedFile("log2.txt", b"log data 2", content_type="text/plain")
+
+        response = self.client.post(reverse('ticket_detail', kwargs={'pk': ticket.pk}), {
+            'content': 'Check these logs',
+            'attachments': [c_f1, c_f2]
+        })
+        self.assertEqual(response.status_code, 302)
+
+        comment = TicketComment.objects.filter(ticket=ticket).first()
+        self.assertIsNotNone(comment)
+        self.assertEqual(comment.attachments.count(), 2)
 
     def test_report_preview_pdf_generation(self):
         self.client.login(username="admin_a", password="password123")
@@ -447,7 +755,8 @@ class MultiTenantTicketTests(TestCase):
         
         # Verify it displays on detail page
         detail_response = self.client.get(reverse('ticket_detail', args=[ticket.id]))
-        self.assertContains(detail_response, 'Network / Internet')
+        self.assertContains(detail_response, 'Network &amp; Internet')
+
 
     def test_language_switch_view(self):
         # 1. Test switching to English
@@ -563,4 +872,245 @@ class MultiTenantTicketTests(TestCase):
         })
         # Validation should fail, rendering the form page (200) instead of redirecting (302)
         self.assertEqual(response.status_code, 200)
-        self.assertIn("ขนาดไฟล์แนบต้องไม่เกิน 10 MB", response.content.decode('utf-8'))
+        self.assertIn("ต้องไม่เกิน 10 MB", response.content.decode('utf-8'))
+
+    def test_ticket_delete_manage_access_and_filtering(self):
+        # Regular user should be denied access
+        self.client.login(username="user_a", password="password123")
+        response = self.client.get(reverse('ticket_delete_manage'))
+        self.assertEqual(response.status_code, 403)
+
+        # System admin can access
+        self.client.login(username="system_admin", password="password123")
+        response = self.client.get(reverse('ticket_delete_manage'))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("จัดการและลบ Ticket", response.content.decode('utf-8'))
+
+        # Test filtering by company and year
+        response = self.client.get(reverse('ticket_delete_manage'), {'company_id': self.company_a.id, 'year': 2026})
+        self.assertEqual(response.status_code, 200)
+
+    def test_ticket_batch_and_single_delete_actions(self):
+        # Create test tickets
+        t1 = Ticket.objects.create(title="Delete T1", description="desc", company=self.company_a, created_by=self.user_a)
+        t2 = Ticket.objects.create(title="Delete T2", description="desc", company=self.company_a, created_by=self.user_a)
+
+        self.client.login(username="system_admin", password="password123")
+
+        # Test batch delete
+        response = self.client.post(reverse('ticket_delete_manage'), {
+            'action': 'delete_selected',
+            'ticket_ids': [t1.id, t2.id]
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(Ticket.objects.filter(id__in=[t1.id, t2.id]).exists())
+
+        # Test single delete
+        t3 = Ticket.objects.create(title="Delete T3", description="desc", company=self.company_a, created_by=self.user_a)
+        response = self.client.post(reverse('ticket_delete', kwargs={'pk': t3.pk}))
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(Ticket.objects.filter(id=t3.id).exists())
+
+    def test_deployment_requested_and_confirm_flow(self):
+        t = Ticket.objects.create(
+            title="Deploy Request Test",
+            description="Deployment needed",
+            status=Ticket.STATUS_IN_PROGRESS,
+            company=self.company_a,
+            created_by=self.user_a
+        )
+
+        # Update status to DEPLOYMENT_REQUESTED
+        t.status = Ticket.STATUS_DEPLOYMENT_REQUESTED
+        t.save()
+
+        # Confirm deployment via ConfirmDeploymentView
+        self.client.login(username="admin_a", password="password123")
+        response = self.client.post(reverse('confirm_deployment', kwargs={'pk': t.pk}))
+        self.assertEqual(response.status_code, 302)
+
+        t.refresh_from_db()
+        self.assertEqual(t.status, Ticket.STATUS_READY_TO_DEPLOY)
+
+    def test_resend_failed_email_log(self):
+        from django.test import override_settings
+        with override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend'):
+            elog = EmailLog.objects.create(
+                recipient="test_resend@example.com",
+                subject="Test Resend",
+                message="Test Message",
+                action_type=EmailLog.ACTION_TICKET_UPDATED,
+                success=False,
+                error_message="Simulated error"
+            )
+            self.client.login(username="system_admin", password="password123")
+            response = self.client.post(reverse('resend_email', kwargs={'pk': elog.pk}))
+            self.assertEqual(response.status_code, 302)
+
+            elog.refresh_from_db()
+            self.assertTrue(elog.success)
+            self.assertEqual(elog.error_message, "")
+
+    def test_notification_config_filtering(self):
+        from .models import NotificationConfig, should_send_email_notification
+        
+        # Company A config: Only important status changes allowed
+        config_a = NotificationConfig.objects.create(
+            name="Company A Important Only",
+            company=self.company_a,
+            status_notification_mode=NotificationConfig.STATUS_NOTIFY_IMPORTANT_ONLY,
+            notify_comments=False
+        )
+
+        # Test normal status change (IN_PROGRESS) -> should return False
+        self.assertFalse(should_send_email_notification(
+            self.user_a.email,
+            event_type=EmailLog.ACTION_TICKET_UPDATED,
+            new_status=Ticket.STATUS_IN_PROGRESS
+        ))
+
+        # Test important status change (DEPLOYMENT_REQUESTED) -> should return True
+        self.assertTrue(should_send_email_notification(
+            self.user_a.email,
+            event_type=EmailLog.ACTION_TICKET_UPDATED,
+            new_status=Ticket.STATUS_DEPLOYMENT_REQUESTED
+        ))
+
+        # Test comment notification -> should return False
+        self.assertFalse(should_send_email_notification(
+            self.user_a.email,
+            event_type=EmailLog.ACTION_COMMENT_ADDED
+        ))
+
+        # Add User-specific override for User A: allow comments
+        config_user = NotificationConfig.objects.create(
+            name="User A Specific",
+            company=self.company_a,
+            notify_comments=True
+        )
+        config_user.target_users.add(self.user_a)
+
+        # Now User A should receive comment notifications because of specific user override!
+        self.assertTrue(should_send_email_notification(
+            self.user_a.email,
+            event_type=EmailLog.ACTION_COMMENT_ADDED
+        ))
+
+    def test_create_monthly_report_schedule_with_cc(self):
+        self.client.login(username="admin_a", password="password123")
+        response = self.client.post(reverse('report_schedule_save'), {
+            'name': 'Month-end management report',
+            'company': self.company_a.id,
+            'recipients': [self.admin_a.id],
+            'cc_recipients': [self.user_a.id],
+            'day_of_month': 31,
+            'send_hour': '23',
+            'send_minute': '45',
+            'timezone_name': MonthlyReportSchedule.TIMEZONE_HONG_KONG,
+            'is_active': 'on',
+        })
+        self.assertEqual(response.status_code, 302)
+        schedule = MonthlyReportSchedule.objects.get(name='Month-end management report')
+        self.assertEqual(schedule.company, self.company_a)
+        self.assertEqual(schedule.created_by, self.admin_a)
+        self.assertEqual(schedule.send_time.strftime('%H:%M'), '23:45')
+        self.assertEqual(schedule.timezone_name, MonthlyReportSchedule.TIMEZONE_HONG_KONG)
+        self.assertCountEqual(schedule.recipients.all(), [self.admin_a])
+        self.assertCountEqual(schedule.cc_recipients.all(), [self.user_a])
+
+    def test_process_report_schedule_sends_to_and_cc_and_marks_sent(self):
+        schedule = MonthlyReportSchedule.objects.create(
+            name='Automated report',
+            company=self.company_a,
+            day_of_month=31,
+            send_time='17:00',
+            created_by=self.admin_a,
+        )
+        schedule.recipients.add(self.admin_a)
+        schedule.cc_recipients.add(self.user_a)
+        mail.outbox = []
+
+        call_command('process_report_schedules', '--schedule-id', schedule.id, '--force')
+
+        report_email = next(message for message in mail.outbox if 'รายงานสรุปสถานะ' in message.subject)
+        self.assertEqual(report_email.to, [self.admin_a.email])
+        self.assertEqual(report_email.cc, [self.user_a.email])
+        schedule.refresh_from_db()
+        self.assertIsNotNone(schedule.last_sent_at)
+        self.assertEqual(schedule.last_error, '')
+
+    def test_schedule_day_31_uses_last_day_for_short_month(self):
+        import datetime
+        schedule = MonthlyReportSchedule(
+            name='Last day',
+            day_of_month=31,
+            send_time=datetime.time(9, 15),
+        )
+        scheduled_at = schedule.scheduled_datetime(2027, 2)
+        self.assertEqual(scheduled_at.day, 28)
+        self.assertEqual(scheduled_at.hour, 9)
+        self.assertEqual(scheduled_at.minute, 15)
+
+    def test_schedule_uses_selected_hong_kong_timezone(self):
+        import datetime
+        schedule = MonthlyReportSchedule(
+            name='Hong Kong report',
+            day_of_month=31,
+            send_time=datetime.time(17, 0),
+            timezone_name=MonthlyReportSchedule.TIMEZONE_HONG_KONG,
+        )
+        scheduled_at = schedule.scheduled_datetime(2027, 7)
+        self.assertEqual(scheduled_at.utcoffset(), datetime.timedelta(hours=8))
+        self.assertTrue(schedule.is_due(datetime.datetime(
+            2027, 7, 31, 9, 1, tzinfo=datetime.timezone.utc
+        )))
+
+    def test_immediate_monthly_report_supports_cc(self):
+        mail.outbox = []
+        self.client.login(username="admin_a", password="password123")
+        response = self.client.post(reverse('report_send'), {
+            'recipient_user_id': self.admin_a.id,
+            'cc_user_ids': [self.user_a.id],
+        })
+        self.assertEqual(response.status_code, 302)
+        report_email = next(message for message in mail.outbox if 'รายงานสรุปสถานะ' in message.subject)
+        self.assertEqual(report_email.to, [self.admin_a.email])
+        self.assertEqual(report_email.cc, [self.user_a.email])
+
+    def test_email_logs_group_to_and_cc_in_one_row_with_detail(self):
+        mail.outbox = []
+        self.client.login(username="admin_a", password="password123")
+        response = self.client.post(reverse('report_send'), {
+            'recipient_user_id': self.admin_a.id,
+            'cc_user_ids': [self.user_a.id],
+        })
+        self.assertEqual(response.status_code, 302)
+
+        grouped_logs = EmailLog.objects.filter(
+            action_type=EmailLog.ACTION_MONTHLY_REPORT
+        ).order_by('-sent_at')[:2]
+        self.assertEqual(len(grouped_logs), 2)
+        self.assertIsNotNone(grouped_logs[0].delivery_group)
+        self.assertEqual(grouped_logs[0].delivery_group, grouped_logs[1].delivery_group)
+        self.assertCountEqual(
+            [log.recipient_type for log in grouped_logs],
+            [EmailLog.RECIPIENT_TO, EmailLog.RECIPIENT_CC],
+        )
+
+        list_response = self.client.get(reverse('log_list'))
+        self.assertEqual(list_response.status_code, 200)
+        groups = list_response.context['email_logs']
+        report_group = next(group for group in groups if group.subject == grouped_logs[0].subject)
+        self.assertEqual(report_group.to_recipients, [self.admin_a.email])
+        self.assertEqual(report_group.cc_recipients, [self.user_a.email])
+
+        detail_response = self.client.get(reverse('email_log_detail', args=[report_group.detail_id]))
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertContains(detail_response, self.admin_a.email)
+        self.assertContains(detail_response, self.user_a.email)
+
+
+
+
+
+

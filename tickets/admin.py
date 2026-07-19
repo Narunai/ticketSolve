@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import Company, CustomUser, Ticket
+from .models import Company, CustomUser, Ticket, MonthlyReportSchedule
 
 class CompanyAdmin(admin.ModelAdmin):
     list_display = ('name', 'created_at')
@@ -97,6 +97,14 @@ class TicketAdmin(admin.ModelAdmin):
         if not request.user.is_superuser and request.user.role == CustomUser.CLIENT_ADMIN:
             obj.company = request.user.company
         super().save_model(request, obj, form, change)
+
+
+@admin.register(MonthlyReportSchedule)
+class MonthlyReportScheduleAdmin(admin.ModelAdmin):
+    list_display = ('name', 'company', 'day_of_month', 'send_time', 'timezone_name', 'is_active', 'last_sent_at')
+    list_filter = ('is_active', 'timezone_name', 'company')
+    search_fields = ('name', 'recipients__username', 'recipients__email')
+    filter_horizontal = ('recipients', 'cc_recipients')
 
 admin.site.register(Company, CompanyAdmin)
 admin.site.register(CustomUser, CustomUserAdmin)

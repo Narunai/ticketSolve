@@ -60,7 +60,15 @@
                     <label for="{{ form.name.id_for_label }}" class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">ชื่อบริษัท/องค์กร (Company Name)</label>
                     {{ form.name }}
                 </div>
+
+                <!-- Parent Company -->
+                <div>
+                    <label for="{{ form.parent.id_for_label }}" class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">สังกัดบริษัทแม่ (Parent Company / Head Office)</label>
+                    {{ form.parent }}
+                    <p class="text-xs text-slate-500 mt-1.5">หากเป็นบริษัทหลักให้เว้นว่างไว้ หากเป็นบริษัทลูกให้เลือกระบุบริษัทแม่ที่สังกัดอยู่</p>
+                </div>
             </div>
+
 
             <!-- Action buttons -->
             <div class="pt-6 border-t border-slate-800 flex items-center justify-end gap-4">

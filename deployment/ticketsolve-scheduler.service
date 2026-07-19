@@ -1,0 +1,11 @@
+[Unit]
+Description=Process TicketSolve automatic monthly email schedules
+After=network.target postgresql.service
+
+[Service]
+Type=oneshot
+User=ubuntu
+Group=www-data
+WorkingDirectory=/var/www/ticketSolve
+Environment=TIME_ZONE=Asia/Bangkok
+ExecStart=/var/www/ticketSolve/venv/bin/python manage.py process_report_schedules

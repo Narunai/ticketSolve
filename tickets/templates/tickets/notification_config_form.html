@@ -1,0 +1,211 @@
+{% extends 'tickets/base.html' %}
+
+{% block header_title %}{% if form.instance.pk %}แก้ไขกฎการแจ้งเตือน{% else %}สร้างกฎการแจ้งเตือนใหม่{% endif %}{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto space-y-6">
+
+    <div class="glass-panel p-6 md:p-8 rounded-2xl border border-slate-800/80 shadow-2xl">
+        <div class="border-b border-slate-800 pb-4 mb-6">
+            <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                <span>⚙️</span>
+                <span>{% if form.instance.pk %}แก้ไขกฎการแจ้งเตือน (Edit Config){% else %}สร้างกฎการแจ้งเตือนใหม่ (Create Config){% endif %}</span>
+            </h2>
+            <p class="text-xs text-slate-400 mt-1">
+                กำหนดขอบเขตและเงื่อนไขการส่งแจ้งเตือนทางอีเมล
+            </p>
+        </div>
+
+        <form method="POST" class="space-y-6">
+            {% csrf_token %}
+
+            {% if form.non_field_errors %}
+            <div class="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs font-medium space-y-1">
+                {% for err in form.non_field_errors %}
+                <p>⚠️ {{ err }}</p>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- Name -->
+            <div class="space-y-2">
+                <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider">ชื่อกฎการตั้งค่า *</label>
+                {{ form.name }}
+                {% if form.name.errors %}
+                <span class="text-xs text-rose-400 block font-medium">{{ form.name.errors.0 }}</span>
+                {% endif %}
+            </div>
+
+            <!-- Company -->
+            <div class="space-y-2">
+                <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider">บริษัท *</label>
+                {{ form.company }}
+                {% if form.company.errors %}
+                <span class="text-xs text-rose-400 block font-medium">{{ form.company.errors.0 }}</span>
+                {% endif %}
+            </div>
+
+            <!-- Subsidiary Application -->
+            <div class="p-4 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center gap-3">
+                {{ form.apply_to_subsidiaries }}
+                <div>
+                    <label for="{{ form.apply_to_subsidiaries.id_for_label }}" class="text-xs font-bold text-white cursor-pointer block">
+                        บังคับใช้กฎนี้กับบริษัทลูก (Subsidiaries) ทั้งหมดด้วย
+                    </label>
+                    <span class="text-[11px] text-slate-400 block">หากติ๊กเลือก บริษัทลูกที่อยู่ภายใต้บริษัทนี้จะใช้กฎนี้โดยอัตโนมัติหากไม่ได้ตั้งค่าไว้แยกต่างหาก</span>
+                </div>
+            </div>
+
+            <!-- Target Users (Multi-select with Filter) -->
+            <div class="space-y-2">
+                <div class="flex items-center justify-between">
+                    <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider">
+                        ผู้ใช้งานเฉพาะบุคคล (Optional - เลือกได้หลายคน)
+                    </label>
+                    <span class="text-[10px] text-indigo-400 font-mono">กด Ctrl/Cmd เพื่อเลือกหลายคน</span>
+                </div>
+                
+                <!-- Quick Filter Input -->
+                <div class="relative">
+                    <input type="text" id="user-search-input" placeholder="🔍 พิมพ์ค้นหาชื่อผู้ใช้หรือชื่อบริษัท..." class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500">
+                </div>
+
+                {{ form.target_users }}
+
+                <p class="text-[11px] text-slate-400">
+                    💡 หากไม่เลือกผู้ใช้ กฎนี้จะบังคับใช้กับสมาชิกทุกคนในบริษัท. หากเลือกผู้ใช้ กฎนี้จะมีความสำคัญสูงสุดเฉพาะบุคคลที่เลือก (User-Specific Override)
+                </p>
+                {% if form.target_users.errors %}
+                <span class="text-xs text-rose-400 block font-medium">{{ form.target_users.errors.0 }}</span>
+                {% endif %}
+            </div>
+
+            <div class="border-t border-slate-800 pt-6 space-y-4">
+                <h3 class="font-bold text-white text-sm flex items-center gap-2">
+                    <span>🔔</span>
+                    <span>ตั้งค่าเปิด/ปิด แต่ละเหตุการณ์</span>
+                </h3>
+
+                <!-- Ticket Created -->
+                <div class="p-4 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center gap-3">
+                    {{ form.notify_ticket_created }}
+                    <label for="{{ form.notify_ticket_created.id_for_label }}" class="text-xs font-bold text-white cursor-pointer">
+                        แจ้งเตือนเมื่อมีการเปิด Ticket ใหม่ (Ticket Created)
+                    </label>
+                </div>
+
+                <!-- Status Changes Mode -->
+                <div class="space-y-2">
+                    <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider">
+                        โหมดการแจ้งเตือนเมื่อเปลี่ยนสถานะ Ticket
+                    </label>
+                    {{ form.status_notification_mode }}
+                </div>
+
+                <!-- Custom Selectable Status Checkboxes -->
+                <div id="custom-status-container" class="space-y-3 p-4 rounded-xl bg-slate-900/80 border border-indigo-500/30">
+                    <label class="block text-xs font-bold text-indigo-300 uppercase tracking-wider">
+                        🎯 เลือกสถานะที่ต้องการทริกเกอร์แจ้งเตือน:
+                    </label>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-200">
+                        {% for choice in form.status_checkboxes %}
+                        <label class="flex items-center gap-2.5 p-2 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 cursor-pointer transition-all">
+                            {{ choice.tag }}
+                            <span class="font-medium">{{ choice.choice_label }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- Comments -->
+                <div class="p-4 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center gap-3">
+                    {{ form.notify_comments }}
+                    <label for="{{ form.notify_comments.id_for_label }}" class="text-xs font-bold text-white cursor-pointer">
+                        แจ้งเตือนความคิดเห็น / ตอบกลับข้อความ (Comments & Replies)
+                    </label>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
+                <a href="{% url 'notification_config_list' %}" class="px-4 py-2.5 rounded-xl font-bold text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 transition-all">
+                    ยกเลิก
+                </a>
+                <button type="submit" class="px-5 py-2.5 rounded-xl font-bold text-xs bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/20 transition-all active:scale-95 cursor-pointer">
+                    💾 บันทึกการตั้งค่า
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const modeSelect = document.getElementById('id_status_notification_mode');
+    const customContainer = document.getElementById('custom-status-container');
+    const userSearch = document.getElementById('user-search-input');
+    const targetUsersSelect = document.getElementById('id_target_users');
+    const companySelect = document.getElementById('id_company');
+
+    const companyHierarchy = {{ company_hierarchy_json|default:"{}"|safe }};
+    const userCompanyMap = {{ user_company_json|default:"{}"|safe }};
+
+    function toggleCustomStatus() {
+        if (!modeSelect || !customContainer) return;
+        if (modeSelect.value === 'CUSTOM') {
+            customContainer.classList.remove('hidden');
+        } else {
+            customContainer.classList.add('hidden');
+        }
+    }
+
+    function filterUsersByCompanyAndSearch() {
+        if (!targetUsersSelect) return;
+
+        const selectedCompId = companySelect ? companySelect.value : '';
+        const searchQuery = userSearch ? userSearch.value.toLowerCase().trim() : '';
+
+        const allowedCompIds = selectedCompId && companyHierarchy[selectedCompId] 
+            ? companyHierarchy[selectedCompId] 
+            : (selectedCompId ? [parseInt(selectedCompId)] : null);
+
+        Array.from(targetUsersSelect.options).forEach(opt => {
+            const userId = opt.value;
+            const uCompId = userCompanyMap[userId];
+
+            let matchesCompany = true;
+            if (allowedCompIds !== null) {
+                matchesCompany = uCompId && allowedCompIds.includes(uCompId);
+            }
+
+            let matchesSearch = true;
+            if (searchQuery) {
+                matchesSearch = opt.text.toLowerCase().includes(searchQuery);
+            }
+
+            if (matchesCompany && matchesSearch) {
+                opt.style.display = '';
+            } else {
+                opt.style.display = 'none';
+            }
+        });
+    }
+
+    if (modeSelect) {
+        modeSelect.addEventListener('change', toggleCustomStatus);
+        toggleCustomStatus();
+    }
+
+    if (companySelect) {
+        companySelect.addEventListener('change', filterUsersByCompanyAndSearch);
+    }
+
+    if (userSearch) {
+        userSearch.addEventListener('input', filterUsersByCompanyAndSearch);
+    }
+
+    filterUsersByCompanyAndSearch();
+});
+</script>
+
+{% endblock %}

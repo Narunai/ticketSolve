@@ -207,11 +207,17 @@
                             <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">Open</span>
                         {% elif ticket.status == 'IN_PROGRESS' %}
                             <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">In Progress</span>
+                        {% elif ticket.status == 'DEPLOYMENT_REQUESTED' %}
+                            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-500/10 text-purple-300 border border-purple-500/20">Production Deployment Request</span>
+
+                        {% elif ticket.status == 'READY_TO_DEPLOY' %}
+                            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">Ready to Deploy</span>
                         {% elif ticket.status == 'RESOLVED' %}
                             <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Resolved</span>
                         {% else %}
                             <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-500/10 text-slate-400 border border-slate-700/20">Closed</span>
                         {% endif %}
+
                     </td>
                     <td class="px-6 py-4 text-slate-300 font-medium">{{ ticket.created_by.username }}</td>
                     <td class="px-6 py-4 text-slate-400 italic">

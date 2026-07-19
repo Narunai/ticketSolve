@@ -98,6 +98,16 @@ graph TD
    python manage.py createsuperuser  # สร้างไอดีแอดมินคนแรก
    ```
 
+   สำหรับเซิร์ฟเวอร์เดิมที่ติดตั้ง TicketSolve อยู่แล้ว ให้ติดตั้งตัวตรวจตารางส่งอีเมลอัตโนมัติเพิ่มเติม:
+   ```bash
+   sudo cp deployment/ticketsolve-scheduler.service /etc/systemd/system/
+   sudo cp deployment/ticketsolve-scheduler.timer /etc/systemd/system/
+   sudo systemctl daemon-reload
+   sudo systemctl enable --now ticketsolve-scheduler.timer
+   sudo systemctl status ticketsolve-scheduler.timer
+   ```
+   Timer จะเรียก `python manage.py process_report_schedules` ทุกนาที โดยใช้เขตเวลา `Asia/Bangkok` เป็นค่าเริ่มต้น
+
 6. ดำเนินการติดตั้ง SSL Certificate บน VPS ด้วย Certbot:
    ```bash
    sudo certbot --nginx -d ticketsolve-systemoneit.uk

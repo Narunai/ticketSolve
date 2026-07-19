@@ -4,6 +4,7 @@ __pycache__/
 ticketSolve.zip
 venv/
 .env
+*.pem
 .DS_Store
 .idea/
 .vscode/

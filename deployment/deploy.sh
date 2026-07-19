@@ -21,16 +21,20 @@ source venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt gunicorn
 
-# 3. Create static directories and collect
+# 3. Apply database migrations and collect static files
+python manage.py migrate --noinput
 echo "📂 Collecting static files..."
 python manage.py collectstatic --noinput
 
 # 4. Copy Service configurations
 echo "⚙️ Setting up Gunicorn systemd service..."
 sudo cp deployment/gunicorn.service /etc/systemd/system/gunicorn.service
+sudo cp deployment/ticketsolve-scheduler.service /etc/systemd/system/ticketsolve-scheduler.service
+sudo cp deployment/ticketsolve-scheduler.timer /etc/systemd/system/ticketsolve-scheduler.timer
 sudo systemctl daemon-reload
 sudo systemctl start gunicorn
 sudo systemctl enable gunicorn
+sudo systemctl enable --now ticketsolve-scheduler.timer
 
 # 5. Copy Nginx configurations
 echo "🕸️ Setting up Nginx virtual host..."

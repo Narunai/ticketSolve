@@ -57,7 +57,7 @@
                         <input type="hidden" name="company_id" value="{{ selected_company.id }}">
                         {% endif %}
                         
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div>
                                 <label for="recipient_user_id" class="block text-xs text-slate-400 mb-1.5 font-medium">เป้าหมายผู้รับอีเมล:</label>
                                 <select name="recipient_user_id" id="recipient_user_id" class="w-full bg-slate-900 border border-slate-755 text-slate-300 rounded-xl px-4 py-2.5 text-xs font-semibold focus:outline-none focus:border-theme-accent">
@@ -77,6 +77,15 @@
                                     </option>
                                     {% endfor %}
                                 </select>
+                            </div>
+                            <div>
+                                <label for="cc_user_ids" class="block text-xs text-slate-400 mb-1.5 font-medium">สำเนาถึง (CC):</label>
+                                <select name="cc_user_ids" id="cc_user_ids" multiple class="w-full min-h-24 bg-slate-900 border border-slate-755 text-slate-300 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-theme-accent">
+                                    {% for member in company_users %}
+                                    <option value="{{ member.id }}">{{ member.username }} ({{ member.email }})</option>
+                                    {% endfor %}
+                                </select>
+                                <p class="text-[10px] text-slate-500 mt-1">กด Ctrl/Cmd ค้างเพื่อเลือกหลายคน</p>
                             </div>
                         </div>
 
@@ -125,6 +134,139 @@
                     <span class="text-3xl font-extrabold text-emerald-400 block">{{ done_count }}</span>
                     <span class="text-[11px] text-slate-400 mt-1 block">เสร็จสิ้น & ปิดงานแล้ว</span>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Automatic monthly schedules -->
+    <div class="grid grid-cols-1 xl:grid-cols-5 gap-6">
+        <div class="glass-panel p-6 rounded-2xl border border-slate-800/80 xl:col-span-2">
+            <div class="mb-5">
+                <span class="text-[11px] font-bold text-theme-accent uppercase tracking-widest">Auto Schedule</span>
+                <h3 class="text-lg font-bold text-white mt-1">
+                    {% if editing_schedule %}แก้ไขตารางส่งอัตโนมัติ{% else %}สร้างตารางส่งอัตโนมัติ{% endif %}
+                </h3>
+                <p class="text-xs text-slate-400 mt-1">ระบบส่งรายงานทุกเดือนตามวัน เวลา และเขตเวลาที่เลือก</p>
+            </div>
+
+            <form method="POST" action="{% url 'report_schedule_save' %}" class="space-y-4">
+                {% csrf_token %}
+                {% if editing_schedule %}<input type="hidden" name="schedule_id" value="{{ editing_schedule.id }}">{% endif %}
+
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1.5 font-medium">ชื่อตารางส่ง:</label>
+                    {{ schedule_form.name }}
+                </div>
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1.5 font-medium">บริษัท / ขอบเขตรายงาน:</label>
+                    {{ schedule_form.company }}
+                    <p class="text-[10px] text-slate-500 mt-1">เว้นว่างได้เฉพาะผู้ดูแลระบบ เพื่อสร้างรายงานรวมทุกบริษัท</p>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1.5 font-medium">วันที่ของเดือน (1–31):</label>
+                        {{ schedule_form.day_of_month }}
+                    </div>
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1.5 font-medium">เวลาส่ง (24 ชั่วโมง):</label>
+                        <div class="grid grid-cols-[1fr_auto_1fr] gap-2 items-center">
+                            {{ schedule_form.send_hour }}
+                            <span class="font-bold text-white">:</span>
+                            {{ schedule_form.send_minute }}
+                        </div>
+                        <div class="grid grid-cols-2 gap-5 text-[10px] text-slate-500 mt-1">
+                            <span>ชั่วโมง 00–23</span><span>นาที 00–59</span>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1.5 font-medium">เขตเวลา:</label>
+                        {{ schedule_form.timezone_name }}
+                    </div>
+                </div>
+                <p class="text-[10px] text-slate-500 -mt-2">ตั้งวันที่ 31 เพื่อให้ส่งวันสุดท้ายของทุกเดือนโดยอัตโนมัติ</p>
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1.5 font-medium">บัญชีอีเมลผู้ส่ง:</label>
+                    {{ schedule_form.smtp_configuration }}
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div class="rounded-xl bg-slate-950/60 border border-slate-800 p-3 max-h-44 overflow-y-auto text-xs text-slate-300">
+                        <p class="font-bold text-white mb-2">ผู้รับหลัก (To) *</p>
+                        {{ schedule_form.recipients }}
+                    </div>
+                    <div class="rounded-xl bg-slate-950/60 border border-slate-800 p-3 max-h-44 overflow-y-auto text-xs text-slate-300">
+                        <p class="font-bold text-white mb-2">สำเนาถึง (CC)</p>
+                        {{ schedule_form.cc_recipients }}
+                    </div>
+                </div>
+                <label class="flex items-center gap-2 text-xs text-slate-300">
+                    {{ schedule_form.is_active }} เปิดใช้งานทันที
+                </label>
+                <div class="flex gap-3">
+                    <button type="submit" class="px-5 py-3 rounded-xl text-xs font-bold text-white bg-theme-gradient shadow-theme-glow hover:opacity-90 transition-all">
+                        💾 {% if editing_schedule %}บันทึกการแก้ไข{% else %}เพิ่มตารางส่ง{% endif %}
+                    </button>
+                    {% if editing_schedule %}
+                    <a href="{% url 'monthly_report' %}{% if selected_company %}?company_id={{ selected_company.id }}{% endif %}" class="px-5 py-3 rounded-xl text-xs font-bold text-slate-300 bg-slate-900 border border-slate-700">ยกเลิก</a>
+                    {% endif %}
+                </div>
+            </form>
+        </div>
+
+        <div class="glass-panel rounded-2xl border border-slate-800/80 overflow-hidden xl:col-span-3">
+            <div class="px-6 py-4 border-b border-slate-800/80 bg-slate-900/40">
+                <h3 class="font-bold text-white">รายการตารางส่งรายเดือนที่บันทึกไว้</h3>
+                <p class="text-xs text-slate-400 mt-1">รายการที่เปิดใช้งานจะถูกตรวจสอบและส่งเพียงครั้งเดียวต่อเดือน</p>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs">
+                    <thead class="bg-slate-900/60 text-slate-400">
+                        <tr>
+                            <th class="px-4 py-3">รายการ / กำหนดส่ง</th>
+                            <th class="px-4 py-3">ผู้รับและ CC</th>
+                            <th class="px-4 py-3">สถานะ</th>
+                            <th class="px-4 py-3 text-right">จัดการ</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-800/60 text-slate-300">
+                        {% for schedule in report_schedules %}
+                        <tr class="align-top hover:bg-slate-800/20">
+                            <td class="px-4 py-4">
+                                <span class="font-bold text-white block">{{ schedule.name }}</span>
+                                <span class="text-slate-400 block mt-1">{{ schedule.company.name|default:"ทุกบริษัท" }}</span>
+                                <span class="text-theme-accent block mt-1">วันที่ {{ schedule.day_of_month }} เวลา {{ schedule.send_time|time:"H:i" }}</span>
+                                <span class="text-slate-400 block mt-1">{{ schedule.get_timezone_name_display }}</span>
+                                {% if schedule.is_active %}<span class="text-[10px] text-slate-500 block mt-1">ครั้งถัดไป {{ schedule.next_run_display }}</span>{% endif %}
+                            </td>
+                            <td class="px-4 py-4">
+                                <span class="font-semibold text-white">To:</span>
+                                {% for person in schedule.recipients.all %}<span class="block">{{ person.username }} &lt;{{ person.email }}&gt;</span>{% endfor %}
+                                {% if schedule.cc_recipients.all %}
+                                <span class="font-semibold text-white block mt-2">CC:</span>
+                                {% for person in schedule.cc_recipients.all %}<span class="block">{{ person.username }} &lt;{{ person.email }}&gt;</span>{% endfor %}
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-4">
+                                {% if schedule.is_active %}
+                                <span class="px-2 py-1 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">เปิดใช้งาน</span>
+                                {% else %}
+                                <span class="px-2 py-1 rounded bg-slate-800 text-slate-400 border border-slate-700">หยุดใช้งาน</span>
+                                {% endif %}
+                                {% if schedule.last_sent_at %}<span class="block text-[10px] text-slate-500 mt-2">ส่งล่าสุด {{ schedule.last_sent_display }}</span>{% endif %}
+                                {% if schedule.last_error %}<span class="block text-[10px] text-rose-400 mt-2">{{ schedule.last_error }}</span>{% endif %}
+                            </td>
+                            <td class="px-4 py-4">
+                                <div class="flex justify-end gap-2">
+                                    <a href="{% url 'monthly_report' %}?{% if schedule.company_id %}company_id={{ schedule.company_id }}&{% endif %}schedule_id={{ schedule.id }}" class="px-2.5 py-1.5 rounded bg-slate-800 text-sky-400 border border-slate-700">แก้ไข</a>
+                                    <form method="POST" action="{% url 'report_schedule_toggle' schedule.id %}">{% csrf_token %}<button class="px-2.5 py-1.5 rounded bg-slate-800 text-amber-400 border border-slate-700">{% if schedule.is_active %}พัก{% else %}เปิด{% endif %}</button></form>
+                                    <form method="POST" action="{% url 'report_schedule_delete' schedule.id %}" onsubmit="return confirm('ลบตารางส่งนี้หรือไม่?')">{% csrf_token %}<button class="px-2.5 py-1.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20">ลบ</button></form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="4" class="px-6 py-10 text-center text-slate-500">ยังไม่มีตารางส่งอัตโนมัติ</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
