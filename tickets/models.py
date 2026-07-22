@@ -155,6 +155,31 @@ class ResolutionCategory(models.Model):
         return f"{self.name} [{comp}]"
 
 
+class ModuleCategory(models.Model):
+    name = models.CharField(max_length=100)
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='module_categories'
+    )
+    description = models.TextField(blank=True)
+    icon_code = models.CharField(max_length=50, default='cpu', blank=True)
+    color_code = models.CharField(max_length=20, default='#10b981', blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['company', 'name']
+        verbose_name_plural = 'Module Categories'
+
+    def __str__(self):
+        comp = self.company.name if self.company else 'Global (ทุกบริษัท)'
+        return f"{self.name} [{comp}]"
+
+
+
 class TicketStatusConfig(models.Model):
     code = models.CharField(max_length=30)
     name = models.CharField(max_length=100)
@@ -237,9 +262,10 @@ class CompanyTicketField(models.Model):
             return
         defaults = [
             {'field_key': 'title', 'label': 'หัวข้อปัญหา', 'field_type': cls.FIELD_TYPE_TEXT, 'placeholder': 'ระบุหัวข้อปัญหา...', 'is_required': True, 'is_visible': True, 'is_custom': False, 'order': 10},
-            {'field_key': 'description', 'label': 'รายละเอียดปัญหา', 'field_type': cls.FIELD_TYPE_TEXTAREA, 'placeholder': 'อธิบายรายละเอียดของปัญหา...', 'is_required': True, 'is_visible': True, 'is_custom': False, 'order': 20},
+            {'field_key': 'description', 'label': 'รายละเอียดปัญหา', 'field_type': cls.FIELD_TYPE_TEXTAREA, 'placeholder': 'อธิบายรายละเอียดของปัญหา (ไม่บังคับ)...', 'is_required': False, 'is_visible': True, 'is_custom': False, 'order': 20},
             {'field_key': 'priority', 'label': 'ระดับความสำคัญ', 'field_type': cls.FIELD_TYPE_SELECT, 'placeholder': '', 'is_required': True, 'is_visible': True, 'is_custom': False, 'order': 30},
             {'field_key': 'ticket_category', 'label': 'หมวดหมู่ปัญหา', 'field_type': cls.FIELD_TYPE_SELECT, 'placeholder': '', 'is_required': True, 'is_visible': True, 'is_custom': False, 'order': 40},
+            {'field_key': 'module_category', 'label': 'หมวดหมู่โมดูล (Module Category)', 'field_type': cls.FIELD_TYPE_SELECT, 'placeholder': '', 'is_required': False, 'is_visible': True, 'is_custom': False, 'order': 45},
             {'field_key': 'attachment', 'label': 'ไฟล์แนบประกอบ', 'field_type': cls.FIELD_TYPE_TEXT, 'placeholder': '', 'is_required': False, 'is_visible': True, 'is_custom': False, 'order': 50},
         ]
         for d in defaults:
@@ -248,6 +274,9 @@ class CompanyTicketField(models.Model):
                 field_key=d['field_key'],
                 defaults=d
             )
+        # Update description requirement for existing records
+        cls.objects.filter(company=company, field_key='description', is_custom=False).update(is_required=False)
+
 
 
 
@@ -368,7 +397,7 @@ class Ticket(models.Model):
     ]
 
     title = models.CharField(max_length=255)
-    description = models.TextField()
+    description = models.TextField(blank=True, default='')
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
@@ -386,6 +415,13 @@ class Ticket(models.Model):
     )
     ticket_category = models.ForeignKey(
         TicketCategory,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='tickets'
+    )
+    module_category = models.ForeignKey(
+        ModuleCategory,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,

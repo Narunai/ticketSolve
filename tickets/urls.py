@@ -36,6 +36,10 @@ urlpatterns = [
     path('categories/resolution/create/', views.ResolutionCategoryCreateView.as_view(), name='resolution_category_create'),
     path('categories/resolution/<int:pk>/edit/', views.ResolutionCategoryUpdateView.as_view(), name='resolution_category_update'),
     path('categories/resolution/<int:pk>/delete/', views.ResolutionCategoryDeleteView.as_view(), name='resolution_category_delete'),
+    path('categories/module/create/', views.ModuleCategoryCreateView.as_view(), name='module_category_create'),
+    path('categories/module/<int:pk>/edit/', views.ModuleCategoryUpdateView.as_view(), name='module_category_update'),
+    path('categories/module/<int:pk>/delete/', views.ModuleCategoryDeleteView.as_view(), name='module_category_delete'),
+
 
     # Notification Email Config URLs
     path('notification-configs/', views.NotificationConfigListView.as_view(), name='notification_config_list'),

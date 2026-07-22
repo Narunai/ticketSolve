@@ -6,7 +6,7 @@ from django.views.generic import CreateView, UpdateView, DetailView, TemplateVie
 from django.urls import reverse, reverse_lazy
 
 from django.core.exceptions import PermissionDenied
-from .models import Ticket, CustomUser, Company, EmailLog, TicketAuditLog, ReportViewLog, MonthlyReportSchedule, TicketAutomationConfig, SMTPConfiguration, get_smtp_connection, get_smtp_from_email, TicketComment, TicketCategory, ResolutionCategory, TicketStatusConfig, CompanyTicketConfig, CompanyTicketField, NotificationConfig, should_send_email_notification
+from .models import Ticket, CustomUser, Company, EmailLog, TicketAuditLog, ReportViewLog, MonthlyReportSchedule, TicketAutomationConfig, SMTPConfiguration, get_smtp_connection, get_smtp_from_email, TicketComment, TicketCategory, ResolutionCategory, ModuleCategory, TicketStatusConfig, CompanyTicketConfig, CompanyTicketField, NotificationConfig, should_send_email_notification
 
 
 from django.db import models
@@ -35,7 +35,7 @@ from types import SimpleNamespace
 class TicketForm(forms.ModelForm):
     class Meta:
         model = Ticket
-        fields = ['title', 'description', 'priority', 'ticket_category', 'category', 'attachment']
+        fields = ['title', 'description', 'priority', 'ticket_category', 'module_category', 'category', 'attachment']
         widgets = {
             'title': forms.TextInput(attrs={
                 'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all',
@@ -43,13 +43,16 @@ class TicketForm(forms.ModelForm):
             }),
             'description': forms.Textarea(attrs={
                 'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all',
-                'placeholder': 'อธิบายรายละเอียดของปัญหา...',
+                'placeholder': 'อธิบายรายละเอียดของปัญหา (ไม่บังคับ)...',
                 'rows': 4
             }),
             'priority': forms.Select(attrs={
                 'class': 'w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all'
             }),
             'ticket_category': forms.Select(attrs={
+                'class': 'w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all'
+            }),
+            'module_category': forms.Select(attrs={
                 'class': 'w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all'
             }),
             'category': forms.HiddenInput(),
@@ -62,12 +65,15 @@ class TicketForm(forms.ModelForm):
         self.request = kwargs.pop('request', None)
         user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
+        self.fields['description'].required = False
         self.fields['category'].required = False
         self.fields['ticket_category'].required = False
+        self.fields['module_category'].required = False
+        self.fields['ticket_category'].label = "หมวดหมู่ปัญหา (Category)"
+        self.fields['module_category'].label = "หมวดหมู่โมดูล (Module Category)"
 
         inst_company = getattr(self.instance, 'company', None) if (self.instance and getattr(self.instance, 'company_id', None)) else None
         company = user.company if (user and user.company) else inst_company
-
 
         if not company and user and (user.is_superuser or user.role in [CustomUser.SYSTEM_ADMIN, CustomUser.SYSTEM_SUB_ADMIN]):
             self.fields['company'] = forms.ModelChoiceField(
@@ -87,10 +93,14 @@ class TicketForm(forms.ModelForm):
                 models.Q(company=None) | models.Q(company=company) | models.Q(company__in=parents),
                 is_active=True
             )
+            self.fields['module_category'].queryset = ModuleCategory.objects.filter(
+                models.Q(company=None) | models.Q(company=company) | models.Q(company__in=parents),
+                is_active=True
+            )
         else:
             company_fields = None
             self.fields['ticket_category'].queryset = TicketCategory.objects.filter(is_active=True)
-
+            self.fields['module_category'].queryset = ModuleCategory.objects.filter(is_active=True)
 
         self.custom_field_keys = []
         if company_fields:
@@ -153,7 +163,7 @@ class TicketForm(forms.ModelForm):
                 else:
                     if key in self.fields:
                         self.fields[key].label = f_obj.label
-                        if key != 'ticket_category':
+                        if key not in ['ticket_category', 'module_category', 'description']:
                             self.fields[key].required = f_obj.is_required
                         if f_obj.placeholder and hasattr(self.fields[key].widget, 'attrs'):
                             self.fields[key].widget.attrs['placeholder'] = f_obj.placeholder
@@ -238,7 +248,7 @@ class TicketForm(forms.ModelForm):
 class TicketUpdateForm(forms.ModelForm):
     class Meta:
         model = Ticket
-        fields = ['title', 'description', 'status', 'priority', 'ticket_category', 'assigned_to', 'resolution_category', 'resolution_notes', 'attachment']
+        fields = ['title', 'description', 'status', 'priority', 'ticket_category', 'module_category', 'assigned_to', 'resolution_category', 'resolution_notes', 'attachment']
         widgets = {
             'title': forms.TextInput(attrs={
                 'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all'
@@ -254,6 +264,9 @@ class TicketUpdateForm(forms.ModelForm):
                 'class': 'w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all'
             }),
             'ticket_category': forms.Select(attrs={
+                'class': 'w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all'
+            }),
+            'module_category': forms.Select(attrs={
                 'class': 'w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all'
             }),
             'assigned_to': forms.Select(attrs={
@@ -276,6 +289,11 @@ class TicketUpdateForm(forms.ModelForm):
         user = kwargs.pop('user', None)
         self.request = kwargs.pop('request', None)
         super().__init__(*args, **kwargs)
+        self.fields['description'].required = False
+        self.fields['ticket_category'].required = False
+        self.fields['module_category'].required = False
+        self.fields['ticket_category'].label = "หมวดหมู่ปัญหา (Category)"
+        self.fields['module_category'].label = "หมวดหมู่โมดูล (Module Category)"
         ticket_company = self.instance.company if self.instance else (user.company if user else None)
 
         if user and user.company:
@@ -300,10 +318,16 @@ class TicketUpdateForm(forms.ModelForm):
                 models.Q(company=None) | models.Q(company=ticket_company),
                 is_active=True
             )
+            self.fields['module_category'].queryset = ModuleCategory.objects.filter(
+                models.Q(company=None) | models.Q(company=ticket_company),
+                is_active=True
+            )
         else:
             company_fields = None
             self.fields['resolution_category'].queryset = ResolutionCategory.objects.filter(is_active=True)
             self.fields['ticket_category'].queryset = TicketCategory.objects.filter(is_active=True)
+            self.fields['module_category'].queryset = ModuleCategory.objects.filter(is_active=True)
+
 
         self.custom_field_keys = []
         if company_fields:
@@ -366,7 +390,8 @@ class TicketUpdateForm(forms.ModelForm):
                 else:
                     if key in self.fields:
                         self.fields[key].label = f_obj.label
-                        self.fields[key].required = f_obj.is_required
+                        if key not in ['ticket_category', 'module_category', 'description']:
+                            self.fields[key].required = f_obj.is_required
                         if f_obj.placeholder and hasattr(self.fields[key].widget, 'attrs'):
                             self.fields[key].widget.attrs['placeholder'] = f_obj.placeholder
 
@@ -434,14 +459,13 @@ class TicketUpdateForm(forms.ModelForm):
         files = []
         if self.files:
             files = self.files.getlist('attachments') or self.files.getlist('attachment')
-        max_size = 10 * 1024 * 1024
+        max_size = 50 * 1024 * 1024
         for f in files:
             if f.size > max_size:
                 size_mb = f.size / (1024 * 1024)
-                self.add_error('attachment', f"ขนาดไฟล์แนบ '{f.name}' ต้องไม่เกิน 10 MB (ไฟล์ของคุณขนาด {size_mb:.1f} MB)")
+                self.add_error('attachment', f"ขนาดไฟล์แนบ '{f.name}' ต้องไม่เกิน 50 MB (ไฟล์ของคุณขนาด {size_mb:.1f} MB)")
 
         return cleaned_data
-
 
 
 class TicketCategoryForm(forms.ModelForm):
@@ -468,18 +492,6 @@ class TicketCategoryForm(forms.ModelForm):
         if 'is_active' in self.fields:
             self.fields['is_active'].required = False
 
-    def clean(self):
-        cleaned_data = super().clean()
-        if not cleaned_data.get('icon_code'):
-            cleaned_data['icon_code'] = 'folder'
-        if not cleaned_data.get('color_code'):
-            cleaned_data['color_code'] = '#6366f1'
-        if 'is_active' not in self.data and not (self.instance and self.instance.pk):
-            cleaned_data['is_active'] = True
-        return cleaned_data
-
-
-
 
 class ResolutionCategoryForm(forms.ModelForm):
     class Meta:
@@ -496,6 +508,31 @@ class ResolutionCategoryForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         if 'company' in self.fields:
             self.fields['company'].required = False
+        if 'is_active' in self.fields:
+            self.fields['is_active'].required = False
+
+
+class ModuleCategoryForm(forms.ModelForm):
+    class Meta:
+        model = ModuleCategory
+        fields = ['name', 'company', 'description', 'icon_code', 'color_code', 'is_active']
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white', 'placeholder': 'ชื่อหมวดหมู่โมดูล...'}),
+            'company': forms.Select(attrs={'class': 'w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white'}),
+            'description': forms.Textarea(attrs={'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white', 'rows': 2, 'placeholder': 'คำอธิบายโมดูล...'}),
+            'icon_code': forms.TextInput(attrs={'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white', 'placeholder': 'เช่น cpu, code, layers'}),
+            'color_code': forms.TextInput(attrs={'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white', 'placeholder': 'เช่น #10b981, #3b82f6'}),
+            'is_active': forms.CheckboxInput(attrs={'class': 'rounded bg-slate-900 border-slate-700 text-indigo-600 h-4 w-4'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if 'company' in self.fields:
+            self.fields['company'].required = False
+        if 'icon_code' in self.fields:
+            self.fields['icon_code'].required = False
+        if 'color_code' in self.fields:
+            self.fields['color_code'].required = False
         if 'is_active' in self.fields:
             self.fields['is_active'].required = False
 
@@ -2365,6 +2402,7 @@ class CategoryListView(LoginRequiredMixin, AdminRequiredMixin, TemplateView):
             companies = Company.objects.all()
             ticket_qs = TicketCategory.objects.all().select_related('company')
             res_qs = ResolutionCategory.objects.all().select_related('company')
+            mod_qs = ModuleCategory.objects.all().select_related('company')
         else:
             if user.company:
                 sub_ids = user.company.get_all_subsidiary_ids()
@@ -2375,16 +2413,21 @@ class CategoryListView(LoginRequiredMixin, AdminRequiredMixin, TemplateView):
                 res_qs = ResolutionCategory.objects.filter(
                     models.Q(company=None) | models.Q(company_id__in=sub_ids)
                 ).select_related('company')
+                mod_qs = ModuleCategory.objects.filter(
+                    models.Q(company=None) | models.Q(company_id__in=sub_ids)
+                ).select_related('company')
             else:
                 companies = Company.objects.none()
                 ticket_qs = TicketCategory.objects.none()
                 res_qs = ResolutionCategory.objects.none()
+                mod_qs = ModuleCategory.objects.none()
 
         selected_company = None
         if selected_company_id:
             if selected_company_id == 'global':
                 ticket_qs = ticket_qs.filter(company=None)
                 res_qs = res_qs.filter(company=None)
+                mod_qs = mod_qs.filter(company=None)
             else:
                 try:
                     c_id = int(selected_company_id)
@@ -2393,23 +2436,29 @@ class CategoryListView(LoginRequiredMixin, AdminRequiredMixin, TemplateView):
                         sub_ids = selected_company.get_all_subsidiary_ids()
                         ticket_qs = ticket_qs.filter(models.Q(company=None) | models.Q(company_id__in=sub_ids))
                         res_qs = res_qs.filter(models.Q(company=None) | models.Q(company_id__in=sub_ids))
+                        mod_qs = mod_qs.filter(models.Q(company=None) | models.Q(company_id__in=sub_ids))
                 except ValueError:
                     pass
 
         initial_cat = {}
         initial_res = {}
+        initial_mod = {}
         if selected_company:
             initial_cat['company'] = selected_company
             initial_res['company'] = selected_company
+            initial_mod['company'] = selected_company
 
         context['ticket_categories'] = ticket_qs
         context['resolution_categories'] = res_qs
+        context['module_categories'] = mod_qs
         context['category_form'] = TicketCategoryForm(initial=initial_cat)
         context['resolution_form'] = ResolutionCategoryForm(initial=initial_res)
+        context['module_form'] = ModuleCategoryForm(initial=initial_mod)
         context['companies'] = companies
         context['selected_company_id'] = selected_company_id
         context['selected_company'] = selected_company
         return context
+
 
 
 
@@ -2526,6 +2575,64 @@ class ResolutionCategoryDeleteView(LoginRequiredMixin, AdminRequiredMixin, View)
         cat.delete()
         messages.success(request, f"ลบหมวดหมู่การแก้ปัญหา '{name}' เรียบร้อยแล้ว!")
         return redirect('category_list')
+
+
+class ModuleCategoryCreateView(LoginRequiredMixin, AdminRequiredMixin, CreateView):
+    model = ModuleCategory
+    form_class = ModuleCategoryForm
+    success_url = reverse_lazy('category_list')
+
+    def form_valid(self, form):
+        user = self.request.user
+        form.instance.is_active = True
+        if not user.is_superuser and user.role not in [CustomUser.SYSTEM_ADMIN, CustomUser.SYSTEM_SUB_ADMIN]:
+            form.instance.company = user.company
+        messages.success(self.request, f"เพิ่มหมวดหมู่โมดูล '{form.instance.name}' เรียบร้อยแล้ว!")
+        return super().form_valid(form)
+
+    def form_invalid(self, form):
+        for field, errors in form.errors.items():
+            for error in errors:
+                messages.error(self.request, f"ไม่สามารถสร้างหมวดหมู่โมดูลได้ ({field}): {error}")
+        return redirect('category_list')
+
+
+class ModuleCategoryUpdateView(LoginRequiredMixin, AdminRequiredMixin, UpdateView):
+    model = ModuleCategory
+    form_class = ModuleCategoryForm
+    success_url = reverse_lazy('category_list')
+
+    def get_object(self, queryset=None):
+        obj = super().get_object(queryset)
+        user = self.request.user
+        if not user.is_superuser and user.role not in [CustomUser.SYSTEM_ADMIN, CustomUser.SYSTEM_SUB_ADMIN]:
+            if obj.company != user.company:
+                raise PermissionDenied("คุณไม่มีสิทธิ์แก้ไขหมวดหมู่โมดูลของบริษัทอื่นหรือหมวดหมู่ส่วนกลาง")
+        return obj
+
+    def form_valid(self, form):
+        messages.success(self.request, f"บันทึกการแก้ไขหมวดหมู่โมดูล '{form.instance.name}' เรียบร้อยแล้ว!")
+        return super().form_valid(form)
+
+    def form_invalid(self, form):
+        for field, errors in form.errors.items():
+            for error in errors:
+                messages.error(self.request, f"ไม่สามารถแก้ไขหมวดหมู่โมดูลได้ ({field}): {error}")
+        return redirect('category_list')
+
+
+class ModuleCategoryDeleteView(LoginRequiredMixin, AdminRequiredMixin, View):
+    def post(self, request, pk, *args, **kwargs):
+        cat = get_object_or_404(ModuleCategory, pk=pk)
+        user = request.user
+        if not user.is_superuser and user.role not in [CustomUser.SYSTEM_ADMIN, CustomUser.SYSTEM_SUB_ADMIN]:
+            if cat.company != user.company:
+                raise PermissionDenied("คุณไม่มีสิทธิ์ลบหมวดหมู่โมดูลของบริษัทอื่น")
+        name = cat.name
+        cat.delete()
+        messages.success(request, f"ลบหมวดหมู่โมดูล '{name}' เรียบร้อยแล้ว!")
+        return redirect('category_list')
+
 
 
 class CompanyTicketDesignView(LoginRequiredMixin, AdminRequiredMixin, View):

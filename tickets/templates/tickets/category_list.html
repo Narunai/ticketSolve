@@ -65,14 +65,14 @@
 
 
     <!-- Grid Layout for Categories -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         <!-- SECTION 1: Ticket Categories (หมวดหมู่ปัญหา) -->
         <div class="glass-panel p-6 rounded-2xl border border-slate-800/80 shadow-xl flex flex-col justify-between space-y-6">
             <div>
                 <div class="border-b border-slate-800 pb-4 mb-4 flex items-center justify-between">
                     <div>
-                        <h3 class="font-bold text-white text-lg flex items-center gap-2">
+                        <h3 class="font-bold text-white text-base flex items-center gap-2">
                             🏷️ หมวดหมู่ปัญหาที่เปิดรับแจ้ง (Ticket Categories)
                         </h3>
                         <p class="text-xs text-slate-400 mt-1">หมวดหมู่สำหรับผู้แจ้งปัญหาเลือกขณะเปิด Ticket</p>
@@ -87,7 +87,7 @@
                                 <span class="w-3 h-3 rounded-full" style="background-color: {{ cat.color_code }};"></span>
                                 <span class="font-semibold text-white text-sm truncate">{{ cat.name }}</span>
                                 {% if not cat.company %}
-                                    <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Global (ส่วนกลาง)</span>
+                                    <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Global</span>
                                 {% else %}
                                     <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-sky-500/10 text-sky-400 border border-sky-500/20">{{ cat.company.name }}</span>
                                 {% endif %}
@@ -138,15 +138,86 @@
             </div>
         </div>
 
-        <!-- SECTION 2: Resolution Categories (หมวดหมู่การแก้ปัญหา) -->
+        <!-- SECTION 2: Module Categories (หมวดหมู่โมดูล) -->
         <div class="glass-panel p-6 rounded-2xl border border-slate-800/80 shadow-xl flex flex-col justify-between space-y-6">
             <div>
                 <div class="border-b border-slate-800 pb-4 mb-4 flex items-center justify-between">
                     <div>
-                        <h3 class="font-bold text-white text-lg flex items-center gap-2">
+                        <h3 class="font-bold text-white text-base flex items-center gap-2">
+                            🧩 หมวดหมู่โมดูลที่เกิดปัญหา (Module Categories)
+                        </h3>
+                        <p class="text-xs text-slate-400 mt-1">ระบุระบบย่อย/โมดูล เช่น ระบบลา, ระบบขาย, POS</p>
+                    </div>
+                </div>
+
+                <div class="space-y-3 max-h-[400px] overflow-y-auto pr-1">
+                    {% for mod in module_categories %}
+                    <div class="p-4 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between hover:border-slate-700 transition-all">
+                        <div class="min-w-0 pr-3">
+                            <div class="flex items-center gap-2">
+                                <span class="w-3 h-3 rounded-full bg-emerald-500"></span>
+                                <span class="font-semibold text-white text-sm truncate">{{ mod.name }}</span>
+                                {% if not mod.company %}
+                                    <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Global</span>
+                                {% else %}
+                                    <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-sky-500/10 text-sky-400 border border-sky-500/20">{{ mod.company.name }}</span>
+                                {% endif %}
+                            </div>
+                            {% if mod.description %}
+                            <p class="text-xs text-slate-400 mt-1 truncate">{{ mod.description }}</p>
+                            {% endif %}
+                        </div>
+
+                        {% if user.is_superuser or user.role == 'SYSTEM_ADMIN' or mod.company == user.company %}
+                        <form method="POST" action="{% url 'module_category_delete' mod.id %}" onsubmit="return confirm('ยืนยันลบหมวดหมู่โมดูลนี้หรือไม่?');">
+                            {% csrf_token %}
+                            <button type="submit" class="p-2 text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg transition-colors text-xs font-semibold">
+                                ลบ
+                            </button>
+                        </form>
+                        {% endif %}
+                    </div>
+                    {% empty %}
+                    <p class="text-sm text-slate-500 py-6 text-center">ยังไม่มีหมวดหมู่โมดูลในระบบ</p>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Add Module Category Form -->
+            <div class="pt-4 border-t border-slate-800">
+                <h4 class="text-sm font-bold text-white mb-3">+ เพิ่มหมวดหมู่โมดูลใหม่</h4>
+                <form method="POST" action="{% url 'module_category_create' %}" class="space-y-4">
+                    {% csrf_token %}
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">ชื่อโมดูล / ระบบย่อย</label>
+                        {{ module_form.name }}
+                    </div>
+                    {% if user.is_superuser or user.role == 'SYSTEM_ADMIN' or user.role == 'SYSTEM_SUB_ADMIN' %}
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">บริษัทลูกค้า (เว้นว่างไว้หากเป็นส่วนกลาง Global)</label>
+                        {{ module_form.company }}
+                    </div>
+                    {% endif %}
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">คำอธิบายโมดูล</label>
+                        {{ module_form.description }}
+                    </div>
+                    <button type="submit" class="w-full py-2.5 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-500 transition-all shadow-lg">
+                        บันทึกหมวดหมู่โมดูลใหม่
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- SECTION 3: Resolution Categories (หมวดหมู่การแก้ปัญหา) -->
+        <div class="glass-panel p-6 rounded-2xl border border-slate-800/80 shadow-xl flex flex-col justify-between space-y-6">
+            <div>
+                <div class="border-b border-slate-800 pb-4 mb-4 flex items-center justify-between">
+                    <div>
+                        <h3 class="font-bold text-white text-base flex items-center gap-2">
                             🛠️ หมวดหมู่ประเภทการแก้ปัญหา (Resolution Categories)
                         </h3>
-                        <p class="text-xs text-slate-400 mt-1">ใช้ระบุวิธีแก้ปัญหาเมื่อทีมงานสรุปปิดงาน (Resolved/Closed)</p>
+                        <p class="text-xs text-slate-400 mt-1">ใช้ระบุวิธีแก้ปัญหาเมื่อทีมงานสรุปปิดงาน</p>
                     </div>
                 </div>
 
@@ -157,7 +228,7 @@
                             <div class="flex items-center gap-2">
                                 <span class="font-semibold text-white text-sm truncate">{{ res.name }}</span>
                                 {% if not res.company %}
-                                    <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Global (ส่วนกลาง)</span>
+                                    <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Global</span>
                                 {% else %}
                                     <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-sky-500/10 text-sky-400 border border-sky-500/20">{{ res.company.name }}</span>
                                 {% endif %}

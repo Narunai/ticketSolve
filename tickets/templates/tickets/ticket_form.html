@@ -166,13 +166,35 @@
                 {% endif %}
             </div>
 
+            <!-- Upload Progress & Queue Indicator -->
+            <div id="upload-progress-panel" class="hidden p-4 rounded-xl bg-slate-900/90 border border-indigo-500/30 space-y-3 shadow-lg my-4">
+                <div class="flex items-center justify-between text-xs font-semibold text-slate-300">
+                    <div class="flex items-center gap-2">
+                        <svg class="animate-spin h-4 w-4 text-indigo-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span id="upload-status-text">⏳ กำลังอัปโหลดข้อมูลและไฟล์แนบ...</span>
+                    </div>
+                    <span id="upload-percent-text" class="text-indigo-400 font-mono font-bold">0%</span>
+                </div>
+                <!-- Progress Bar -->
+                <div class="w-full bg-slate-800 rounded-full h-2 overflow-hidden border border-slate-700">
+                    <div id="upload-progress-bar" class="bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 h-2 rounded-full transition-all duration-200 w-0"></div>
+                </div>
+                <div class="flex items-center justify-between text-[11px] text-slate-400">
+                    <span id="upload-speed-text">ความเร็ว: -- MB/s</span>
+                    <span>กรุณารอสักครู่ ห้ามปิดหรือเปลี่ยนหน้าต่างนี้</span>
+                </div>
+            </div>
+
             <!-- Action Buttons -->
             <div class="pt-6 border-t border-slate-800 flex items-center justify-end gap-4">
-                <a href="{% url 'dashboard' %}" class="px-5 py-2.5 rounded-lg text-sm font-semibold border border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800 transition-all">
+                <a href="{% url 'dashboard' %}" id="btn-cancel" class="px-5 py-2.5 rounded-lg text-sm font-semibold border border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800 transition-all">
                     {{ t.cancel }}
                 </a>
-                <button type="submit" class="px-5 py-2.5 rounded-lg text-sm font-semibold text-white bg-theme-gradient hover:opacity-90 shadow-theme-glow active:scale-[0.98] transition-all">
-                    {% if object %}{{ t.save_changes }}{% else %}{{ t.submit_ticket }}{% endif %}
+                <button type="submit" id="btn-submit-form" class="px-5 py-2.5 rounded-lg text-sm font-semibold text-white bg-theme-gradient hover:opacity-90 shadow-theme-glow active:scale-[0.98] transition-all flex items-center gap-2">
+                    <span id="submit-btn-text">{% if object %}{{ t.save_changes }}{% else %}{{ t.submit_ticket }}{% endif %}</span>
                 </button>
             </div>
         </form>
@@ -187,9 +209,20 @@ document.addEventListener('DOMContentLoaded', function() {
     const fileCountSpan = document.getElementById('file-count');
     const errorMsg = document.getElementById('file-size-error');
     const form = document.querySelector('form');
-    const MAX_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+    const btnSubmit = document.getElementById('btn-submit-form');
+    const submitBtnText = document.getElementById('submit-btn-text');
+    const btnCancel = document.getElementById('btn-cancel');
+    const btnAddFile = document.getElementById('btn-add-file');
 
+    const progressPanel = document.getElementById('upload-progress-panel');
+    const progressBar = document.getElementById('upload-progress-bar');
+    const progressPercent = document.getElementById('upload-percent-text');
+    const progressSpeed = document.getElementById('upload-speed-text');
+    const statusText = document.getElementById('upload-status-text');
+
+    const MAX_SIZE_BYTES = 50 * 1024 * 1024; // 50 MB Max per file
     let accumulatedFiles = [];
+    let isUploading = false;
 
     function renderFileList() {
         if (!itemsContainer) return;
@@ -234,6 +267,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         itemsContainer.querySelectorAll('.remove-file-btn').forEach(btn => {
             btn.addEventListener('click', function() {
+                if (isUploading) return;
                 const idx = parseInt(this.getAttribute('data-index'));
                 accumulatedFiles.splice(idx, 1);
                 renderFileList();
@@ -268,7 +302,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
 
                 if (overFiles.length > 0) {
-                    alert(`❌ ไฟล์ต่อไปนี้มีขนาดเกิน 10 MB:\n${overFiles.join('\n')}\n\nไฟล์ที่ขนาดเกินจะไม่ถูกเพิ่มในรายการครับ`);
+                    alert(`❌ ไฟล์ต่อไปนี้มีขนาดเกิน 50 MB:\n${overFiles.join('\n')}\n\nไฟล์ที่ขนาดเกินจะไม่ถูกเพิ่มในรายการครับ`);
                     if (errorMsg) errorMsg.classList.remove('hidden');
                 } else {
                     if (errorMsg) errorMsg.classList.add('hidden');
@@ -281,14 +315,86 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (form) {
         form.addEventListener('submit', function(e) {
-            let hasOver = accumulatedFiles.some(f => f.size > MAX_SIZE_BYTES);
-            if (hasOver) {
-                e.preventDefault();
-                alert('❌ ไม่สามารถส่งฟอร์มได้ เนื่องจากมีไฟล์แนบที่มีขนาดเกิน 10 MB');
+            e.preventDefault();
+
+            if (isUploading) {
+                alert('⏳ กำลังอัปโหลดข้อมูลคำขอชิ้นแรกอยู่ กรุณารอสักครู่ให้เสร็จสิ้น...');
                 return false;
             }
+
+            let hasOver = accumulatedFiles.some(f => f.size > MAX_SIZE_BYTES);
+            if (hasOver) {
+                alert('❌ ไม่สามารถส่งฟอร์มได้ เนื่องจากมีไฟล์แนบที่มีขนาดเกิน 50 MB');
+                return false;
+            }
+
             updateRealInput();
+
+            // Lock Form & UI
+            isUploading = true;
+            if (btnSubmit) {
+                btnSubmit.disabled = true;
+                btnSubmit.classList.add('opacity-50', 'cursor-not-allowed');
+                if (submitBtnText) submitBtnText.textContent = '⏳ กำลังส่งข้อมูล...';
+            }
+            if (btnAddFile) btnAddFile.classList.add('pointer-events-none', 'opacity-50');
+            if (btnCancel) btnCancel.classList.add('pointer-events-none', 'opacity-50');
+            if (progressPanel) progressPanel.classList.remove('hidden');
+
+            const formData = new FormData(form);
+            const xhr = new XMLHttpRequest();
+            const startTime = Date.now();
+
+            xhr.upload.onprogress = function(event) {
+                if (event.lengthComputable) {
+                    const percentComplete = Math.round((event.loaded / event.total) * 100);
+                    const elapsedTime = (Date.now() - startTime) / 1000;
+                    const uploadSpeed = elapsedTime > 0 ? (event.loaded / (1024 * 1024 * elapsedTime)).toFixed(1) : 0;
+
+                    if (progressBar) progressBar.style.width = percentComplete + '%';
+                    if (progressPercent) progressPercent.textContent = percentComplete + '%';
+                    if (progressSpeed) progressSpeed.textContent = `ความเร็ว: ${uploadSpeed} MB/s (${(event.loaded / (1024 * 1024)).toFixed(1)} / ${(event.total / (1024 * 1024)).toFixed(1)} MB)`;
+                }
+            };
+
+            xhr.onload = function() {
+                if (xhr.status >= 200 && xhr.status < 400) {
+                    if (progressBar) progressBar.style.width = '100%';
+                    if (progressPercent) progressPercent.textContent = '100%';
+                    if (statusText) statusText.textContent = '✅ อัปโหลดและบันทึกข้อมูลสำเร็จ กำลังเปลี่ยนหน้า...';
+                    
+                    setTimeout(() => {
+                        window.location.href = xhr.responseURL || "{% url 'dashboard' %}";
+                    }, 500);
+                } else if (xhr.status === 413) {
+                    alert('❌ เกิดข้อผิดพลาด 413: ขนาดไฟล์รวมใหญ่เกินกำหนดที่เซิร์ฟเวอร์อนุญาต');
+                    resetFormState();
+                } else {
+                    alert(`❌ เกิดข้อผิดพลาดในการบันทึกข้อมูล (${xhr.status})`);
+                    resetFormState();
+                }
+            };
+
+            xhr.onerror = function() {
+                alert('❌ ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้ กรุณาตรวจสอบอินเทอร์เน็ต');
+                resetFormState();
+            };
+
+            xhr.open('POST', form.action || window.location.href, true);
+            xhr.send(formData);
         });
+    }
+
+    function resetFormState() {
+        isUploading = false;
+        if (btnSubmit) {
+            btnSubmit.disabled = false;
+            btnSubmit.classList.remove('opacity-50', 'cursor-not-allowed');
+            if (submitBtnText) submitBtnText.textContent = '{% if object %}{{ t.save_changes }}{% else %}{{ t.submit_ticket }}{% endif %}';
+        }
+        if (btnAddFile) btnAddFile.classList.remove('pointer-events-none', 'opacity-50');
+        if (btnCancel) btnCancel.classList.remove('pointer-events-none', 'opacity-50');
+        if (progressPanel) progressPanel.classList.add('hidden');
     }
 });
 </script>
