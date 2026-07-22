@@ -94,7 +94,7 @@
                     <span class="text-slate-300 font-semibold">{{ high_priority_count }} {{ t.items }}</span>
                 </div>
                 <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-                    <div class="bg-rose-500 h-full rounded-full" style="width: {% if tickets_count > 0 %}{{ high_priority_count|default:0|add:0|stringformat:'d' }}00{% else %}0{% endif %}%"></div>
+                    <div class="bg-rose-500 h-full rounded-full" style="width: {% if tickets_count > 0 %}100{% else %}0{% endif %}%;"></div>
                 </div>
             </a>
             <a href="{% if selected_priority == 'MEDIUM' %}{% url 'dashboard' %}{% else %}{% url 'dashboard' %}?priority=MEDIUM{% endif %}" class="block group">
@@ -106,7 +106,7 @@
                     <span class="text-slate-300 font-semibold">{{ medium_priority_count }} {{ t.items }}</span>
                 </div>
                 <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-                    <div class="bg-amber-500 h-full rounded-full" style="width: {% if tickets_count > 0 %}{{ medium_priority_count|default:0|add:0|stringformat:'d' }}00{% else %}0{% endif %}%"></div>
+                    <div class="bg-amber-500 h-full rounded-full" style="width: {% if tickets_count > 0 %}100{% else %}0{% endif %}%;"></div>
                 </div>
             </a>
             <a href="{% if selected_priority == 'LOW' %}{% url 'dashboard' %}{% else %}{% url 'dashboard' %}?priority=LOW{% endif %}" class="block group">
@@ -118,7 +118,7 @@
                     <span class="text-slate-300 font-semibold">{{ low_priority_count }} {{ t.items }}</span>
                 </div>
                 <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-                    <div class="bg-sky-500 h-full rounded-full" style="width: {% if tickets_count > 0 %}{{ low_priority_count|default:0|add:0|stringformat:'d' }}00{% else %}0{% endif %}%"></div>
+                    <div class="bg-sky-500 h-full rounded-full" style="width: {% if tickets_count > 0 %}100{% else %}0{% endif %}%;"></div>
                 </div>
             </a>
         </div>
