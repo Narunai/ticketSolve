@@ -15,7 +15,7 @@
     </div>
 
     <!-- Tab Switcher Navigation -->
-    <div class="flex items-center gap-3 border-b border-slate-800 pb-3">
+    <div class="flex flex-wrap items-center gap-3 border-b border-slate-800 pb-3">
         <button type="button" id="tab-btn-audit" onclick="switchLogPageTab('audit')" class="px-4 py-2.5 rounded-xl text-xs font-bold transition-all bg-indigo-600 text-white shadow-lg shadow-indigo-500/20 cursor-pointer flex items-center gap-2">
             <span>📋</span>
             <span>ประวัติการเปลี่ยนสถานะ & ดำเนินการ (Audit Trail Log)</span>
@@ -25,6 +25,11 @@
             <span>📧</span>
             <span>ประวัติการจัดส่งอีเมล (Email Notification Logs)</span>
             <span class="px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 text-[11px] font-mono">{{ email_log_count }}</span>
+        </button>
+        <button type="button" id="tab-btn-backup" onclick="switchLogPageTab('backup')" class="px-4 py-2.5 rounded-xl text-xs font-bold transition-all bg-slate-900 text-slate-400 hover:text-white border border-slate-800 cursor-pointer flex items-center gap-2">
+            <span>💾</span>
+            <span>ประวัติการสำรองข้อมูล (Backup Logs)</span>
+            <span class="px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 text-[11px] font-mono">{{ backup_log_count }}</span>
         </button>
     </div>
 
@@ -200,31 +205,108 @@
     </div>
 </div>
 
+    <!-- Log Section 3: Backup Logs (ประวัติการสำรองข้อมูลอัตโนมัติ) -->
+    <div id="log-section-backup" class="glass-panel rounded-2xl border border-slate-800/80 overflow-hidden shadow-xl hidden">
+        <div class="px-6 py-4 border-b border-slate-800/80 flex items-center justify-between bg-slate-900/40">
+            <div class="flex items-center gap-2">
+                <span class="w-3 h-3 rounded-full bg-blue-500"></span>
+                <h3 class="font-bold text-white text-base">ประวัติการสำรองข้อมูลอัตโนมัติ (Automated 2-Hour Backup Log)</h3>
+            </div>
+            <span class="text-xs px-2.5 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-400 font-medium">รวม {{ backup_log_count }} รายการ</span>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-slate-900/60 border-b border-slate-800 text-slate-400 text-xs font-semibold uppercase tracking-wider">
+                        <th class="px-6 py-3.5">วัน-เวลา (Timestamp)</th>
+                        <th class="px-6 py-3.5">ชื่อไฟล์ Archive (Filename)</th>
+                        <th class="px-6 py-3.5">ขนาดไฟล์ (Size)</th>
+                        <th class="px-6 py-3.5 text-center">สถานะ (Status)</th>
+                        <th class="px-6 py-3.5">รายละเอียด (Details)</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800/60 text-sm">
+                    {% for blog in backup_logs %}
+                    <tr class="hover:bg-slate-800/30 transition-colors">
+                        <td class="px-6 py-4 text-slate-400 font-mono text-xs whitespace-nowrap">
+                            {{ blog.created_at|date:"Y-m-d H:i:s" }}
+                        </td>
+                        <td class="px-6 py-4 font-mono text-xs font-medium text-white">
+                            📦 {{ blog.filename }}
+                        </td>
+                        <td class="px-6 py-4 font-mono text-xs text-slate-300">
+                            {{ blog.file_size_mb }} MB
+                        </td>
+                        <td class="px-6 py-4 text-center">
+                            {% if blog.status == 'SUCCESS' %}
+                                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                    <span>สำเร็จ (SUCCESS)</span>
+                                </span>
+                            {% else %}
+                                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                                    <span>ล้มเหลว (FAILED)</span>
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 text-slate-300 text-xs font-mono">
+                            {{ blog.details|default:"-" }}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="px-6 py-8 text-center text-slate-500">
+                            ยังไม่มีบันทึกประวัติการสำรองข้อมูลในระบบ
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
 <script>
 function switchLogPageTab(tabName) {
     const auditSec = document.getElementById('log-section-audit');
     const emailSec = document.getElementById('log-section-email');
+    const backupSec = document.getElementById('log-section-backup');
     const auditBtn = document.getElementById('tab-btn-audit');
     const emailBtn = document.getElementById('tab-btn-email');
+    const backupBtn = document.getElementById('tab-btn-backup');
 
-    if (!auditSec || !emailSec || !auditBtn || !emailBtn) return;
+    if (!auditSec || !emailSec || !backupSec || !auditBtn || !emailBtn || !backupBtn) return;
+
+    // Reset all buttons to inactive state
+    const inactiveClass = 'px-4 py-2.5 rounded-xl text-xs font-bold transition-all bg-slate-900 text-slate-400 hover:text-white border border-slate-800 cursor-pointer flex items-center gap-2';
+    auditBtn.className = inactiveClass;
+    emailBtn.className = inactiveClass;
+    backupBtn.className = inactiveClass;
+
+    // Hide all sections
+    auditSec.classList.add('hidden');
+    emailSec.classList.add('hidden');
+    backupSec.classList.add('hidden');
 
     if (tabName === 'audit') {
         auditSec.classList.remove('hidden');
-        emailSec.classList.add('hidden');
         auditBtn.className = 'px-4 py-2.5 rounded-xl text-xs font-bold transition-all bg-indigo-600 text-white shadow-lg shadow-indigo-500/20 cursor-pointer flex items-center gap-2';
-        emailBtn.className = 'px-4 py-2.5 rounded-xl text-xs font-bold transition-all bg-slate-900 text-slate-400 hover:text-white border border-slate-800 cursor-pointer flex items-center gap-2';
-    } else {
-        auditSec.classList.add('hidden');
+    } else if (tabName === 'email') {
         emailSec.classList.remove('hidden');
         emailBtn.className = 'px-4 py-2.5 rounded-xl text-xs font-bold transition-all bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 cursor-pointer flex items-center gap-2';
-        auditBtn.className = 'px-4 py-2.5 rounded-xl text-xs font-bold transition-all bg-slate-900 text-slate-400 hover:text-white border border-slate-800 cursor-pointer flex items-center gap-2';
+    } else if (tabName === 'backup') {
+        backupSec.classList.remove('hidden');
+        backupBtn.className = 'px-4 py-2.5 rounded-xl text-xs font-bold transition-all bg-blue-600 text-white shadow-lg shadow-blue-500/20 cursor-pointer flex items-center gap-2';
     }
 }
 
 document.addEventListener('DOMContentLoaded', function () {
     if (window.location.hash === '#log-section-email') {
         switchLogPageTab('email');
+    } else if (window.location.hash === '#log-section-backup') {
+        switchLogPageTab('backup');
     }
 });
 </script>

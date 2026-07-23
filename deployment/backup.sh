@@ -95,6 +95,16 @@ EOF
 
 if [ -f "${BACKUPS_DIR}/${ARCHIVE_NAME}" ]; then
     upload_file_to_gdrive "${BACKUPS_DIR}/${ARCHIVE_NAME}"
+    FILE_SIZE=$(stat -c%s "${BACKUPS_DIR}/${ARCHIVE_NAME}" 2>/dev/null || stat -f%z "${BACKUPS_DIR}/${ARCHIVE_NAME}" 2>/dev/null || echo "0")
+    python3 manage.py shell -c "
+from tickets.models import BackupLog
+BackupLog.objects.create(
+    filename='${ARCHIVE_NAME}',
+    file_size_bytes=${FILE_SIZE},
+    status='SUCCESS',
+    details='Backup Archive created & uploaded to Google Drive'
+)
+"
 fi
 
 echo "[$(date)] 🎉 2-Hour backup workflow finished successfully."

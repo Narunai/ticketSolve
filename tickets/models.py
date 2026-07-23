@@ -474,8 +474,29 @@ class Ticket(models.Model):
             return self.ticket_category.name
         return self.get_category_display()
 
+class BackupLog(models.Model):
+    STATUS_SUCCESS = 'SUCCESS'
+    STATUS_FAILED = 'FAILED'
+    STATUS_CHOICES = [
+        (STATUS_SUCCESS, 'สำเร็จ (Success)'),
+        (STATUS_FAILED, 'ล้มเหลว (Failed)'),
+    ]
+
+    filename = models.CharField(max_length=255)
+    file_size_bytes = models.BigIntegerField(default=0)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_SUCCESS)
+    details = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
     def __str__(self):
-        return f"{self.get_ticket_code()} - {self.title} ({self.status})"
+        return f"{self.filename} ({self.status}) - {self.created_at.strftime('%Y-%m-%d %H:%M')}"
+
+    @property
+    def file_size_mb(self):
+        return round(self.file_size_bytes / (1024 * 1024), 2)
 
 
 class EmailLog(models.Model):

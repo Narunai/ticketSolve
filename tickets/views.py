@@ -6,7 +6,7 @@ from django.views.generic import CreateView, UpdateView, DetailView, TemplateVie
 from django.urls import reverse, reverse_lazy
 
 from django.core.exceptions import PermissionDenied
-from .models import Ticket, CustomUser, Company, EmailLog, TicketAuditLog, ReportViewLog, MonthlyReportSchedule, TicketAutomationConfig, SMTPConfiguration, get_smtp_connection, get_smtp_from_email, TicketComment, TicketCategory, ResolutionCategory, ModuleCategory, TicketStatusConfig, CompanyTicketConfig, CompanyTicketField, NotificationConfig, should_send_email_notification
+from .models import Ticket, CustomUser, Company, EmailLog, TicketAuditLog, ReportViewLog, MonthlyReportSchedule, TicketAutomationConfig, SMTPConfiguration, get_smtp_connection, get_smtp_from_email, TicketComment, TicketCategory, ResolutionCategory, ModuleCategory, TicketStatusConfig, CompanyTicketConfig, CompanyTicketField, NotificationConfig, should_send_email_notification, BackupLog
 
 
 from django.db import models
@@ -929,6 +929,8 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         context['tickets_count'] = tickets.count()
         context['open_count'] = tickets.filter(status=Ticket.STATUS_OPEN).count()
         context['in_progress_count'] = tickets.filter(status=Ticket.STATUS_IN_PROGRESS).count()
+        context['deployment_requested_count'] = tickets.filter(status=Ticket.STATUS_DEPLOYMENT_REQUESTED).count()
+        context['ready_to_deploy_count'] = tickets.filter(status=Ticket.STATUS_READY_TO_DEPLOY).count()
         context['resolved_count'] = tickets.filter(status=Ticket.STATUS_RESOLVED).count()
         context['closed_count'] = tickets.filter(status=Ticket.STATUS_CLOSED).count()
 
@@ -941,7 +943,15 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         priority_filter = self.request.GET.get('priority')
 
         filtered_tickets = tickets
-        if status_filter in [Ticket.STATUS_OPEN, Ticket.STATUS_IN_PROGRESS, Ticket.STATUS_RESOLVED, Ticket.STATUS_CLOSED]:
+        valid_statuses = [
+            Ticket.STATUS_OPEN,
+            Ticket.STATUS_IN_PROGRESS,
+            Ticket.STATUS_DEPLOYMENT_REQUESTED,
+            Ticket.STATUS_READY_TO_DEPLOY,
+            Ticket.STATUS_RESOLVED,
+            Ticket.STATUS_CLOSED
+        ]
+        if status_filter in valid_statuses:
             filtered_tickets = filtered_tickets.filter(status=status_filter)
             context['selected_status'] = status_filter
 
@@ -1733,6 +1743,8 @@ class LogListView(LoginRequiredMixin, SystemStaffRequiredMixin, TemplateView):
         context['email_logs'] = _group_email_logs(_email_logs_for_user(user))
         context['email_log_count'] = len(context['email_logs'])
         context['audit_logs'] = audit_logs[:100]
+        context['backup_logs'] = BackupLog.objects.all()[:100]
+        context['backup_log_count'] = BackupLog.objects.count()
         return context
 
 
