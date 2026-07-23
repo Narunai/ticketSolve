@@ -57,7 +57,7 @@
         {% endif %}
 
         <!-- Form Object -->
-        <form method="POST" enctype="multipart/form-data" class="space-y-6">
+        <form method="POST" enctype="multipart/form-data" id="ticket-form" class="space-y-6">
             {% csrf_token %}
 
             <div class="space-y-5">
@@ -203,9 +203,11 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const fileInput = document.getElementById('multi-file-input');
+    const fileInput = document.getElementById('real-file-input');
     const btnAddFile = document.getElementById('btn-add-file');
-    const fileListContainer = document.getElementById('file-list');
+    const fileListContainer = document.getElementById('file-items-container');
+    const fileListPreview = document.getElementById('file-list-preview');
+    const fileCountSpan = document.getElementById('file-count');
     const errorMsg = document.getElementById('file-size-error');
     const form = document.getElementById('ticket-form');
     
@@ -218,11 +220,11 @@ document.addEventListener('DOMContentLoaded', function() {
     const progressPercent = document.getElementById('upload-percent-text');
     const progressSpeed = document.getElementById('upload-speed-text');
     const statusText = document.getElementById('upload-status-text');
-
-    const MAX_SIZE_BYTES = 50 * 1024 * 1024; // 50MB per file limit
+ 
+    const MAX_SIZE_BYTES = 10 * 1024 * 1024; // 10MB per file limit (matching django back-end)
     let accumulatedFiles = [];
     let isUploading = false;
-
+ 
     function formatFileSize(bytes) {
         if (bytes === 0) return '0 Bytes';
         const k = 1024;
@@ -230,10 +232,17 @@ document.addEventListener('DOMContentLoaded', function() {
         const i = Math.floor(Math.log(bytes) / Math.log(k));
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
-
+ 
     function renderFileList() {
         if (!fileListContainer) return;
         fileListContainer.innerHTML = '';
+        
+        if (accumulatedFiles.length > 0) {
+            if (fileListPreview) fileListPreview.classList.remove('hidden');
+            if (fileCountSpan) fileCountSpan.textContent = accumulatedFiles.length;
+        } else {
+            if (fileListPreview) fileListPreview.classList.add('hidden');
+        }
         
         accumulatedFiles.forEach((file, index) => {
             const isOver = file.size > MAX_SIZE_BYTES;
@@ -254,7 +263,7 @@ document.addEventListener('DOMContentLoaded', function() {
             `;
             fileListContainer.appendChild(fileItem);
         });
-
+ 
         // Add event listeners to remove buttons
         document.querySelectorAll('.btn-remove-file').forEach(btn => {
             btn.addEventListener('click', function() {
@@ -264,14 +273,14 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
     }
-
+ 
     function updateRealInput() {
         if (!fileInput) return;
         const dt = new DataTransfer();
         accumulatedFiles.forEach(file => dt.items.add(file));
         fileInput.files = dt.files;
     }
-
+ 
     function resetFormState() {
         isUploading = false;
         if (btnSubmit) {
@@ -283,10 +292,9 @@ document.addEventListener('DOMContentLoaded', function() {
         if (btnCancel) btnCancel.classList.remove('pointer-events-none', 'opacity-50');
         if (progressPanel) progressPanel.classList.add('hidden');
     }
-
+ 
     if (btnAddFile && fileInput) {
-        btnAddFile.addEventListener('click', () => fileInput.click());
-
+        // Remove duplicate listener, onclick is already on the button
         fileInput.addEventListener('change', function(e) {
             const files = Array.from(e.target.files);
             if (files.length > 0) {
@@ -298,36 +306,36 @@ document.addEventListener('DOMContentLoaded', function() {
                         accumulatedFiles.push(file);
                     }
                 });
-
+ 
                 if (overFiles.length > 0) {
-                    alert(`❌ The following files exceed 50 MB:\n${overFiles.join('\n')}\n\nFiles exceeding the limit will not be added.`);
+                    alert(`❌ The following files exceed 10 MB:\n${overFiles.join('\n')}\n\nFiles exceeding the limit will not be added.`);
                     if (errorMsg) errorMsg.classList.remove('hidden');
                 } else {
                     if (errorMsg) errorMsg.classList.add('hidden');
                 }
-
+ 
                 renderFileList();
             }
         });
     }
-
+ 
     if (form) {
         form.addEventListener('submit', function(e) {
             e.preventDefault();
-
+ 
             if (isUploading) {
                 alert('⏳ Request upload in progress, please wait...');
                 return false;
             }
-
+ 
             let hasOver = accumulatedFiles.some(f => f.size > MAX_SIZE_BYTES);
             if (hasOver) {
-                alert('❌ Cannot submit form because some attachments exceed 50 MB.');
+                alert('❌ Cannot submit form because some attachments exceed 10 MB.');
                 return false;
             }
-
+ 
             updateRealInput();
-
+ 
             // Lock Form & UI
             isUploading = true;
             if (btnSubmit) {
@@ -338,23 +346,23 @@ document.addEventListener('DOMContentLoaded', function() {
             if (btnAddFile) btnAddFile.classList.add('pointer-events-none', 'opacity-50');
             if (btnCancel) btnCancel.classList.add('pointer-events-none', 'opacity-50');
             if (progressPanel) progressPanel.classList.remove('hidden');
-
+ 
             const formData = new FormData(form);
             const xhr = new XMLHttpRequest();
             const startTime = Date.now();
-
+ 
             xhr.upload.onprogress = function(event) {
                 if (event.lengthComputable) {
                     const percentComplete = Math.round((event.loaded / event.total) * 100);
                     const elapsedTime = (Date.now() - startTime) / 1000;
                     const uploadSpeed = elapsedTime > 0 ? (event.loaded / (1024 * 1024 * elapsedTime)).toFixed(1) : 0;
-
+ 
                     if (progressBar) progressBar.style.width = percentComplete + '%';
                     if (progressPercent) progressPercent.textContent = percentComplete + '%';
                     if (progressSpeed) progressSpeed.textContent = `Speed: ${uploadSpeed} MB/s (${(event.loaded / (1024 * 1024)).toFixed(1)} / ${(event.total / (1024 * 1024)).toFixed(1)} MB)`;
                 }
             };
-
+ 
             xhr.onload = function() {
                 if (xhr.status >= 200 && xhr.status < 400) {
                     if (progressBar) progressBar.style.width = '100%';
@@ -372,27 +380,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     resetFormState();
                 }
             };
-
+ 
             xhr.onerror = function() {
                 alert('❌ Unable to connect to server. Please check your network connection.');
                 resetFormState();
             };
-
+ 
             xhr.open('POST', form.action || window.location.href, true);
             xhr.send(formData);
         });
-    }
-
-    function resetFormState() {
-        isUploading = false;
-        if (btnSubmit) {
-            btnSubmit.disabled = false;
-            btnSubmit.classList.remove('opacity-50', 'cursor-not-allowed');
-            if (submitBtnText) submitBtnText.textContent = '{% if object %}{{ t.save_changes }}{% else %}{{ t.submit_ticket }}{% endif %}';
-        }
-        if (btnAddFile) btnAddFile.classList.remove('pointer-events-none', 'opacity-50');
-        if (btnCancel) btnCancel.classList.remove('pointer-events-none', 'opacity-50');
-        if (progressPanel) progressPanel.classList.add('hidden');
     }
 });
 </script>
