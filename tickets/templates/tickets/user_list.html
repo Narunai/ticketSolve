@@ -1,19 +1,15 @@
 {% extends 'tickets/base.html' %}
 
-{% block title %}จัดการบัญชีผู้ใช้ - TicketSolve{% endblock %}
-{% block header_title %}จัดการบัญชีผู้ใช้ (User Management){% endblock %}
+{% block title %}{{ t.user_list_title }} - TicketSolve{% endblock %}
+{% block header_title %}{{ t.user_list_title }}{% endblock %}
 
 {% block content %}
 <!-- Welcome & Quick Action Header -->
 <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900/40 p-6 rounded-2xl border border-slate-800/80 glass-card">
     <div>
-        <h2 class="text-xl font-bold text-white">รายชื่อสมาชิกในระบบ</h2>
+        <h2 class="text-xl font-bold text-white">{{ t.user_list_title }}</h2>
         <p class="text-sm text-slate-400 mt-1">
-            {% if user.role == 'SYSTEM_ADMIN' or user.is_superuser %}
-                รายชื่อสมาชิกผู้ใช้งานทั้งหมดจากทุกองค์กร/บริษัทในระบบ
-            {% else %}
-                รายชื่อสมาชิกพนักงานและแอดมินทั้งหมดภายในองค์กร {{ user.company.name }}
-            {% endif %}
+            {{ t.user_list_desc }}
         </p>
     </div>
     <div>
@@ -21,7 +17,7 @@
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path>
             </svg>
-            เพิ่มผู้ใช้งานใหม่
+            {{ t.add_new_user }}
         </a>
     </div>
 </div>
@@ -29,8 +25,8 @@
 <!-- Users List Table -->
 <div class="glass-panel rounded-2xl border border-slate-800/80 overflow-hidden shadow-xl">
     <div class="px-6 py-5 border-b border-slate-800/80 flex items-center justify-between">
-        <h3 class="font-bold text-white text-base">สมาชิกพนักงาน</h3>
-        <span class="text-xs px-2.5 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-400 font-medium">รวม {{ users_list.count }} บัญชี</span>
+        <h3 class="font-bold text-white text-base">{{ t.system_users }}</h3>
+        <span class="text-xs px-2.5 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-400 font-medium">{{ users_list.count }} {{ t.items }}</span>
     </div>
 
     <!-- Table -->
@@ -39,11 +35,11 @@
             <thead>
                 <tr class="bg-slate-900/60 border-b border-slate-800 text-slate-400 text-xs font-semibold uppercase tracking-wider">
                     <th class="px-6 py-4">Username</th>
-                    <th class="px-6 py-4">อีเมล (Email)</th>
-                    <th class="px-6 py-4">องค์กร (Company)</th>
-                    <th class="px-6 py-4">บทบาท (Role)</th>
-                    <th class="px-6 py-4">สถานะ (Status)</th>
-                    <th class="px-6 py-4 text-center">จัดการ</th>
+                    <th class="px-6 py-4">{{ t.email }}</th>
+                    <th class="px-6 py-4">{{ t.company }}</th>
+                    <th class="px-6 py-4">{{ t.role }}</th>
+                    <th class="px-6 py-4">{{ t.status }}</th>
+                    <th class="px-6 py-4 text-center">{{ t.actions }}</th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-slate-800/50 text-sm">
@@ -52,7 +48,7 @@
                     <td class="px-6 py-4 font-semibold text-white">
                         {{ usr.username }}
                         {% if usr == user %}
-                            <span class="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">คุณ</span>
+                            <span class="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">You</span>
                         {% endif %}
                     </td>
                     <td class="px-6 py-4 text-slate-300">{{ usr.email|default:"-" }}</td>
@@ -60,7 +56,7 @@
                         {% if usr.company %}
                             {{ usr.company.name }}
                         {% else %}
-                            <span class="text-slate-500 italic text-xs">ส่วนกลาง (System)</span>
+                            <span class="text-slate-500 italic text-xs">{{ t.central_admin }}</span>
                         {% endif %}
                     </td>
                     <td class="px-6 py-4">
@@ -74,21 +70,21 @@
                     </td>
                     <td class="px-6 py-4">
                         {% if usr.is_active %}
-                            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">เปิดใช้งาน</span>
+                            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">{{ t.user_status_active }}</span>
                         {% else %}
-                            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20">ปิดการใช้งาน</span>
+                            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20">{{ t.user_status_inactive }}</span>
                         {% endif %}
                     </td>
                     <td class="px-6 py-4 text-center">
                         <a href="{% url 'user_update' usr.id %}" class="inline-flex items-center px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-indigo-600 hover:text-white border border-slate-700 text-slate-300 text-xs font-semibold transition-all">
-                            แก้ไข / ตั้งค่าสิทธิ์
+                            {{ t.edit_user }}
                         </a>
                     </td>
                 </tr>
                 {% empty %}
                 <tr>
                     <td colspan="6" class="px-6 py-12 text-center text-slate-500">
-                        <span class="block font-medium">ไม่พบรายชื่อผู้ใช้งานในระบบ</span>
+                        <span class="block font-medium">{{ t.no_users }}</span>
                     </td>
                 </tr>
                 {% endfor %}

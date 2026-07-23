@@ -8,8 +8,8 @@ from .models import Ticket, CustomUser, Company, EmailLog, get_smtp_connection, 
 
 def log_and_send_email(subject, message, recipient_list, action_type, ticket=None, new_status=None):
     """
-    บันทึก EmailLog ลงในฐานข้อมูลสำหรับการตรวจสอบสถิติและ audit พร้อมส่งอีเมลแยกรายบุคคล
-    เพื่อป้องกันไม่ให้อีเมลแอดเดรสที่เสียปะปนอยู่นั้นขัดขวางการส่งอีเมลไปยังผู้รับคนอื่นๆ
+    Saves EmailLog to database for auditing and statistics, and sends emails to recipients individually
+    to prevent invalid emails from blocking delivery to other recipients.
     """
     recipients = list(set([e for e in recipient_list if e]))
     if not recipients:
@@ -30,7 +30,7 @@ def log_and_send_email(subject, message, recipient_list, action_type, ticket=Non
                 message=message,
                 action_type=action_type,
                 success=False,
-                error_message="ข้ามการส่งตามกฎตั้งค่าการแจ้งเตือนของผู้รับ/บริษัท (Notification Filtered)"
+                error_message="Filtered out by recipient/company notification rules (Notification Filtered)"
             )
             continue
 
@@ -98,7 +98,7 @@ def send_status_change_email(ticket, subject, message):
                 message=message,
                 action_type=EmailLog.ACTION_TICKET_UPDATED,
                 success=False,
-                error_message='ข้ามการส่งตามกฎตั้งค่าการแจ้งเตือนของผู้รับ/บริษัท (Notification Filtered)',
+                error_message='Filtered out by recipient/company notification rules (Notification Filtered)',
             )
 
     if not allowed:
@@ -121,7 +121,7 @@ def send_status_change_email(ticket, subject, message):
         )
         sent_count = email_message.send(fail_silently=False)
         if sent_count <= 0:
-            raise RuntimeError('SMTP ไม่ยืนยันการส่งอีเมล (ส่งได้ 0 ฉบับ)')
+            raise RuntimeError('SMTP did not confirm email delivery (sent 0).')
         success = True
     except Exception as exc:
         error_message = str(exc)
@@ -151,31 +151,25 @@ def remember_previous_ticket_status(sender, instance, **kwargs):
     if instance._previous_status != instance.status:
         instance.status_changed_at = timezone.now()
 
-
-
-
-
-
 @receiver(post_save, sender=Ticket)
 def send_ticket_notifications(sender, instance, created, **kwargs):
     """
-    ส่งอีเมลแจ้งเตือนและบันทึก EmailLog เมื่อมีการสร้างหรืออัปเดต Ticket ในระบบ
+    Send email notifications and save EmailLog when a ticket is created or updated.
     """
     if created:
-        # Action 1: แจ้งเตือนเมื่อมีการเปิด Ticket ใหม่
-        subject = f"[TicketSolve] ได้รับการแจ้งปัญหาใหม่: Ticket #{instance.id} - {instance.title}"
+        subject = f"[TicketSolve] New Support Ticket Created: Ticket #{instance.id} - {instance.title}"
         message = (
-            f"สวัสดีคุณ {instance.created_by.username},\n\n"
-            f"ระบบได้รับการแจ้งปัญหาของคุณเรียบร้อยแล้ว รายละเอียดมีดังนี้:\n"
+            f"Dear {instance.created_by.username},\n\n"
+            f"We have successfully received your support ticket. Here are the details:\n"
             f"----------------------------------------\n"
-            f"📌 รหัส Ticket: #{instance.id}\n"
-            f"📌 หัวข้อปัญหา: {instance.title}\n"
-            f"📌 ระดับความสำคัญ: {instance.get_priority_display()}\n"
-            f"📌 องค์กร: {instance.company.name if instance.company else 'ส่วนกลาง'}\n"
-            f"📌 รายละเอียด: {instance.description}\n"
+            f"📌 Ticket ID: #{instance.id}\n"
+            f"📌 Title: {instance.title}\n"
+            f"📌 Priority: {instance.get_priority_display()}\n"
+            f"📌 Organization: {instance.company.name if instance.company else 'Central'}\n"
+            f"📌 Description: {instance.description}\n"
             f"----------------------------------------\n\n"
-            f"ทีมงานและแอดมินประจำองค์กรจะเข้าตรวจสอบและดำเนินการแก้ไขโดยเร็วที่สุด\n"
-            f"ขอบคุณค่ะ/ครับ\n"
+            f"Our team will review your request and begin working on a resolution shortly.\n"
+            f"Best regards,\n"
             f"TicketSolve Support Team"
         )
         
@@ -200,58 +194,52 @@ def send_ticket_notifications(sender, instance, created, **kwargs):
         # Keep the status clock correct when save(update_fields=['status']) is used.
         Ticket.objects.filter(pk=instance.pk).update(status_changed_at=instance.status_changed_at)
 
-        # Action 2: แจ้งเตือนเฉพาะเมื่อสถานะ Ticket เปลี่ยนจริง
+        # Action 2: Send status change email notifications
         if instance.status == Ticket.STATUS_DEPLOYMENT_REQUESTED:
             confirm_url = f"http://127.0.0.1:8000/ticket/{instance.id}/confirm-deployment/"
-            subject = f"[TicketSolve Approval Required] ร้องขอการ Deploy งาน: Ticket #{instance.id} - {instance.title}"
+            subject = f"[TicketSolve Approval Required] Production Deployment Request: Ticket #{instance.id} - {instance.title}"
             message = (
-                f"เรียนผู้มีส่วนเกี่ยวข้องและแอดมิน,\n\n"
-                f"มีการเปลี่ยนสถานะเป็น 'Production Deployment Request' (ร้องขอการ Deploy งาน) สำหรับ Ticket #{instance.id}\n"
-
+                f"Dear Admin / Stakeholder,\n\n"
+                f"A deployment to production has been requested for Ticket #{instance.id}.\n\n"
                 f"----------------------------------------\n"
-                f"📌 รหัส Ticket: #{instance.id}\n"
-                f"📌 หัวข้อปัญหา: {instance.title}\n"
-                f"📌 ระดับความสำคัญ: {instance.get_priority_display()}\n"
-                f"📌 องค์กร: {instance.company.name if instance.company else 'ส่วนกลาง'}\n"
-                f"📌 ผู้รับผิดชอบ: {instance.assigned_to.username if instance.assigned_to else 'ยังไม่ได้มอบหมาย'}\n"
+                f"📌 Ticket ID: #{instance.id}\n"
+                f"📌 Title: {instance.title}\n"
+                f"📌 Priority: {instance.get_priority_display()}\n"
+                f"📌 Company: {instance.company.name if instance.company else 'Central'}\n"
+                f"📌 Assignee: {instance.assigned_to.username if instance.assigned_to else 'Not Assigned'}\n"
                 f"----------------------------------------\n\n"
-                f"กรุณากดยืนยันการอนุมัติให้ Deploy งานได้ที่ลิงก์ด้านล่างนี้:\n"
+                f"Please review and approve the deployment request using the following link:\n"
                 f"👉 {confirm_url}\n\n"
-                f"เมื่อกดยืนยันแล้ว ระบบจะปรับสถานะของ Ticket เป็น 'Ready to Deploy' โดยอัตโนมัติ\n\n"
-                f"ขอบคุณค่ะ/ครับ\n"
+                f"Once confirmed, the ticket status will be automatically updated to 'Ready to Deploy'.\n\n"
+                f"Best regards,\n"
                 f"TicketSolve Support Team"
             )
         else:
-            subject = f"[TicketSolve] อัปเดตความคืบหน้า: Ticket #{instance.id} - {instance.title}"
+            subject = f"[TicketSolve] Status Update: Ticket #{instance.id} - {instance.title}"
             message = (
-                f"เรียนคุณ {instance.created_by.username},\n\n"
-                f"Ticket #{instance.id} ของคุณได้รับการอัปเดตข้อมูลใหม่ในระบบ:\n"
+                f"Dear {instance.created_by.username},\n\n"
+                f"Your Ticket #{instance.id} has been updated in the system:\n\n"
                 f"----------------------------------------\n"
-                f"📌 สถานะล่าสุด: {instance.get_status_display()}\n"
-                f"📌 ระดับความสำคัญ: {instance.get_priority_display()}\n"
-                f"📌 ผู้รับผิดชอบงาน: {instance.assigned_to.username if instance.assigned_to else 'ยังไม่ได้มอบหมาย'}\n"
+                f"📌 Latest Status: {instance.get_status_display()}\n"
+                f"📌 Priority: {instance.get_priority_display()}\n"
+                f"📌 Assignee: {instance.assigned_to.username if instance.assigned_to else 'Not Assigned'}\n"
                 f"----------------------------------------\n\n"
-                f"คุณสามารถล็อกอินเข้าสู่ระบบเพื่อตรวจสอบรายละเอียดเพิ่มเติมได้ที่หน้า Dashboard\n"
-                f"ขอบคุณค่ะ/ครับ\n"
+                f"You can log in to your dashboard to track details.\n\n"
+                f"Best regards,\n"
                 f"TicketSolve Support Team"
             )
                   
         send_status_change_email(instance, subject, message)
-
-
-
-
-
 @receiver(post_migrate)
 def ensure_default_categories_and_configs(sender, **kwargs):
     if sender.name == 'tickets':
         from .models import TicketCategory, ResolutionCategory
         defaults_cats = [
-            ('Hardware / อุปกรณ์ฮาร์ดแวร์', 'ปัญหาคอมพิวเตอร์ หน้าจอ เมาส์ คีย์บอร์ด ปริ้นเตอร์', 'cpu', '#f59e0b'),
-            ('Software / โปรแกรม', 'ปัญหาการใช้งานซอฟต์แวร์ แรนซัมแวร์ การเข้าไม่ได้', 'code', '#3b82f6'),
-            ('Network & Internet / เครือข่าย', 'ปัญหาระบบอินเทอร์เน็ต WiFi VPN สาย LAN', 'wifi', '#10b981'),
-            ('Account & Access / บัญชีและสิทธิ์', 'ลืมรหัสผ่าน ปลดล็อกบัญชี ขอสิทธิ์เข้าถึงระบบ', 'user-check', '#8b5cf6'),
-            ('Other / เรื่องอื่นๆ', 'ปัญหาหรือข้อสอบถามเพิ่มเติมเรื่องอื่นๆ', 'help-circle', '#6b7280'),
+            ('Hardware', 'Computer hardware issues (monitor, mouse, keyboard, printer, etc.)', 'cpu', '#f59e0b'),
+            ('Software', 'Software usage, installation, licensing, or access issues', 'code', '#3b82f6'),
+            ('Network & Internet', 'Network, WiFi, VPN, or LAN connection issues', 'wifi', '#10b981'),
+            ('Account & Access', 'Forgotten password, locked account, access permissions request', 'user-check', '#8b5cf6'),
+            ('Other', 'General questions or miscellaneous issues', 'help-circle', '#6b7280'),
         ]
         for name, desc, icon, color in defaults_cats:
             TicketCategory.objects.get_or_create(
@@ -261,13 +249,13 @@ def ensure_default_categories_and_configs(sender, **kwargs):
             )
 
         default_resolutions = [
-            ('การเปลี่ยนอุปกรณ์/ชิ้นส่วนใหม่', 'เปลี่ยนทดแทนฮาร์ดแวร์หรืออุปกรณ์ชำรุด'),
-            ('การปรับปรุงแก้ไขตั้งค่าระบบ', 'แก้ไขการกำหนดค่า Config หรือ Permissions'),
-            ('การอัปเดตและซ่อมแซมโปรแกรม', 'Patch update หรือ Reinstall software'),
-            ('การให้คำแนะนำและวิธีใช้งาน', 'ให้ความรู้ คำแนะนำเพื่อแก้ปัญหาผู้ใช้'),
-            ('การแก้ไขผ่านระบบทางไกล (Remote)', 'เข้าช่วยเหลือแบบ Remote Support'),
-            ('การซ่อมแซมหน้างาน (On-Site)', 'ส่งเจ้าหน้าที่เข้าบริการแก้ไขในสถานที่'),
-            ('อื่นๆ / ยกเลิกคำขอ', 'การแก้ไขประเภทอื่นๆ หรือผู้แจ้งยกเลิกเคส'),
+            ('Hardware Replacement', 'Replaced faulty hardware or components'),
+            ('System Configuration Adjustments', 'Adjusted config settings or permissions'),
+            ('Program Update / Repair', 'Software patch updates or clean reinstallation'),
+            ('User Guidance & FAQs', 'Provided instructions or training to resolve the issue'),
+            ('Remote Support (TeamViewer/AnyDesk)', 'Resolved issue via remote desktop support'),
+            ('On-Site Support', 'Dispatched technician to resolve issue in-person'),
+            ('Other / Cancelled', 'Other types of resolutions or user cancelled request'),
         ]
         for name, desc in default_resolutions:
             ResolutionCategory.objects.get_or_create(
@@ -281,22 +269,22 @@ def ensure_default_categories_and_configs(sender, **kwargs):
 @receiver(post_save, sender=CustomUser)
 def send_user_welcome_email(sender, instance, created, **kwargs):
     """
-    Action 3: ส่งอีเมลต้อนรับและบันทึก EmailLog เมื่อแอดมินสร้างบัญชีผู้ใช้งานใหม่
+    Action 3: Send welcome email and save EmailLog when admin creates a new user account
     """
     if created and instance.email:
-        subject = f"[TicketSolve] ยินดีต้อนรับ! ข้อมูลบัญชีผู้ใช้งานใหม่ของคุณ"
+        subject = f"[TicketSolve] Welcome! Your New Account Details"
         message = (
-            f"ยินดีต้อนรับคุณ {instance.username} เข้าสู่ระบบ TicketSolve,\n\n"
-            f"บัญชีผู้ใช้งานของคุณถูกสร้างขึ้นเรียบร้อยแล้ว รายละเอียดบัญชี:\n"
+            f"Dear {instance.username},\n\n"
+            f"Welcome to TicketSolve! Your user account has been successfully created. Here are your account details:\n"
             f"----------------------------------------\n"
-            f"👤 ชื่อผู้ใช้ (Username): {instance.username}\n"
-            f"📧 อีเมล (Email): {instance.email}\n"
-            f"🔑 บทบาท (Role): {instance.get_role_display()}\n"
-            f"🏢 สังกัดองค์กร: {instance.company.name if instance.company else 'ส่วนกลาง (System Admin)'}\n"
+            f"👤 Username: {instance.username}\n"
+            f"📧 Email: {instance.email}\n"
+            f"🔑 Role: {instance.get_role_display()}\n"
+            f"🏢 Company: {instance.company.name if instance.company else 'Central (System Admin)'}\n"
             f"----------------------------------------\n\n"
-            f"กรุณาใช้ Username และรหัสผ่านที่ได้รับจากผู้ดูแลระบบในการล็อกอินเข้าสู่ระบบ\n"
-            f"หากมีข้อสงสัยเพิ่มเติม สามารถติดต่อแอดมินประจำองค์กรของคุณได้ทันที\n\n"
-            f"ขอบคุณค่ะ/ครับ\n"
+            f"Please log in using the credentials provided by your system administrator.\n"
+            f"If you have any questions, please contact your organization administrator.\n\n"
+            f"Best regards,\n"
             f"TicketSolve System Administrator"
         )
         log_and_send_email(subject, message, [instance.email], EmailLog.ACTION_WELCOME_USER)
@@ -305,7 +293,7 @@ def send_user_welcome_email(sender, instance, created, **kwargs):
 @receiver(post_save, sender=Company)
 def send_company_registration_email(sender, instance, created, **kwargs):
     """
-    Action 4: ส่งอีเมลแจ้งเตือนและบันทึก EmailLog เมื่อมีการเพิ่มองค์กรใหม่ในระบบ
+    Action 4: Send alert email and save EmailLog when a new company is registered
     """
     if created:
         system_admins = CustomUser.objects.filter(
@@ -313,15 +301,15 @@ def send_company_registration_email(sender, instance, created, **kwargs):
         ).exclude(email='').values_list('email', flat=True)
 
         if system_admins:
-            subject = f"[TicketSolve Log] ลงทะเบียนองค์กรใหม่สำเร็จ: {instance.name}"
+            subject = f"[TicketSolve Log] New Company Registered Successfully: {instance.name}"
             message = (
-                f"เรียน System Administrator,\n\n"
-                f"มีการเพิ่มบริษัท/องค์กรใหม่เข้าสู่ระบบ Multi-tenant:\n"
+                f"Dear System Administrator,\n\n"
+                f"A new tenant company has been registered in the system:\n"
                 f"----------------------------------------\n"
-                f"🏢 ชื่อบริษัท: {instance.name}\n"
+                f"🏢 Company Name: {instance.name}\n"
                 f"🆔 Company ID: {instance.id}\n"
                 f"----------------------------------------\n\n"
-                f"สามารถดูรายละเอียดและจัดการผู้ใช้ขององค์กรใหม่นี้ได้ผ่านระบบ Custom Admin Dashboard\n"
+                f"You can review and manage this company's users through the custom Admin Dashboard.\n"
                 f"TicketSolve System Log"
             )
             log_and_send_email(subject, message, system_admins, EmailLog.ACTION_COMPANY_REGISTERED)

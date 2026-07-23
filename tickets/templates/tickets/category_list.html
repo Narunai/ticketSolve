@@ -1,20 +1,20 @@
 {% extends 'tickets/base.html' %}
 
-{% block title %}จัดการหมวดหมู่ตั๋ว & การแก้ปัญหา - TicketSolve{% endblock %}
-{% block header_title %}จัดการหมวดหมู่ปัญหา & หมวดหมู่การแก้ไข (Category Admin){% endblock %}
+{% block title %}{{ t.category_management }} - TicketSolve{% endblock %}
+{% block header_title %}{{ t.category_management }}{% endblock %}
 
 {% block content %}
-<div class="space-y-8">
+<div class="space-y-3.5">
     <!-- Header Card -->
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900/40 p-6 rounded-2xl border border-slate-800/80 glass-card">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-slate-900/40 p-3.5 rounded-xl border border-slate-800/80">
         <div>
-            <h2 class="text-xl font-bold text-white">การจัดการหมวดหมู่ปัญหาและหมวดหมู่การแก้ปัญหา</h2>
-            <p class="text-sm text-slate-400 mt-1">ผู้ดูแลระบบสามารถกำหนดหมวดหมู่ระดับกลาง (Global) หรือหมวดหมู่เฉพาะบริษัทลูกค้า เพื่อปรับดีไซน์ Ticket ให้ตรงกับแต่ละองค์กร</p>
+            <h2 class="text-sm font-bold text-white tracking-tight">{{ t.category_management }}</h2>
+            <p class="text-xs text-slate-400 mt-0.5">Manage problem categories, module categories, and custom ticket layouts.</p>
         </div>
         {% if user.company %}
         <div>
-            <a href="{% url 'company_ticket_design' %}" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 shadow-lg transition-all">
-                ⚙️ ตั้งค่าดีไซน์ Ticket ของบริษัท
+            <a href="{% url 'company_ticket_design' %}" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 transition-all">
+                ⚙️ {{ t.categories_ticket_design }}
             </a>
         </div>
         {% endif %}
@@ -34,21 +34,21 @@
     <!-- Company Filter Bar -->
     <div class="glass-panel p-4 rounded-xl border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div class="flex items-center gap-3">
-            <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">🔍 ตัวกรองตามบริษัท (Company Filter):</span>
+            <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">🔍 Company Filter:</span>
             {% if selected_company %}
             <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-                กำลังกรอง: {{ selected_company.name }}
+                Filtering: {{ selected_company.name }}
             </span>
             {% elif selected_company_id == 'global' %}
             <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                กำลังกรอง: หมวดหมู่ส่วนกลาง (Global Only)
+                Filtering: Global Only
             </span>
             {% endif %}
         </div>
         <form method="GET" action="{% url 'category_list' %}" class="flex items-center gap-2">
             <select name="company_id" onchange="this.form.submit()" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                <option value="" {% if not selected_company_id %}selected{% endif %}>-- แสดงทุกบริษัท & ส่วนกลาง (All) --</option>
-                <option value="global" {% if selected_company_id == 'global' %}selected{% endif %}>🌐 เฉพาะหมวดหมู่ส่วนกลาง (Global Only)</option>
+                <option value="" {% if not selected_company_id %}selected{% endif %}>-- All Companies & Global --</option>
+                <option value="global" {% if selected_company_id == 'global' %}selected{% endif %}>🌐 Global Categories Only</option>
                 {% for c in companies %}
                 <option value="{{ c.id }}" {% if selected_company_id == c.id|stringformat:"s" %}selected{% endif %}>
                     🏢 {{ c.name }}
@@ -57,7 +57,7 @@
             </select>
             {% if selected_company_id %}
             <a href="{% url 'category_list' %}" class="px-2.5 py-1 rounded-lg text-xs text-slate-400 hover:text-white border border-slate-700 hover:bg-slate-800 transition-all">
-                ล้างตัวกรอง
+                Clear Filter
             </a>
             {% endif %}
         </form>
@@ -67,15 +67,15 @@
     <!-- Grid Layout for Categories -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        <!-- SECTION 1: Ticket Categories (หมวดหมู่ปัญหา) -->
+        <!-- SECTION 1: Ticket Categories -->
         <div class="glass-panel p-6 rounded-2xl border border-slate-800/80 shadow-xl flex flex-col justify-between space-y-6">
             <div>
                 <div class="border-b border-slate-800 pb-4 mb-4 flex items-center justify-between">
                     <div>
                         <h3 class="font-bold text-white text-base flex items-center gap-2">
-                            🏷️ หมวดหมู่ปัญหาที่เปิดรับแจ้ง (Ticket Categories)
+                            🏷️ {{ t.problem_categories }}
                         </h3>
-                        <p class="text-xs text-slate-400 mt-1">หมวดหมู่สำหรับผู้แจ้งปัญหาเลือกขณะเปิด Ticket</p>
+                        <p class="text-xs text-slate-400 mt-1">Categories available during ticket submission</p>
                     </div>
                 </div>
 
@@ -98,55 +98,55 @@
                         </div>
 
                         {% if user.is_superuser or user.role == 'SYSTEM_ADMIN' or cat.company == user.company %}
-                        <form method="POST" action="{% url 'ticket_category_delete' cat.id %}" onsubmit="return confirm('ยืนยันลบหมวดหมู่นี้หรือไม่?');">
+                        <form method="POST" action="{% url 'ticket_category_delete' cat.id %}" onsubmit="return confirm('Confirm deletion of this category?');">
                             {% csrf_token %}
                             <button type="submit" class="p-2 text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg transition-colors text-xs font-semibold">
-                                ลบ
+                                {{ t.delete }}
                             </button>
                         </form>
                         {% endif %}
                     </div>
                     {% empty %}
-                    <p class="text-sm text-slate-500 py-6 text-center">ยังไม่มีหมวดหมู่ปัญหาในระบบ</p>
+                    <p class="text-sm text-slate-500 py-6 text-center">No ticket categories found.</p>
                     {% endfor %}
                 </div>
             </div>
 
             <!-- Add Category Form -->
             <div class="pt-4 border-t border-slate-800">
-                <h4 class="text-sm font-bold text-white mb-3">+ เพิ่มหมวดหมู่ปัญหาใหม่</h4>
+                <h4 class="text-sm font-bold text-white mb-3">+ {{ t.add_category }}</h4>
                 <form method="POST" action="{% url 'ticket_category_create' %}" class="space-y-4">
                     {% csrf_token %}
                     <div>
-                        <label class="block text-xs text-slate-400 mb-1">ชื่อหมวดหมู่</label>
+                        <label class="block text-xs text-slate-400 mb-1">{{ t.category_name }}</label>
                         {{ category_form.name }}
                     </div>
                     {% if user.is_superuser or user.role == 'SYSTEM_ADMIN' or user.role == 'SYSTEM_SUB_ADMIN' %}
                     <div>
-                        <label class="block text-xs text-slate-400 mb-1">บริษัทลูกค้า (เว้นว่างไว้หากเป็นส่วนกลาง Global)</label>
+                        <label class="block text-xs text-slate-400 mb-1">{{ t.company }} (Leave blank for Global)</label>
                         {{ category_form.company }}
                     </div>
                     {% endif %}
                     <div>
-                        <label class="block text-xs text-slate-400 mb-1">คำอธิบายย่อ</label>
+                        <label class="block text-xs text-slate-400 mb-1">{{ t.description }}</label>
                         {{ category_form.description }}
                     </div>
                     <button type="submit" class="w-full py-2.5 rounded-lg bg-theme-gradient text-white text-sm font-semibold hover:opacity-90 transition-all shadow-theme-glow">
-                        บันทึกหมวดหมู่ใหม่
+                        {{ t.save }}
                     </button>
                 </form>
             </div>
         </div>
 
-        <!-- SECTION 2: Module Categories (หมวดหมู่โมดูล) -->
+        <!-- SECTION 2: Module Categories -->
         <div class="glass-panel p-6 rounded-2xl border border-slate-800/80 shadow-xl flex flex-col justify-between space-y-6">
             <div>
                 <div class="border-b border-slate-800 pb-4 mb-4 flex items-center justify-between">
                     <div>
                         <h3 class="font-bold text-white text-base flex items-center gap-2">
-                            🧩 หมวดหมู่โมดูลที่เกิดปัญหา (Module Categories)
+                            🧩 {{ t.module_categories }}
                         </h3>
-                        <p class="text-xs text-slate-400 mt-1">ระบุระบบย่อย/โมดูล เช่น ระบบลา, ระบบขาย, POS</p>
+                        <p class="text-xs text-slate-400 mt-1">Specify system modules (e.g. Leave System, Sales, POS)</p>
                     </div>
                 </div>
 
@@ -169,55 +169,55 @@
                         </div>
 
                         {% if user.is_superuser or user.role == 'SYSTEM_ADMIN' or mod.company == user.company %}
-                        <form method="POST" action="{% url 'module_category_delete' mod.id %}" onsubmit="return confirm('ยืนยันลบหมวดหมู่โมดูลนี้หรือไม่?');">
+                        <form method="POST" action="{% url 'module_category_delete' mod.id %}" onsubmit="return confirm('Confirm deletion of this module?');">
                             {% csrf_token %}
                             <button type="submit" class="p-2 text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg transition-colors text-xs font-semibold">
-                                ลบ
+                                {{ t.delete }}
                             </button>
                         </form>
                         {% endif %}
                     </div>
                     {% empty %}
-                    <p class="text-sm text-slate-500 py-6 text-center">ยังไม่มีหมวดหมู่โมดูลในระบบ</p>
+                    <p class="text-sm text-slate-500 py-6 text-center">No module categories found.</p>
                     {% endfor %}
                 </div>
             </div>
 
             <!-- Add Module Category Form -->
             <div class="pt-4 border-t border-slate-800">
-                <h4 class="text-sm font-bold text-white mb-3">+ เพิ่มหมวดหมู่โมดูลใหม่</h4>
+                <h4 class="text-sm font-bold text-white mb-3">+ Add New Module Category</h4>
                 <form method="POST" action="{% url 'module_category_create' %}" class="space-y-4">
                     {% csrf_token %}
                     <div>
-                        <label class="block text-xs text-slate-400 mb-1">ชื่อโมดูล / ระบบย่อย</label>
+                        <label class="block text-xs text-slate-400 mb-1">{{ t.module_name }}</label>
                         {{ module_form.name }}
                     </div>
                     {% if user.is_superuser or user.role == 'SYSTEM_ADMIN' or user.role == 'SYSTEM_SUB_ADMIN' %}
                     <div>
-                        <label class="block text-xs text-slate-400 mb-1">บริษัทลูกค้า (เว้นว่างไว้หากเป็นส่วนกลาง Global)</label>
+                        <label class="block text-xs text-slate-400 mb-1">{{ t.company }} (Leave blank for Global)</label>
                         {{ module_form.company }}
                     </div>
                     {% endif %}
                     <div>
-                        <label class="block text-xs text-slate-400 mb-1">คำอธิบายโมดูล</label>
+                        <label class="block text-xs text-slate-400 mb-1">{{ t.description }}</label>
                         {{ module_form.description }}
                     </div>
                     <button type="submit" class="w-full py-2.5 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-500 transition-all shadow-lg">
-                        บันทึกหมวดหมู่โมดูลใหม่
+                        {{ t.save }}
                     </button>
                 </form>
             </div>
         </div>
 
-        <!-- SECTION 3: Resolution Categories (หมวดหมู่การแก้ปัญหา) -->
+        <!-- SECTION 3: Resolution Categories -->
         <div class="glass-panel p-6 rounded-2xl border border-slate-800/80 shadow-xl flex flex-col justify-between space-y-6">
             <div>
                 <div class="border-b border-slate-800 pb-4 mb-4 flex items-center justify-between">
                     <div>
                         <h3 class="font-bold text-white text-base flex items-center gap-2">
-                            🛠️ หมวดหมู่ประเภทการแก้ปัญหา (Resolution Categories)
+                            🛠️ {{ t.resolution_category }}
                         </h3>
-                        <p class="text-xs text-slate-400 mt-1">ใช้ระบุวิธีแก้ปัญหาเมื่อทีมงานสรุปปิดงาน</p>
+                        <p class="text-xs text-slate-400 mt-1">Classification when technicians resolve tickets</p>
                     </div>
                 </div>
 
@@ -239,41 +239,41 @@
                         </div>
 
                         {% if user.is_superuser or user.role == 'SYSTEM_ADMIN' or res.company == user.company %}
-                        <form method="POST" action="{% url 'resolution_category_delete' res.id %}" onsubmit="return confirm('ยืนยันลบหมวดหมู่การแก้ปัญหานี้หรือไม่?');">
+                        <form method="POST" action="{% url 'resolution_category_delete' res.id %}" onsubmit="return confirm('Confirm deletion of this resolution category?');">
                             {% csrf_token %}
                             <button type="submit" class="p-2 text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg transition-colors text-xs font-semibold">
-                                ลบ
+                                {{ t.delete }}
                             </button>
                         </form>
                         {% endif %}
                     </div>
                     {% empty %}
-                    <p class="text-sm text-slate-500 py-6 text-center">ยังไม่มีหมวดหมู่ประเภทการแก้ปัญหาในระบบ</p>
+                    <p class="text-sm text-slate-500 py-6 text-center">No resolution categories found.</p>
                     {% endfor %}
                 </div>
             </div>
 
             <!-- Add Resolution Category Form -->
             <div class="pt-4 border-t border-slate-800">
-                <h4 class="text-sm font-bold text-white mb-3">+ เพิ่มหมวดหมู่การแก้ปัญหาใหม่</h4>
+                <h4 class="text-sm font-bold text-white mb-3">+ Add New Resolution Category</h4>
                 <form method="POST" action="{% url 'resolution_category_create' %}" class="space-y-4">
                     {% csrf_token %}
                     <div>
-                        <label class="block text-xs text-slate-400 mb-1">ชื่อประเภทการแก้ไขปัญหา</label>
+                        <label class="block text-xs text-slate-400 mb-1">{{ t.category_name }}</label>
                         {{ resolution_form.name }}
                     </div>
                     {% if user.is_superuser or user.role == 'SYSTEM_ADMIN' or user.role == 'SYSTEM_SUB_ADMIN' %}
                     <div>
-                        <label class="block text-xs text-slate-400 mb-1">บริษัทลูกค้า (เว้นว่างไว้หากเป็นส่วนกลาง Global)</label>
+                        <label class="block text-xs text-slate-400 mb-1">{{ t.company }} (Leave blank for Global)</label>
                         {{ resolution_form.company }}
                     </div>
                     {% endif %}
                     <div>
-                        <label class="block text-xs text-slate-400 mb-1">คำอธิบายประเภทการแก้ไข</label>
+                        <label class="block text-xs text-slate-400 mb-1">{{ t.description }}</label>
                         {{ resolution_form.description }}
                     </div>
                     <button type="submit" class="w-full py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-500 transition-all shadow-lg">
-                        บันทึกหมวดหมู่การแก้ปัญหา
+                        {{ t.save }}
                     </button>
                 </form>
             </div>

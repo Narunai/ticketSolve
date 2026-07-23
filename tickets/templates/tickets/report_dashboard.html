@@ -1,6 +1,6 @@
 {% extends 'tickets/base.html' %}
 
-{% block header_title %}รายงานประจำเดือน (Monthly Report Dashboard){% endblock %}
+{% block header_title %}{{ t.report_dashboard }}{% endblock %}
 
 {% block content %}
 <div class="space-y-6">
@@ -19,17 +19,17 @@
     <!-- Filter Control for System Admins -->
     <div class="glass-card p-6 rounded-2xl border border-slate-800/80 flex flex-col md:flex-row md:items-center justify-between gap-6 bg-slate-900/20">
         <div class="space-y-1">
-            <h2 class="text-xl font-bold text-white">รายงานสถิติ Ticket ประจำรอบเดือน</h2>
+            <h2 class="text-xl font-bold text-white">{{ t.report_dashboard }}</h2>
             <p class="text-xs text-slate-400">
-                สรุปข้อมูล ปัญหา ประสิทธิภาพ และจัดพิมพ์รายงานส่งออกเป็น PDF ทันทีโดยไม่ต้องรองวดสิ้นเดือน
+                Monthly ticket performance statistics, issue distribution summaries, and on-demand PDF report generator.
             </p>
         </div>
 
         {% if user.role == 'SYSTEM_ADMIN' or user.is_superuser %}
         <form method="GET" action="" class="flex items-center gap-3 shrink-0">
-            <label for="company_id" class="text-xs text-slate-400 font-semibold uppercase tracking-wider">เลือกบริษัท/หน่วยงาน:</label>
+            <label for="company_id" class="text-xs text-slate-400 font-semibold uppercase tracking-wider">Filter by Company:</label>
             <select name="company_id" id="company_id" onchange="this.form.submit()" class="bg-slate-950 border border-slate-800 text-slate-300 rounded-xl px-4 py-2.5 text-xs font-semibold focus:outline-none focus:border-theme-accent">
-                <option value="" {% if not selected_company %}selected{% endif %}>--- ทั้งหมด (System Wide) ---</option>
+                <option value="" {% if not selected_company %}selected{% endif %}>--- All Companies (System Wide) ---</option>
                 {% for company in companies %}
                 <option value="{{ company.id }}" {% if selected_company.id == company.id %}selected{% endif %}>{{ company.name }}</option>
                 {% endfor %}
@@ -44,12 +44,12 @@
         <div class="glass-panel p-6 rounded-2xl border border-slate-800/80 flex flex-col justify-between space-y-4 lg:col-span-2">
             <div class="space-y-4">
                 <div>
-                    <span class="text-[11px] font-bold text-theme-accent uppercase tracking-widest">รอบประจำเดือนปัจจุบัน</span>
+                    <span class="text-[11px] font-bold text-theme-accent uppercase tracking-widest">Current Monthly Period</span>
                     <h3 class="text-2xl font-bold text-white mt-1">{{ month_name }}</h3>
                 </div>
 
                 <div class="p-4 rounded-xl bg-slate-950/60 border border-slate-850 space-y-4">
-                    <span class="text-[11px] font-bold text-slate-400 uppercase block tracking-wider">ตัวจัดส่งรายงาน (On-Demand Dispatcher)</span>
+                    <span class="text-[11px] font-bold text-slate-400 uppercase block tracking-wider">On-Demand Report Dispatcher</span>
                     
                     <form method="POST" action="{% url 'report_send' %}" class="space-y-4">
                         {% csrf_token %}
@@ -59,18 +59,18 @@
                         
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div>
-                                <label for="recipient_user_id" class="block text-xs text-slate-400 mb-1.5 font-medium">เป้าหมายผู้รับอีเมล:</label>
+                                <label for="recipient_user_id" class="block text-xs text-slate-400 mb-1.5 font-medium">Target Recipient:</label>
                                 <select name="recipient_user_id" id="recipient_user_id" class="w-full bg-slate-900 border border-slate-755 text-slate-300 rounded-xl px-4 py-2.5 text-xs font-semibold focus:outline-none focus:border-theme-accent">
-                                    <option value="">📧 จัดส่งทุกคนในบริษัท (Send to All Members)</option>
+                                    <option value="">📧 Send to All Company Members</option>
                                     {% for member in company_users %}
-                                    <option value="{{ member.id }}">👤 เฉพาะบุคคล: {{ member.username }} ({{ member.email }})</option>
+                                    <option value="{{ member.id }}">👤 Specific User: {{ member.username }} ({{ member.email }})</option>
                                     {% endfor %}
                                 </select>
                             </div>
                             <div>
-                                <label for="smtp_config_id" class="block text-xs text-slate-400 mb-1.5 font-medium">เลือกอีเมลผู้ส่ง (Send From Account):</label>
+                                <label for="smtp_config_id" class="block text-xs text-slate-400 mb-1.5 font-medium">Sender Account (SMTP):</label>
                                 <select name="smtp_config_id" id="smtp_config_id" class="w-full bg-slate-900 border border-slate-755 text-slate-300 rounded-xl px-4 py-2.5 text-xs font-semibold focus:outline-none focus:border-theme-accent">
-                                    <option value="">🌐 ใช้บัญชี Active เริ่มต้น (Active System Configuration)</option>
+                                    <option value="">🌐 Use Default Active System Config</option>
                                     {% for config in smtp_configs %}
                                     <option value="{{ config.id }}">
                                         📬 {{ config.name }} ({{ config.username|default:"Simulation/Console" }})
@@ -79,25 +79,25 @@
                                 </select>
                             </div>
                             <div>
-                                <label for="cc_user_ids" class="block text-xs text-slate-400 mb-1.5 font-medium">สำเนาถึง (CC):</label>
+                                <label for="cc_user_ids" class="block text-xs text-slate-400 mb-1.5 font-medium">Carbon Copy (CC):</label>
                                 <select name="cc_user_ids" id="cc_user_ids" multiple class="w-full min-h-24 bg-slate-900 border border-slate-755 text-slate-300 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-theme-accent">
                                     {% for member in company_users %}
                                     <option value="{{ member.id }}">{{ member.username }} ({{ member.email }})</option>
                                     {% endfor %}
                                 </select>
-                                <p class="text-[10px] text-slate-500 mt-1">กด Ctrl/Cmd ค้างเพื่อเลือกหลายคน</p>
+                                <p class="text-[10px] text-slate-500 mt-1">Hold Ctrl/Cmd to select multiple users</p>
                             </div>
                         </div>
 
                         <div class="flex flex-wrap gap-3 pt-2">
                             <!-- Preview Button -->
                             <a href="{% url 'report_preview' %}{% if selected_company %}?company_id={{ selected_company.id }}{% endif %}" target="_blank" class="px-5 py-3 rounded-xl text-xs font-bold text-white bg-slate-900 border border-slate-700 hover:border-slate-500 transition-all flex items-center gap-2 cursor-pointer">
-                                🔍 ดูตัวอย่างรายงาน (PDF Preview)
+                                🔍 PDF Preview
                             </a>
 
                             <!-- Send Action Button -->
                             <button type="submit" class="px-5 py-3 rounded-xl text-xs font-bold text-white bg-theme-gradient shadow-theme-glow hover:opacity-90 transition-all flex items-center gap-2 cursor-pointer">
-                                ✉️ กดส่งรายงานทันที
+                                ✉️ Dispatch Report Now
                             </button>
                         </div>
                     </form>
@@ -108,31 +108,31 @@
         <!-- KPI Metrics Distribution Grid -->
         <div class="grid grid-cols-2 gap-4">
             <div class="glass-panel p-5 rounded-2xl border border-slate-800/80 flex flex-col justify-between">
-                <span class="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">ประสิทธิภาพเสร็จสิ้น (KPI)</span>
+                <span class="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">Resolution KPI</span>
                 <div>
                     <span class="text-3xl font-extrabold text-white block">{{ resolution_rate }}%</span>
                     <span class="text-[11px] text-slate-400 mt-1 block">Resolution Rate</span>
                 </div>
             </div>
             <div class="glass-panel p-5 rounded-2xl border border-slate-800/80 flex flex-col justify-between">
-                <span class="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">จำนวนปัญหารวม</span>
+                <span class="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">Total Tickets</span>
                 <div>
                     <span class="text-3xl font-extrabold text-white block">{{ tickets_count }}</span>
-                    <span class="text-[11px] text-slate-400 mt-1 block">เคสทั้งหมดในรอบเดือน</span>
+                    <span class="text-[11px] text-slate-400 mt-1 block">Total Cases This Month</span>
                 </div>
             </div>
             <div class="glass-panel p-5 rounded-2xl border border-slate-800/80 flex flex-col justify-between">
-                <span class="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">กำลังแก้ไข (Active)</span>
+                <span class="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">Active Pending</span>
                 <div>
                     <span class="text-3xl font-extrabold text-amber-400 block">{{ active_count }}</span>
-                    <span class="text-[11px] text-slate-400 mt-1 block">ตั๋วที่ยังค้างอยู่</span>
+                    <span class="text-[11px] text-slate-400 mt-1 block">Open & In Progress</span>
                 </div>
             </div>
             <div class="glass-panel p-5 rounded-2xl border border-slate-800/80 flex flex-col justify-between">
-                <span class="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">ปิดสมบูรณ์แล้ว</span>
+                <span class="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">Completed</span>
                 <div>
                     <span class="text-3xl font-extrabold text-emerald-400 block">{{ done_count }}</span>
-                    <span class="text-[11px] text-slate-400 mt-1 block">เสร็จสิ้น & ปิดงานแล้ว</span>
+                    <span class="text-[11px] text-slate-400 mt-1 block">Resolved & Closed</span>
                 </div>
             </div>
         </div>
@@ -144,9 +144,9 @@
             <div class="mb-5">
                 <span class="text-[11px] font-bold text-theme-accent uppercase tracking-widest">Auto Schedule</span>
                 <h3 class="text-lg font-bold text-white mt-1">
-                    {% if editing_schedule %}แก้ไขตารางส่งอัตโนมัติ{% else %}สร้างตารางส่งอัตโนมัติ{% endif %}
+                    {% if editing_schedule %}{{ t.edit_ticket_title }} Schedule{% else %}Create Monthly Schedule{% endif %}
                 </h3>
-                <p class="text-xs text-slate-400 mt-1">ระบบส่งรายงานทุกเดือนตามวัน เวลา และเขตเวลาที่เลือก</p>
+                <p class="text-xs text-slate-400 mt-1">Automates monthly report delivery according to day, time, and timezone.</p>
             </div>
 
             <form method="POST" action="{% url 'report_schedule_save' %}" class="space-y-4">
@@ -154,59 +154,56 @@
                 {% if editing_schedule %}<input type="hidden" name="schedule_id" value="{{ editing_schedule.id }}">{% endif %}
 
                 <div>
-                    <label class="block text-xs text-slate-400 mb-1.5 font-medium">ชื่อตารางส่ง:</label>
+                    <label class="block text-xs text-slate-400 mb-1.5 font-medium">Schedule Name:</label>
                     {{ schedule_form.name }}
                 </div>
                 <div>
-                    <label class="block text-xs text-slate-400 mb-1.5 font-medium">บริษัท / ขอบเขตรายงาน:</label>
+                    <label class="block text-xs text-slate-400 mb-1.5 font-medium">Company Scope:</label>
                     {{ schedule_form.company }}
-                    <p class="text-[10px] text-slate-500 mt-1">เว้นว่างได้เฉพาะผู้ดูแลระบบ เพื่อสร้างรายงานรวมทุกบริษัท</p>
+                    <p class="text-[10px] text-slate-500 mt-1">Leave blank to create a system-wide aggregated report (System Admin only)</p>
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div>
-                        <label class="block text-xs text-slate-400 mb-1.5 font-medium">วันที่ของเดือน (1–31):</label>
+                        <label class="block text-xs text-slate-400 mb-1.5 font-medium">Day of Month (1–31):</label>
                         {{ schedule_form.day_of_month }}
                     </div>
                     <div>
-                        <label class="block text-xs text-slate-400 mb-1.5 font-medium">เวลาส่ง (24 ชั่วโมง):</label>
+                        <label class="block text-xs text-slate-400 mb-1.5 font-medium">Send Time (24h):</label>
                         <div class="grid grid-cols-[1fr_auto_1fr] gap-2 items-center">
                             {{ schedule_form.send_hour }}
                             <span class="font-bold text-white">:</span>
                             {{ schedule_form.send_minute }}
                         </div>
-                        <div class="grid grid-cols-2 gap-5 text-[10px] text-slate-500 mt-1">
-                            <span>ชั่วโมง 00–23</span><span>นาที 00–59</span>
-                        </div>
                     </div>
                     <div>
-                        <label class="block text-xs text-slate-400 mb-1.5 font-medium">เขตเวลา:</label>
+                        <label class="block text-xs text-slate-400 mb-1.5 font-medium">Timezone:</label>
                         {{ schedule_form.timezone_name }}
                     </div>
                 </div>
-                <p class="text-[10px] text-slate-500 -mt-2">ตั้งวันที่ 31 เพื่อให้ส่งวันสุดท้ายของทุกเดือนโดยอัตโนมัติ</p>
+                <p class="text-[10px] text-slate-500 -mt-2">Set day 31 to automatically run on the last day of each month.</p>
                 <div>
-                    <label class="block text-xs text-slate-400 mb-1.5 font-medium">บัญชีอีเมลผู้ส่ง:</label>
+                    <label class="block text-xs text-slate-400 mb-1.5 font-medium">Sender Email Account:</label>
                     {{ schedule_form.smtp_configuration }}
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div class="rounded-xl bg-slate-950/60 border border-slate-800 p-3 max-h-44 overflow-y-auto text-xs text-slate-300">
-                        <p class="font-bold text-white mb-2">ผู้รับหลัก (To) *</p>
+                        <p class="font-bold text-white mb-2">Recipients (To) *</p>
                         {{ schedule_form.recipients }}
                     </div>
                     <div class="rounded-xl bg-slate-950/60 border border-slate-800 p-3 max-h-44 overflow-y-auto text-xs text-slate-300">
-                        <p class="font-bold text-white mb-2">สำเนาถึง (CC)</p>
+                        <p class="font-bold text-white mb-2">Carbon Copy (CC)</p>
                         {{ schedule_form.cc_recipients }}
                     </div>
                 </div>
                 <label class="flex items-center gap-2 text-xs text-slate-300">
-                    {{ schedule_form.is_active }} เปิดใช้งานทันที
+                    {{ schedule_form.is_active }} Enable Immediately
                 </label>
                 <div class="flex gap-3">
                     <button type="submit" class="px-5 py-3 rounded-xl text-xs font-bold text-white bg-theme-gradient shadow-theme-glow hover:opacity-90 transition-all">
-                        💾 {% if editing_schedule %}บันทึกการแก้ไข{% else %}เพิ่มตารางส่ง{% endif %}
+                        💾 {% if editing_schedule %}{{ t.save }}{% else %}Add Schedule{% endif %}
                     </button>
                     {% if editing_schedule %}
-                    <a href="{% url 'monthly_report' %}{% if selected_company %}?company_id={{ selected_company.id }}{% endif %}" class="px-5 py-3 rounded-xl text-xs font-bold text-slate-300 bg-slate-900 border border-slate-700">ยกเลิก</a>
+                    <a href="{% url 'monthly_report' %}{% if selected_company %}?company_id={{ selected_company.id }}{% endif %}" class="px-5 py-3 rounded-xl text-xs font-bold text-slate-300 bg-slate-900 border border-slate-700">{{ t.cancel }}</a>
                     {% endif %}
                 </div>
             </form>
@@ -214,17 +211,17 @@
 
         <div class="glass-panel rounded-2xl border border-slate-800/80 overflow-hidden xl:col-span-3">
             <div class="px-6 py-4 border-b border-slate-800/80 bg-slate-900/40">
-                <h3 class="font-bold text-white">รายการตารางส่งรายเดือนที่บันทึกไว้</h3>
-                <p class="text-xs text-slate-400 mt-1">รายการที่เปิดใช้งานจะถูกตรวจสอบและส่งเพียงครั้งเดียวต่อเดือน</p>
+                <h3 class="font-bold text-white">Active Monthly Schedules</h3>
+                <p class="text-xs text-slate-400 mt-1">Active schedules run automatically once per month.</p>
             </div>
             <div class="overflow-x-auto">
                 <table class="w-full text-left text-xs">
                     <thead class="bg-slate-900/60 text-slate-400">
                         <tr>
-                            <th class="px-4 py-3">รายการ / กำหนดส่ง</th>
-                            <th class="px-4 py-3">ผู้รับและ CC</th>
-                            <th class="px-4 py-3">สถานะ</th>
-                            <th class="px-4 py-3 text-right">จัดการ</th>
+                            <th class="px-4 py-3">Schedule / Time</th>
+                            <th class="px-4 py-3">Recipients & CC</th>
+                            <th class="px-4 py-3">Status</th>
+                            <th class="px-4 py-3 text-right">Actions</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-800/60 text-slate-300">
@@ -232,10 +229,10 @@
                         <tr class="align-top hover:bg-slate-800/20">
                             <td class="px-4 py-4">
                                 <span class="font-bold text-white block">{{ schedule.name }}</span>
-                                <span class="text-slate-400 block mt-1">{{ schedule.company.name|default:"ทุกบริษัท" }}</span>
-                                <span class="text-theme-accent block mt-1">วันที่ {{ schedule.day_of_month }} เวลา {{ schedule.send_time|time:"H:i" }}</span>
+                                <span class="text-slate-400 block mt-1">{{ schedule.company.name|default:"All Companies" }}</span>
+                                <span class="text-theme-accent block mt-1">Day {{ schedule.day_of_month }} at {{ schedule.send_time|time:"H:i" }}</span>
                                 <span class="text-slate-400 block mt-1">{{ schedule.get_timezone_name_display }}</span>
-                                {% if schedule.is_active %}<span class="text-[10px] text-slate-500 block mt-1">ครั้งถัดไป {{ schedule.next_run_display }}</span>{% endif %}
+                                {% if schedule.is_active %}<span class="text-[10px] text-slate-500 block mt-1">Next run: {{ schedule.next_run_display }}</span>{% endif %}
                             </td>
                             <td class="px-4 py-4">
                                 <span class="font-semibold text-white">To:</span>
@@ -247,23 +244,23 @@
                             </td>
                             <td class="px-4 py-4">
                                 {% if schedule.is_active %}
-                                <span class="px-2 py-1 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">เปิดใช้งาน</span>
+                                <span class="px-2 py-1 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Active</span>
                                 {% else %}
-                                <span class="px-2 py-1 rounded bg-slate-800 text-slate-400 border border-slate-700">หยุดใช้งาน</span>
+                                <span class="px-2 py-1 rounded bg-slate-800 text-slate-400 border border-slate-700">Paused</span>
                                 {% endif %}
-                                {% if schedule.last_sent_at %}<span class="block text-[10px] text-slate-500 mt-2">ส่งล่าสุด {{ schedule.last_sent_display }}</span>{% endif %}
+                                {% if schedule.last_sent_at %}<span class="block text-[10px] text-slate-500 mt-2">Last sent: {{ schedule.last_sent_display }}</span>{% endif %}
                                 {% if schedule.last_error %}<span class="block text-[10px] text-rose-400 mt-2">{{ schedule.last_error }}</span>{% endif %}
                             </td>
                             <td class="px-4 py-4">
                                 <div class="flex justify-end gap-2">
-                                    <a href="{% url 'monthly_report' %}?{% if schedule.company_id %}company_id={{ schedule.company_id }}&{% endif %}schedule_id={{ schedule.id }}" class="px-2.5 py-1.5 rounded bg-slate-800 text-sky-400 border border-slate-700">แก้ไข</a>
-                                    <form method="POST" action="{% url 'report_schedule_toggle' schedule.id %}">{% csrf_token %}<button class="px-2.5 py-1.5 rounded bg-slate-800 text-amber-400 border border-slate-700">{% if schedule.is_active %}พัก{% else %}เปิด{% endif %}</button></form>
-                                    <form method="POST" action="{% url 'report_schedule_delete' schedule.id %}" onsubmit="return confirm('ลบตารางส่งนี้หรือไม่?')">{% csrf_token %}<button class="px-2.5 py-1.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20">ลบ</button></form>
+                                    <a href="{% url 'monthly_report' %}?{% if schedule.company_id %}company_id={{ schedule.company_id }}&{% endif %}schedule_id={{ schedule.id }}" class="px-2.5 py-1.5 rounded bg-slate-800 text-sky-400 border border-slate-700">{{ t.edit_ticket_title }}</a>
+                                    <form method="POST" action="{% url 'report_schedule_toggle' schedule.id %}">{% csrf_token %}<button class="px-2.5 py-1.5 rounded bg-slate-800 text-amber-400 border border-slate-700">{% if schedule.is_active %}Pause{% else %}Activate{% endif %}</button></form>
+                                    <form method="POST" action="{% url 'report_schedule_delete' schedule.id %}" onsubmit="return confirm('Delete this schedule?')">{% csrf_token %}<button class="px-2.5 py-1.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20">{{ t.delete }}</button></form>
                                 </div>
                             </td>
                         </tr>
                         {% empty %}
-                        <tr><td colspan="4" class="px-6 py-10 text-center text-slate-500">ยังไม่มีตารางส่งอัตโนมัติ</td></tr>
+                        <tr><td colspan="4" class="px-6 py-10 text-center text-slate-500">No monthly schedule rules recorded yet.</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>
@@ -278,16 +275,16 @@
             <div class="px-6 py-4 border-b border-slate-800/80 bg-slate-900/40">
                 <h3 class="font-bold text-white text-base flex items-center gap-2">
                     <span class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
-                    ประวัติการเปิดดูรายงาน (Report View Logs)
+                    Report View Audit Logs
                 </h3>
             </div>
             <div class="overflow-y-auto max-h-64">
                 <table class="w-full text-left border-collapse text-xs">
                     <thead>
                         <tr class="bg-slate-900/60 border-b border-slate-800 text-slate-400 font-semibold uppercase">
-                            <th class="px-6 py-3">วันเวลาที่เปิดดู</th>
-                            <th class="px-6 py-3">ผู้เข้าชม</th>
-                            <th class="px-6 py-3">เป้าหมายรายงาน</th>
+                            <th class="px-6 py-3">Timestamp</th>
+                            <th class="px-6 py-3">Viewer</th>
+                            <th class="px-6 py-3">Target Scope</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-800/60 text-slate-300">
@@ -301,7 +298,7 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="3" class="px-6 py-6 text-center text-slate-500">ยังไม่มีประวัติการเปิดพรีวิวรายงาน PDF</td>
+                            <td colspan="3" class="px-6 py-6 text-center text-slate-500">No report preview logs recorded.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -314,16 +311,16 @@
             <div class="px-6 py-4 border-b border-slate-800/80 bg-slate-900/40">
                 <h3 class="font-bold text-white text-base flex items-center gap-2">
                     <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                    ประวัติการส่งอีเมลรายงาน (Report Sent Emails Logs)
+                    Report Sent Email Logs
                 </h3>
             </div>
             <div class="overflow-y-auto max-h-64">
                 <table class="w-full text-left border-collapse text-xs">
                     <thead>
                         <tr class="bg-slate-900/60 border-b border-slate-800 text-slate-400 font-semibold uppercase">
-                            <th class="px-6 py-3">วันเวลาส่ง</th>
-                            <th class="px-6 py-3">อีเมลผู้รับ</th>
-                            <th class="px-6 py-3 text-right">สถานะ</th>
+                            <th class="px-6 py-3">Sent Timestamp</th>
+                            <th class="px-6 py-3">Recipient Email</th>
+                            <th class="px-6 py-3 text-right">Status</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-800/60 text-slate-300">
@@ -333,15 +330,15 @@
                             <td class="px-6 py-3 font-mono text-slate-200">{{ log.recipient }}</td>
                             <td class="px-6 py-3 text-right">
                                 {% if log.success %}
-                                <span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">สำเร็จ</span>
+                                <span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Success</span>
                                 {% else %}
-                                <span class="px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20">ล้มเหลว</span>
+                                <span class="px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20">Failed</span>
                                 {% endif %}
                             </td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="3" class="px-6 py-6 text-center text-slate-500">ยังไม่มีประวัติการส่งอีเมลรายงานประจำเดือน</td>
+                            <td colspan="3" class="px-6 py-6 text-center text-slate-500">No monthly report sent email logs recorded.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -353,8 +350,8 @@
     <!-- Tickets List Table -->
     <div class="glass-panel rounded-2xl border border-slate-800/80 overflow-hidden shadow-xl">
         <div class="px-6 py-4 border-b border-slate-800/80 bg-slate-900/40 flex items-center justify-between">
-            <h3 class="font-bold text-white text-base">รายการ Ticket ในรอบรายงานเดือนนี้</h3>
-            <span class="text-xs px-2.5 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-400">ทั้งหมด {{ tickets.count }} รายการ</span>
+            <h3 class="font-bold text-white text-base">Monthly Ticket Details</h3>
+            <span class="text-xs px-2.5 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-400">{{ tickets.count }} {{ t.items }}</span>
         </div>
 
         <div class="overflow-x-auto">
@@ -362,11 +359,11 @@
                 <thead>
                     <tr class="bg-slate-900/60 border-b border-slate-800 text-slate-400 text-xs font-semibold uppercase tracking-wider">
                         <th class="px-6 py-3.5">ID</th>
-                        <th class="px-6 py-3.5">หัวข้อ Ticket</th>
-                        <th class="px-6 py-3.5">ความสำคัญ</th>
-                        <th class="px-6 py-3.5">สถานะ</th>
-                        <th class="px-6 py-3.5">ผู้แจ้งปัญหา</th>
-                        <th class="px-6 py-3.5">ผู้รับผิดชอบ</th>
+                        <th class="px-6 py-3.5">Ticket Title</th>
+                        <th class="px-6 py-3.5">{{ t.priority }}</th>
+                        <th class="px-6 py-3.5">{{ t.status }}</th>
+                        <th class="px-6 py-3.5">{{ t.reporter }}</th>
+                        <th class="px-6 py-3.5">{{ t.assignee }}</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-800/60 text-sm">
@@ -377,26 +374,26 @@
                         </td>
                         <td class="px-6 py-4">
                             <span class="font-semibold text-white block">{{ ticket.title }}</span>
-                            <span class="text-[11px] text-slate-500">สร้างเมื่อ {{ ticket.created_at|date:"d M Y, H:i" }}</span>
+                            <span class="text-[11px] text-slate-500">Created {{ ticket.created_at|date:"d M Y, H:i" }}</span>
                         </td>
                         <td class="px-6 py-4">
                             {% if ticket.priority == 'HIGH' %}
-                            <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20">สูง (High)</span>
+                            <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20">High</span>
                             {% elif ticket.priority == 'MEDIUM' %}
-                            <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">ปานกลาง</span>
+                            <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">Medium</span>
                             {% else %}
-                            <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-sky-500/10 text-sky-400 border border-sky-500/20">ต่ำ</span>
+                            <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-sky-500/10 text-sky-400 border border-sky-500/20">Low</span>
                             {% endif %}
                         </td>
                         <td class="px-6 py-4">
                             {% if ticket.status == 'OPEN' %}
-                            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">เปิดใหม่</span>
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">{{ t.status_open }}</span>
                             {% elif ticket.status == 'IN_PROGRESS' %}
-                            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">กำลังดำเนินการ</span>
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">{{ t.status_in_progress }}</span>
                             {% elif ticket.status == 'RESOLVED' %}
-                            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">แก้ไขเสร็จสิ้น</span>
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">{{ t.status_resolved }}</span>
                             {% else %}
-                            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-800 text-slate-400 border border-slate-700">ปิดสมบูรณ์</span>
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-800 text-slate-400 border border-slate-700">{{ t.status_closed }}</span>
                             {% endif %}
                         </td>
                         <td class="px-6 py-4 text-slate-300">
@@ -407,14 +404,14 @@
                             <span class="text-slate-200 block">{{ ticket.assigned_to.username }}</span>
                             <span class="text-[11px] text-slate-500">{{ ticket.assigned_to.get_role_display }}</span>
                             {% else %}
-                            <span class="text-slate-500 italic text-xs">ยังไม่มีผู้รับผิดชอบ</span>
+                            <span class="text-slate-500 italic text-xs">Unassigned</span>
                             {% endif %}
                         </td>
                     </tr>
                     {% empty %}
                     <tr>
                         <td colspan="6" class="px-6 py-8 text-center text-slate-500">
-                            ไม่มีตั๋วแจ้งซ่อมใดๆ ในรอบรายงานเดือนนี้
+                            No tickets registered for this report period.
                         </td>
                     </tr>
                     {% endfor %}

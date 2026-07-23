@@ -31,19 +31,19 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.WARNING(f"  - No Client Admin emails found for {company.name} (skipping)"))
                 continue
 
-            # Build report message in Thai as requested by system spec
-            subject = f"[TicketSolve] รายงานสรุปสถานะ Ticket ประจำเดือน: {company.name}"
-            message = f"เรียน ผู้ดูแลระบบบริษัท {company.name} (Client Admin),\n\n" \
-                      f"ระบบทำการรวบรวมรายงานสรุปจำนวนความคืบหน้าของ Ticket แจ้งปัญหาทั้งหมดภายในเดือนนี้:\n" \
+            # Build report message in English
+            subject = f"[TicketSolve] Monthly Ticket Summary Report: {company.name}"
+            message = f"Dear {company.name} Administrator (Client Admin),\n\n" \
+                      f"Please find below the monthly summary report of all support tickets for your company:\n" \
                       f"--------------------------------------------------\n" \
-                      f"- จำนวน Ticket ทั้งหมด: {total_tickets} รายการ\n" \
-                      f"- สถานะเปิดใหม่ (Open): {open_count} รายการ\n" \
-                      f"- สถานะกำลังดำเนินการ (In Progress): {in_progress_count} รายการ\n" \
-                      f"- สถานะแก้ไขเสร็จสิ้น (Resolved): {resolved_count} รายการ\n" \
-                      f"- สถานะปิดสมบูรณ์ (Closed): {closed_count} รายการ\n" \
+                      f"- Total Tickets: {total_tickets}\n" \
+                      f"- Open Status: {open_count}\n" \
+                      f"- In Progress Status: {in_progress_count}\n" \
+                      f"- Resolved Status: {resolved_count}\n" \
+                      f"- Closed Status: {closed_count}\n" \
                       f"--------------------------------------------------\n\n" \
-                      f"ท่านสามารถล็อกอินเข้าสู่ระบบหลังบ้าน หรือหน้าจอหลักเพื่อติดตามความคืบหน้าของแต่ละปัญหาเพิ่มเติมได้ตลอด 24 ชั่วโมง\n\n" \
-                      f"ขอแสดงความนับถือ,\nทีมงาน TicketSolve Support"
+                      f"You can log in to your dashboard to monitor status updates at any time.\n\n" \
+                      f"Best regards,\nTicketSolve Support Team"
 
             # Send Email
             try:

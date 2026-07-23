@@ -1,29 +1,29 @@
 {% extends 'tickets/base.html' %}
 
-{% block title %}จัดการองค์กรและบริษัท - TicketSolve{% endblock %}
-{% block header_title %}จัดการองค์กรและบริษัท (Company Management){% endblock %}
+{% block title %}{{ t.company_list_title }} - TicketSolve{% endblock %}
+{% block header_title %}{{ t.company_list_title }}{% endblock %}
 
 {% block content %}
 <!-- Welcome & Quick Action Header -->
 <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900/40 p-6 rounded-2xl border border-slate-800/80 glass-card">
     <div>
-        <h2 class="text-xl font-bold text-white">รายชื่อบริษัท/องค์กรลูกค้าในระบบ (โครงสร้างบริษัทแม่-บริษัทลูก)</h2>
-        <p class="text-sm text-slate-400 mt-1">ผู้ดูแลระบบส่วนกลางสามารถจัดกลุ่มบริษัทแม่-บริษัทลูก ซ่อนและขยายระดับชั้นได้ไม่จำกัด เพื่อจำกัดหรือขยายขอบเขตข้อมูล</p>
+        <h2 class="text-xl font-bold text-white">{{ t.company_list_title }}</h2>
+        <p class="text-sm text-slate-400 mt-1">{{ t.company_list_desc }}</p>
     </div>
     <div class="flex items-center gap-3">
         <button onclick="expandAllBranches()" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-slate-300 bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-all">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 13l-7 7-7-7m14-8l-7 7-7-7"></path></svg>
-            ขยายทั้งหมด
+            Expand All
         </button>
         <button onclick="collapseAllBranches()" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-slate-300 bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-all">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 11l7-7 7 7M5 19l7-7 7 7"></path></svg>
-            ซ่อนบริษัทลูกทั้งหมด
+            Collapse Subsidiaries
         </button>
         <a href="{% url 'company_create' %}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold text-white bg-theme-gradient hover:opacity-90 shadow-theme-glow active:scale-[0.98] transition-all">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
             </svg>
-            เพิ่มบริษัทใหม่
+            {{ t.add_new_company }}
         </a>
     </div>
 </div>
@@ -32,10 +32,10 @@
 <div class="glass-panel rounded-2xl border border-slate-800/80 overflow-hidden shadow-xl">
     <div class="px-6 py-5 border-b border-slate-800/80 flex items-center justify-between">
         <div class="flex items-center gap-3">
-            <h3 class="font-bold text-white text-base">บริษัทลูกค้าทั้งหมด</h3>
-            <span class="text-xs px-2.5 py-1 rounded-full bg-slate-800 border border-slate-700 text-indigo-400 font-semibold">รวม {{ total_companies_count }} บริษัท</span>
+            <h3 class="font-bold text-white text-base">{{ t.accessed_companies }}</h3>
+            <span class="text-xs px-2.5 py-1 rounded-full bg-slate-800 border border-slate-700 text-indigo-400 font-semibold">{{ total_companies_count }} {{ t.items }}</span>
         </div>
-        <span class="text-xs text-slate-400">กดปุ่ม ▼ / ▶ ข้างชื่อบริษัทเพื่อยุบหรือขยายบริษัทลูก</span>
+        <span class="text-xs text-slate-400">Click ▼ / ▶ to collapse or expand subsidiary tree</span>
     </div>
 
     <!-- Table -->
@@ -44,10 +44,10 @@
             <thead>
                 <tr class="bg-slate-900/60 border-b border-slate-800 text-slate-400 text-xs font-semibold uppercase tracking-wider">
                     <th class="px-6 py-4">ID</th>
-                    <th class="px-6 py-4">ชื่อบริษัท/องค์กร (Company Name)</th>
-                    <th class="px-6 py-4">สถานะระดับบริษัท</th>
-                    <th class="px-6 py-4">วันที่เพิ่มในระบบ</th>
-                    <th class="px-6 py-4 text-center">จัดการ</th>
+                    <th class="px-6 py-4">{{ t.company_name }}</th>
+                    <th class="px-6 py-4">{{ t.status }}</th>
+                    <th class="px-6 py-4">{{ t.created_at }}</th>
+                    <th class="px-6 py-4 text-center">{{ t.actions }}</th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-slate-800/50 text-sm">
@@ -70,7 +70,7 @@
                                         onclick="toggleBranch({{ company.id }})" 
                                         id="toggle-btn-{{ company.id }}"
                                         class="inline-flex items-center justify-center w-6 h-6 mr-2 text-xs rounded bg-indigo-500/20 text-indigo-400 hover:bg-indigo-500/40 border border-indigo-500/30 transition-transform font-bold focus:outline-none"
-                                        title="ยุบ/ขยายบริษัทลูก">
+                                        title="Expand/Collapse">
                                     ▼
                                 </button>
                             {% else %}
@@ -83,30 +83,30 @@
                     <td class="px-6 py-4">
                         {% if not company.parent %}
                             <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                                🏢 บริษัทแม่หลัก
+                                🏢 {{ t.parent_org }}
                             </span>
                         {% else %}
                             <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-sky-500/10 text-sky-400 border border-sky-500/20">
-                                ↳ บริษัทลูก (สังกัด {{ company.parent.name }})
+                                ↳ Subsidiary ({{ company.parent.name }})
                             </span>
                         {% endif %}
                         {% if company.has_children %}
                             <span class="ml-1.5 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700">
-                                {{ company.subsidiaries.count }} บริษัทลูก
+                                {{ company.subsidiaries.count }} {{ t.subsidiaries }}
                             </span>
                         {% endif %}
                     </td>
                     <td class="px-6 py-4 text-slate-400">{{ company.created_at|date:"d M Y, H:i" }}</td>
                     <td class="px-6 py-4 text-center">
                         <a href="{% url 'company_update' company.id %}" class="inline-flex items-center px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-indigo-600 hover:text-white border border-slate-700 text-slate-300 text-xs font-semibold transition-all">
-                            แก้ไข
+                            {{ t.edit_ticket_title }}
                         </a>
                     </td>
                 </tr>
                 {% empty %}
                 <tr>
                     <td colspan="5" class="px-6 py-12 text-center text-slate-500">
-                        <span class="block font-medium">ไม่พบรายชื่อบริษัทลูกค้าในระบบ</span>
+                        <span class="block font-medium">No company records found.</span>
                     </td>
                 </tr>
                 {% endfor %}
@@ -136,7 +136,6 @@
         const descendants = getDescendantIds(companyId);
 
         if (isExpanded) {
-            // Hide all descendants
             descendants.forEach(id => {
                 const childRow = document.getElementById(`company-row-${id}`);
                 if (childRow) {
@@ -147,7 +146,6 @@
             btn.innerText = '▶';
             btn.classList.add('rotate-0');
         } else {
-            // Show direct children, and expand sub-branches if they were expanded
             showDirectChildren(companyId);
             row.setAttribute('data-expanded', 'true');
             btn.innerText = '▼';
@@ -197,4 +195,3 @@
     }
 </script>
 {% endblock %}
-

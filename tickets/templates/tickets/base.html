@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="th" class="h-full bg-slate-950 text-slate-100" data-mode="dark" data-theme="indigo">
+<html lang="en" class="h-full bg-slate-950 text-slate-100" data-mode="dark" data-theme="indigo">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}TicketSolve - ระบบจัดการ Ticket แบบ Multi-tenant{% endblock %}</title>
+    <title>{% block title %}TicketSolve - Multi-Tenant Ticket Management System{% endblock %}</title>
     <!-- Google Fonts: Inter & Prompt -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -147,23 +147,84 @@
         [data-mode="light"] .text-slate-100 {
             color: #0f172a !important;
         }
-        [data-mode="light"] .bg-slate-900\/50, 
-        [data-mode="light"] .bg-slate-900\/40, 
-        [data-mode="light"] .bg-slate-900\/60 {
-            background-color: rgba(241, 245, 249, 0.9) !important;
-        }
-        [data-mode="light"] .border-slate-800, 
-        [data-mode="light"] .border-slate-800\/80 {
-            border-color: #cbd5e1 !important;
-        }
-        [data-mode="light"] .border-slate-700 {
-            border-color: #cbd5e1 !important;
+        [data-mode="light"] .bg-slate-900,
+        [data-mode="light"] .bg-slate-950 {
+            background-color: #f8fafc !important;
         }
         [data-mode="light"] .bg-slate-800 {
             background-color: #e2e8f0 !important;
         }
-        [data-mode="light"] .bg-slate-900 {
+        [data-mode="light"] .bg-slate-900\/10 {
+            background-color: rgba(241, 245, 249, 0.25) !important;
+        }
+        [data-mode="light"] .bg-slate-900\/20 {
+            background-color: rgba(241, 245, 249, 0.4) !important;
+        }
+        [data-mode="light"] .bg-slate-900\/30 {
+            background-color: rgba(255, 255, 255, 0.8) !important;
+        }
+        [data-mode="light"] .bg-slate-900\/40 {
+            background-color: rgba(255, 255, 255, 0.85) !important;
+        }
+        [data-mode="light"] .bg-slate-900\/50 {
+            background-color: rgba(255, 255, 255, 0.9) !important;
+        }
+        [data-mode="light"] .bg-slate-900\/60 {
+            background-color: rgba(255, 255, 255, 0.95) !important;
+        }
+        [data-mode="light"] .bg-slate-900\/80 {
             background-color: #f1f5f9 !important;
+        }
+        [data-mode="light"] .bg-slate-800\/30,
+        [data-mode="light"] .bg-slate-800\/40,
+        [data-mode="light"] .bg-slate-800\/50,
+        [data-mode="light"] .bg-slate-800\/60 {
+            background-color: rgba(241, 245, 249, 0.6) !important;
+        }
+        [data-mode="light"] .border-slate-800, 
+        [data-mode="light"] .border-slate-800\/80,
+        [data-mode="light"] .border-slate-700,
+        [data-mode="light"] .border-slate-600 {
+            border-color: #cbd5e1 !important;
+        }
+        [data-mode="light"] .hover\:bg-slate-800\/30:hover,
+        [data-mode="light"] .hover\:bg-slate-800\/50:hover,
+        [data-mode="light"] .hover\:bg-slate-900\/50:hover,
+        [data-mode="light"] .hover\:bg-slate-900\/30:hover {
+            background-color: rgba(241, 245, 249, 0.8) !important;
+        }
+
+        /* Custom Theme-Matching Scrollbars (Global & All Containers) */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.8);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(51, 65, 85, 0.8);
+            border-radius: 4px;
+            transition: background 0.2s ease;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--theme-accent, #6366f1);
+        }
+        [data-mode="light"] ::-webkit-scrollbar-track {
+            background: rgba(241, 245, 249, 0.9);
+        }
+        [data-mode="light"] ::-webkit-scrollbar-thumb {
+            background: rgba(148, 163, 184, 0.8);
+        }
+
+        /* Firefox Scrollbar Support */
+        * {
+            scrollbar-width: thin;
+            scrollbar-color: rgba(51, 65, 85, 0.8) rgba(15, 23, 42, 0.8);
+        }
+        [data-mode="light"] * {
+            scrollbar-color: rgba(148, 163, 184, 0.8) rgba(241, 245, 249, 0.9);
         }
     </style>
     <script>
@@ -182,8 +243,6 @@
                 }
             }
         }
-
-
 
         function toggleThemeMenu(event) {
             if (event) event.stopPropagation();
@@ -269,22 +328,22 @@
     {% if user.is_authenticated %}
     <aside class="w-full md:w-64 glass-panel border-r border-slate-800 flex flex-col shrink-0">
         <!-- Logo Header -->
-        <div class="h-16 px-6 border-b border-slate-800/80 flex items-center justify-between gap-3">
+        <div class="h-14 px-5 border-b border-slate-800/80 flex items-center justify-between gap-3">
             <div class="flex items-center gap-3">
                 <div class="w-8 h-8 rounded-lg bg-theme-gradient flex items-center justify-center font-bold text-white shadow-theme-glow">
                     T
                 </div>
                 <div>
-                    <span class="font-bold text-lg tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-slate-100 to-slate-400">TicketSolve</span>
-                    <span class="block text-[10px] text-slate-500 tracking-widest uppercase -mt-1">Multi-Tenant System</span>
+                    <span class="font-bold text-base tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-slate-100 to-slate-400">TicketSolve</span>
+                    <span class="block text-[9px] text-slate-500 tracking-widest uppercase -mt-0.5">Multi-Tenant System</span>
                 </div>
             </div>
             <!-- Mobile Toggle Menu Button -->
             <button onclick="toggleMobileMenu()" class="md:hidden p-2 rounded-xl text-slate-400 hover:text-white bg-slate-900/50 border border-slate-800 focus:outline-none cursor-pointer">
-                <svg id="menuIconOpen" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg id="menuIconOpen" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
                 </svg>
-                <svg id="menuIconClose" class="w-6 h-6 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg id="menuIconClose" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                 </svg>
             </button>
@@ -293,135 +352,99 @@
         <!-- Collapsible Content Wrapper (Hidden on mobile by default) -->
         <div id="sidebarMenu" class="hidden md:flex flex-col flex-1 border-t border-slate-800/60 md:border-none">
             <!-- Tenant / Company Indicator Card -->
-            <div class="p-4 mx-4 my-4 rounded-xl bg-theme-bg border border-theme-border shadow-inner">
-                <span class="text-[10px] text-theme-accent font-semibold tracking-wider uppercase block">องค์กร / บริษัท</span>
-                <span class="text-sm font-semibold text-white truncate block">
-                    {% if user.company %}{{ user.company.name }}{% else %}ส่วนกลาง (System Admin){% endif %}
+            <div class="p-3 mx-3 my-3 rounded-xl bg-theme-bg border border-theme-border shadow-inner">
+                <span class="text-[9px] text-theme-accent font-semibold tracking-wider uppercase block">{{ t.active_org }}</span>
+                <span class="text-xs font-semibold text-white truncate block">
+                    {% if user.company %}{{ user.company.name }}{% else %}{{ t.central_admin }}{% endif %}
                 </span>
-                <div class="mt-2 flex items-center gap-1.5">
+                <div class="mt-1.5 flex items-center gap-1.5">
                     <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    <span class="text-[11px] text-slate-400 font-medium">{{ user.get_role_display }}</span>
+                    <span class="text-[10px] text-slate-400 font-medium">{{ user.get_role_display }}</span>
                 </div>
             </div>
 
             <!-- Navigation Links -->
-            <nav class="flex-1 px-4 space-y-1.5">
-                <a href="{% url 'dashboard' %}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/50 transition-all font-medium {% if request.resolver_match.url_name == 'dashboard' %}bg-theme-bg border border-theme-border text-theme-accent{% endif %}">
-                    <!-- Dashboard Icon SVG -->
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2v-4zM14 16a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2v-4z"></path>
-                    </svg>
+            <nav class="flex-1 px-3 space-y-1">
+                <a href="{% url 'dashboard' %}" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/50 transition-all text-xs font-medium {% if request.resolver_match.url_name == 'dashboard' %}bg-theme-bg border border-theme-border text-theme-accent{% endif %}">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2v-4zM14 16a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2v-4z"></path></svg>
                     {{ t.dashboard }}
                 </a>
                 
-                <a href="{% url 'ticket_create' %}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/50 transition-all font-medium {% if request.resolver_match.url_name == 'ticket_create' %}bg-theme-bg border border-theme-border text-theme-accent{% endif %}">
-                    <!-- Plus Icon SVG -->
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-                    </svg>
+                <a href="{% url 'ticket_create' %}" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/50 transition-all text-xs font-medium {% if request.resolver_match.url_name == 'ticket_create' %}bg-theme-bg border border-theme-border text-theme-accent{% endif %}">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
                     {{ t.open_new_ticket }}
                 </a>
 
                 {% if user.role == 'SYSTEM_ADMIN' or user.role == 'SYSTEM_SUB_ADMIN' or user.role == 'CLIENT_ADMIN' or user.is_superuser %}
-                <a href="{% url 'user_list' %}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/50 transition-all font-medium {% if request.resolver_match.url_name == 'user_list' or request.resolver_match.url_name == 'user_create' or request.resolver_match.url_name == 'user_update' %}bg-theme-bg border border-theme-border text-theme-accent{% endif %}">
-                    <!-- User Icon SVG -->
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
-                    </svg>
+                <a href="{% url 'user_list' %}" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/50 transition-all text-xs font-medium {% if request.resolver_match.url_name == 'user_list' or request.resolver_match.url_name == 'user_create' or request.resolver_match.url_name == 'user_update' %}bg-theme-bg border border-theme-border text-theme-accent{% endif %}">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
                     {{ t.manage_users }}
                 </a>
                 {% endif %}
 
                 {% if user.role == 'SYSTEM_ADMIN' or user.role == 'SYSTEM_SUB_ADMIN' or user.is_superuser %}
-                <a href="{% url 'company_list' %}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/50 transition-all font-medium {% if request.resolver_match.url_name == 'company_list' or request.resolver_match.url_name == 'company_create' or request.resolver_match.url_name == 'company_update' %}bg-theme-bg border border-theme-border text-theme-accent{% endif %}">
-                    <!-- Company Office Icon SVG -->
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
-                    </svg>
+                <a href="{% url 'company_list' %}" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/50 transition-all text-xs font-medium {% if request.resolver_match.url_name == 'company_list' or request.resolver_match.url_name == 'company_create' or request.resolver_match.url_name == 'company_update' %}bg-theme-bg border border-theme-border text-theme-accent{% endif %}">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
                     {{ t.manage_companies }}
                 </a>
-                <a href="{% url 'ticket_delete_manage' %}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-rose-300 hover:text-rose-100 hover:bg-rose-500/10 transition-all font-medium {% if request.resolver_match.url_name == 'ticket_delete_manage' %}bg-rose-500/20 border border-rose-500/30 text-rose-300{% endif %}">
-                    <svg class="w-5 h-5 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                    </svg>
-                    ลบและจัดการ Ticket
+                <a href="{% url 'ticket_delete_manage' %}" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-rose-300 hover:text-rose-100 hover:bg-rose-500/10 transition-all text-xs font-medium {% if request.resolver_match.url_name == 'ticket_delete_manage' %}bg-rose-500/20 border border-rose-500/30 text-rose-300{% endif %}">
+                    <svg class="w-4 h-4 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                    {{ t.delete_manage_tickets }}
                 </a>
                 {% endif %}
 
-
                 {% if user.role == 'SYSTEM_ADMIN' or user.role == 'SYSTEM_SUB_ADMIN' or user.is_superuser %}
-                <a href="{% url 'log_list' %}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/50 transition-all font-medium {% if request.resolver_match.url_name == 'log_list' %}bg-theme-bg border border-theme-border text-theme-accent{% endif %}">
-                    <!-- Clipboard List Audit Log Icon SVG -->
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
-                    </svg>
+                <a href="{% url 'log_list' %}" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/50 transition-all text-xs font-medium {% if request.resolver_match.url_name == 'log_list' %}bg-theme-bg border border-theme-border text-theme-accent{% endif %}">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
                     {{ t.logs }}
                 </a>
                 {% endif %}
 
                 {% if user.role == 'SYSTEM_ADMIN' or user.role == 'SYSTEM_SUB_ADMIN' or user.role == 'CLIENT_ADMIN' or user.is_superuser %}
-                <a href="{% url 'monthly_report' %}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/50 transition-all font-medium {% if request.resolver_match.url_name == 'monthly_report' %}bg-theme-bg border border-theme-border text-theme-accent{% endif %}">
-                    <!-- Report Icon SVG -->
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                    </svg>
+                <a href="{% url 'monthly_report' %}" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/50 transition-all text-xs font-medium {% if request.resolver_match.url_name == 'monthly_report' %}bg-theme-bg border border-theme-border text-theme-accent{% endif %}">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                     {{ t.reports }}
                 </a>
                 {% endif %}
 
                 {% if user.role == 'SYSTEM_ADMIN' or user.role == 'SYSTEM_SUB_ADMIN' or user.role == 'CLIENT_ADMIN' or user.is_superuser %}
-                <a href="{% url 'category_list' %}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/50 transition-all font-medium {% if request.resolver_match.url_name == 'category_list' or request.resolver_match.url_name == 'company_ticket_design' or request.resolver_match.url_name == 'company_ticket_design_pk' %}bg-theme-bg border border-theme-border text-theme-accent{% endif %}">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 11h.01M7 15h.01M13 7h7M13 11h7M13 15h7M4 19h16a2 2 0 002-2V5a2 2 0 00-2-2H4a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                    </svg>
-                    หมวดหมู่ & ดีไซน์ Ticket
+                <a href="{% url 'category_list' %}" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/50 transition-all text-xs font-medium {% if request.resolver_match.url_name == 'category_list' or request.resolver_match.url_name == 'company_ticket_design' or request.resolver_match.url_name == 'company_ticket_design_pk' %}bg-theme-bg border border-theme-border text-theme-accent{% endif %}">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 11h.01M7 15h.01M13 7h7M13 11h7M13 15h7M4 19h16a2 2 0 002-2V5a2 2 0 00-2-2H4a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                    {{ t.categories_ticket_design }}
                 </a>
-                <a href="{% url 'notification_config_list' %}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/50 transition-all font-medium {% if request.resolver_match.url_name == 'notification_config_list' or request.resolver_match.url_name == 'notification_config_create' or request.resolver_match.url_name == 'notification_config_edit' %}bg-theme-bg border border-theme-border text-theme-accent{% endif %}">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
-                    </svg>
-                    ตั้งค่าแจ้งเตือน (Email Config)
+                <a href="{% url 'notification_config_list' %}" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/50 transition-all text-xs font-medium {% if request.resolver_match.url_name == 'notification_config_list' or request.resolver_match.url_name == 'notification_config_create' or request.resolver_match.url_name == 'notification_config_edit' %}bg-theme-bg border border-theme-border text-theme-accent{% endif %}">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
+                    {{ t.notification_settings }}
                 </a>
                 {% if user.role == 'SYSTEM_ADMIN' or user.role == 'SYSTEM_SUB_ADMIN' or user.is_superuser %}
-                <a href="{% url 'ticket_automation_list' %}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/50 transition-all font-medium {% if request.resolver_match.url_name == 'ticket_automation_list' or request.resolver_match.url_name == 'ticket_automation_create' or request.resolver_match.url_name == 'ticket_automation_edit' %}bg-theme-bg border border-theme-border text-theme-accent{% endif %}">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                    </svg>
-                    Ticket Auto Schedule
+                <a href="{% url 'ticket_automation_list' %}" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/50 transition-all text-xs font-medium {% if request.resolver_match.url_name == 'ticket_automation_list' or request.resolver_match.url_name == 'ticket_automation_create' or request.resolver_match.url_name == 'ticket_automation_edit' %}bg-theme-bg border border-theme-border text-theme-accent{% endif %}">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    {{ t.auto_schedule }}
                 </a>
                 {% endif %}
                 {% endif %}
 
-
                 {% if user.role == 'SYSTEM_ADMIN' or user.is_superuser %}
-                <a href="{% url 'system_settings' %}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/50 transition-all font-medium {% if request.resolver_match.url_name == 'system_settings' %}bg-theme-bg border border-theme-border text-theme-accent{% endif %}">
-
-                    <!-- Settings/Cog Icon SVG -->
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                    </svg>
+                <a href="{% url 'system_settings' %}" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/50 transition-all text-xs font-medium {% if request.resolver_match.url_name == 'system_settings' %}bg-theme-bg border border-theme-border text-theme-accent{% endif %}">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                     {{ t.smtp_settings }}
                 </a>
                 {% endif %}
             </nav>
 
             <!-- Sidebar Footer/User Profile -->
-            <div class="p-4 border-t border-slate-800/80 flex items-center justify-between mt-auto">
-                <div class="flex items-center gap-3 min-w-0">
-                    <div class="w-9 h-9 rounded-full bg-slate-800 border border-theme-border flex items-center justify-center font-semibold text-theme-accent">
+            <div class="p-3 border-t border-slate-800/80 flex items-center justify-between mt-auto">
+                <div class="flex items-center gap-2.5 min-w-0">
+                    <div class="w-8 h-8 rounded-full bg-slate-800 border border-theme-border flex items-center justify-center font-semibold text-xs text-theme-accent shrink-0">
                         {{ user.username|slice:":2"|upper }}
                     </div>
                     <div class="min-w-0">
-                        <span class="block text-sm font-semibold text-white truncate">{{ user.username }}</span>
-                        <span class="block text-[11px] text-slate-500 truncate">{{ user.email }}</span>
+                        <span class="block text-xs font-semibold text-white truncate">{{ user.username }}</span>
+                        <span class="block text-[10px] text-slate-500 truncate">{{ user.email }}</span>
                     </div>
                 </div>
-                <a href="{% url 'logout' %}" class="p-2 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors" title="{{ t.logout }}">
-                    <!-- Log Out SVG -->
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3 3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
-                    </svg>
+                <a href="{% url 'logout' %}" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors" title="{{ t.logout }}">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3 3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
                 </a>
             </div>
         </div>
@@ -432,28 +455,18 @@
     <main class="flex-1 flex flex-col min-w-0 overflow-y-auto">
         <!-- Top bar (only if logged in) -->
         {% if user.is_authenticated %}
-        <header class="h-16 px-8 border-b border-slate-800/80 flex items-center justify-between shrink-0 glass-panel relative z-20 md:bg-transparent md:border-b-0 md:backdrop-filter-none">
-            <div class="flex items-center gap-4">
-                <h1 class="text-xl font-bold text-white tracking-wide">{% block header_title %}{{ t.dashboard }}{% endblock %}</h1>
+        <header class="h-13 px-5 border-b border-slate-800/80 flex items-center justify-between shrink-0 glass-panel relative z-20 md:bg-transparent md:border-b-0 md:backdrop-filter-none">
+            <div class="flex items-center gap-3">
+                <h1 class="text-base font-bold text-white tracking-tight">{% block header_title %}{{ t.dashboard }}{% endblock %}</h1>
             </div>
 
             <div class="flex items-center gap-3">
-                <!-- Language Switcher TH / EN -->
-                <div class="flex items-center bg-slate-900/50 border border-slate-800 rounded-xl p-0.5 overflow-hidden">
-                    <a href="{% url 'set_language' %}?lang=th" class="px-2.5 py-1 text-[10px] font-bold rounded-lg transition-all {% if current_lang == 'th' %}bg-theme-gradient text-white shadow-theme-glow{% else %}text-slate-400 hover:text-white{% endif %}">
-                        TH
-                    </a>
-                    <a href="{% url 'set_language' %}?lang=en" class="px-2.5 py-1 text-[10px] font-bold rounded-lg transition-all {% if current_lang == 'en' %}bg-theme-gradient text-white shadow-theme-glow{% else %}text-slate-400 hover:text-white{% endif %}">
-                        EN
-                    </a>
-                </div>
+
 
                 <!-- Theme & Mode Switcher Popover Menu -->
                 <div class="relative">
                     <button onclick="toggleThemeMenu(event)" class="p-2 rounded-xl text-slate-400 hover:text-white bg-slate-900/50 border border-slate-800 hover:border-slate-700 transition-all flex items-center gap-2 cursor-pointer" title="{{ t.theme_color }}">
-                        <svg class="w-5 h-5 text-theme-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path>
-                        </svg>
+                        <svg class="w-4 h-4 text-theme-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path></svg>
                         <span class="text-xs font-semibold text-slate-300 hidden md:inline">{{ t.theme_color }}</span>
                     </button>
 
@@ -489,16 +502,14 @@
                 <!-- Notification Bell simulation -->
                 <button class="p-2 rounded-xl text-slate-400 hover:text-white bg-slate-900/50 border border-slate-800 hover:border-slate-700 transition-all relative">
                     <span class="w-1.5 h-1.5 rounded-full bg-theme-gradient absolute top-1.5 right-1.5"></span>
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
-                    </svg>
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
                 </button>
             </div>
         </header>
         {% endif %}
 
         <!-- Core Page Content -->
-        <div class="flex-1 p-6 md:p-8 space-y-6">
+        <div class="flex-1 p-3.5 md:p-5 space-y-3.5">
             {% if messages %}
             <div class="space-y-2">
                 {% for message in messages %}
@@ -511,8 +522,6 @@
             {% block content %}{% endblock %}
         </div>
     </main>
-
-
 
 </body>
 </html>

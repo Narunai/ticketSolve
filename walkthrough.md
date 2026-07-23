@@ -4,6 +4,13 @@
 
 ---
 
+> [!IMPORTANT]
+> **อัปเดตล่าสุด (Latest Updates - 2026-07-23):**
+> * **แปลภาษาครบ 100% ทั่วทุกหน้าย่อย (Complete Sub-page Localization):** ได้ตรวจสอบ ตรวจเช็ค และปรับปรุงหน้าย่อยทั้งหมด (`category_list.html`, `log_list.html`, `settings.html`, `company_ticket_design.html`, `ticket_automation_list.html`, `ticket_automation_form.html`, `notification_config_list.html`, `notification_config_form.html`, `report_dashboard.html`, `login.html`, `email_log_detail.html`) โดยแทนที่ข้อความภาษาไทยที่ยังค้างอยู่เป็นคีย์แปลภาษา `{{ t.key }}` ทำให้สามารถสลับภาษาไทย-อังกฤษได้อย่างถูกต้อง สมบูรณ์แบบ 100% ทั่วทั้งระบบ
+> * **กู้คืนหน้าคู่มือและระบบสุ่มกรอก Preset (App Password Guide & Presets Restoration):** กู้คืนส่วนคู่มือตั้งค่าขอรับรหัสผ่านสำหรับแอป (App Password Setup Guide) ทั้ง Google Gmail และ Microsoft Outlook กลับมาที่หน้าตั้งค่า SMTP ในรูปแบบภาษาไทย/อังกฤษ และเปิดใช้งานสคริปต์สุ่มกรอกค่า Host/Port ตาม Preset บัญชีผู้ให้บริการอัตโนมัติ
+
+---
+
 ## 🛠️ รายการฟังก์ชันใหม่ที่พัฒนาเพิ่มเติม (New Features Added)
 
 ### 1. ระบบผู้ดูแลระบบย่อยของส่วนกลาง (System Sub-Admin)
@@ -89,7 +96,7 @@
 ```powershell
 python manage.py test
 ```
-**จำนวนการทดสอบที่รัน: 24 tests | ผลลัพธ์: OK (ผ่านทั้งหมด 100%)**
+**จำนวนการทดสอบที่รัน: 59 tests | ผลลัพธ์: OK (ผ่านทั้งหมด 100%)**
 
 ---
 

@@ -1,15 +1,15 @@
 {% extends 'tickets/base.html' %}
 
-{% block header_title %}รายละเอียดการส่งอีเมล{% endblock %}
+{% block header_title %}{{ t.email_log }} Details{% endblock %}
 
 {% block content %}
 <div class="space-y-6 max-w-6xl mx-auto">
     <div class="flex items-center justify-between gap-4">
         <div>
-            <h2 class="text-xl font-bold text-white">รายละเอียดการส่งอีเมล</h2>
-            <p class="text-sm text-slate-400 mt-1">หนึ่งรายการแสดงผู้รับหลักและ CC ของหัวข้อเดียวกัน</p>
+            <h2 class="text-xl font-bold text-white">{{ t.email_log }} Details</h2>
+            <p class="text-sm text-slate-400 mt-1">Recipient list and delivery status for message group.</p>
         </div>
-        <a href="{% url 'log_list' %}#log-section-email" class="px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-slate-300 text-xs font-bold">← กลับหน้าประวัติ</a>
+        <a href="{% url 'log_list' %}#log-section-email" class="px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-slate-300 text-xs font-bold">← {{ t.back }}</a>
     </div>
 
     <div class="glass-panel rounded-2xl border border-slate-800/80 overflow-hidden">
@@ -20,58 +20,58 @@
                     <h3 class="text-lg font-bold text-white mt-1">{{ email_group.subject }}</h3>
                 </div>
                 {% if email_group.status == 'success' %}
-                <span class="px-3 py-1.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-bold">ส่งสำเร็จ</span>
+                <span class="px-3 py-1.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-bold">Sent</span>
                 {% elif email_group.status == 'filtered' %}
-                <span class="px-3 py-1.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 text-xs font-bold">ข้ามตามกฎ</span>
+                <span class="px-3 py-1.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 text-xs font-bold">Filtered</span>
                 {% elif email_group.status == 'partial' %}
-                <span class="px-3 py-1.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 text-xs font-bold">สำเร็จบางส่วน</span>
+                <span class="px-3 py-1.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 text-xs font-bold">Partial Success</span>
                 {% else %}
-                <span class="px-3 py-1.5 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20 text-xs font-bold">ส่งล้มเหลว</span>
+                <span class="px-3 py-1.5 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20 text-xs font-bold">Failed</span>
                 {% endif %}
             </div>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-                <div><span class="text-slate-500 block">วันเวลาส่ง</span><span class="text-white font-mono">{{ email_group.sent_at|date:"d/m/Y H:i:s" }}</span></div>
-                <div><span class="text-slate-500 block">ประเภท</span><span class="text-white">{{ email_group.action_type_display }}</span></div>
-                <div><span class="text-slate-500 block">ผลรวม</span><span class="text-white">สำเร็จ {{ email_group.success_count }} / ล้มเหลว {{ email_group.failed_count }} / ข้าม {{ email_group.filtered_count }}</span></div>
+                <div><span class="text-slate-500 block">Sent Timestamp</span><span class="text-white font-mono">{{ email_group.sent_at|date:"d/m/Y H:i:s" }}</span></div>
+                <div><span class="text-slate-500 block">Event Type</span><span class="text-white">{{ email_group.action_type_display }}</span></div>
+                <div><span class="text-slate-500 block">Delivery Summary</span><span class="text-white">Sent {{ email_group.success_count }} / Failed {{ email_group.failed_count }} / Filtered {{ email_group.filtered_count }}</span></div>
             </div>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-px bg-slate-800">
             <div class="bg-slate-950 p-5">
-                <p class="text-xs font-bold text-white mb-3">ผู้รับหลัก (To)</p>
+                <p class="text-xs font-bold text-white mb-3">Recipients (To)</p>
                 {% for recipient in email_group.to_recipients %}<span class="block text-sm font-mono text-slate-300 mb-1">{{ recipient }}</span>{% empty %}<span class="text-slate-500">—</span>{% endfor %}
             </div>
             <div class="bg-slate-950 p-5">
-                <p class="text-xs font-bold text-white mb-3">สำเนา (CC)</p>
-                {% for recipient in email_group.cc_recipients %}<span class="block text-sm font-mono text-slate-300 mb-1">{{ recipient }}</span>{% empty %}<span class="text-slate-500">ไม่มี CC</span>{% endfor %}
+                <p class="text-xs font-bold text-white mb-3">Carbon Copy (CC)</p>
+                {% for recipient in email_group.cc_recipients %}<span class="block text-sm font-mono text-slate-300 mb-1">{{ recipient }}</span>{% empty %}<span class="text-slate-500">No CC</span>{% endfor %}
             </div>
         </div>
 
         <div class="p-6 border-t border-slate-800">
-            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">เนื้อหาอีเมล</p>
+            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Message Body</p>
             <div class="rounded-xl bg-slate-950 border border-slate-800 p-5 text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">{{ email_group.message }}</div>
         </div>
     </div>
 
     <div class="glass-panel rounded-2xl border border-slate-800/80 overflow-hidden">
         <div class="px-6 py-4 border-b border-slate-800 bg-slate-900/40 flex items-center justify-between">
-            <h3 class="font-bold text-white">ผลการส่งแยกรายบุคคล</h3>
+            <h3 class="font-bold text-white">Recipient Breakdown</h3>
             {% if email_group.failed_count %}
             <form method="POST" action="{% url 'resend_email' email_group.detail_id %}">
                 {% csrf_token %}
-                <button class="px-3 py-2 rounded-lg bg-amber-500/10 text-amber-300 border border-amber-500/30 text-xs font-bold">🔄 ส่งซ้ำเฉพาะรายการที่ล้มเหลว</button>
+                <button class="px-3 py-2 rounded-lg bg-amber-500/10 text-amber-300 border border-amber-500/30 text-xs font-bold">🔄 Resend Failed Deliveries</button>
             </form>
             {% endif %}
         </div>
         <div class="overflow-x-auto">
             <table class="w-full text-left text-xs">
-                <thead class="bg-slate-900/60 text-slate-400"><tr><th class="px-5 py-3">ประเภท</th><th class="px-5 py-3">อีเมล</th><th class="px-5 py-3">สถานะ</th><th class="px-5 py-3">รายละเอียด</th></tr></thead>
+                <thead class="bg-slate-900/60 text-slate-400"><tr><th class="px-5 py-3">Type</th><th class="px-5 py-3">Email Address</th><th class="px-5 py-3">Status</th><th class="px-5 py-3">Details</th></tr></thead>
                 <tbody class="divide-y divide-slate-800 text-slate-300">
                     {% for log in email_group.logs %}
                     <tr>
                         <td class="px-5 py-3">{{ log.get_recipient_type_display }}</td>
                         <td class="px-5 py-3 font-mono">{{ log.recipient }}</td>
-                        <td class="px-5 py-3">{% if log.success %}<span class="text-emerald-400">สำเร็จ</span>{% elif 'Filtered' in log.error_message or 'ข้ามการส่ง' in log.error_message %}<span class="text-amber-400">ข้ามตามกฎ</span>{% else %}<span class="text-rose-400">ล้มเหลว</span>{% endif %}</td>
+                        <td class="px-5 py-3">{% if log.success %}<span class="text-emerald-400">Success</span>{% elif 'Filtered' in log.error_message %}<span class="text-amber-400">Filtered</span>{% else %}<span class="text-rose-400">Failed</span>{% endif %}</td>
                         <td class="px-5 py-3 text-slate-400">{{ log.error_message|default:"—" }}</td>
                     </tr>
                     {% endfor %}

@@ -39,11 +39,11 @@ class TicketForm(forms.ModelForm):
         widgets = {
             'title': forms.TextInput(attrs={
                 'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all',
-                'placeholder': 'ระบุหัวข้อปัญหา...'
+                'placeholder': 'Enter ticket title...'
             }),
             'description': forms.Textarea(attrs={
                 'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all',
-                'placeholder': 'อธิบายรายละเอียดของปัญหา (ไม่บังคับ)...',
+                'placeholder': 'Describe issue details (optional)...',
                 'rows': 4
             }),
             'priority': forms.Select(attrs={
@@ -69,8 +69,8 @@ class TicketForm(forms.ModelForm):
         self.fields['category'].required = False
         self.fields['ticket_category'].required = False
         self.fields['module_category'].required = False
-        self.fields['ticket_category'].label = "หมวดหมู่ปัญหา (Category)"
-        self.fields['module_category'].label = "หมวดหมู่โมดูล (Module Category)"
+        self.fields['ticket_category'].label = "Category"
+        self.fields['module_category'].label = "Module Category"
 
         inst_company = getattr(self.instance, 'company', None) if (self.instance and getattr(self.instance, 'company_id', None)) else None
         company = user.company if (user and user.company) else inst_company
@@ -79,7 +79,7 @@ class TicketForm(forms.ModelForm):
             self.fields['company'] = forms.ModelChoiceField(
                 queryset=Company.objects.all(),
                 required=True,
-                label="บริษัทลูกค้า (Company)",
+                label="Company",
                 widget=forms.Select(attrs={'class': 'w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white'})
             )
             company = Company.objects.first()
@@ -136,7 +136,7 @@ class TicketForm(forms.ModelForm):
                             label=f_obj.label,
                             required=f_obj.is_required,
                             initial=initial_val,
-                            choices=[('', '-- เลือก --')] + choices,
+                            choices=[('', '-- Select --')] + choices,
                             widget=forms.Select(attrs={'class': 'w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all'})
                         )
                     elif f_obj.field_type == CompanyTicketField.FIELD_TYPE_DATE:
@@ -209,7 +209,7 @@ class TicketForm(forms.ModelForm):
         for f in files:
             if f.size > max_size:
                 size_mb = f.size / (1024 * 1024)
-                self.add_error('attachment', f"ขนาดไฟล์แนบ '{f.name}' ต้องไม่เกิน 10 MB (ไฟล์ของคุณขนาด {size_mb:.1f} MB)")
+                self.add_error('attachment', f"Attachment file size for '{f.name}' must not exceed 10 MB (your file is {size_mb:.1f} MB)")
 
         return cleaned_data
 
@@ -277,7 +277,7 @@ class TicketUpdateForm(forms.ModelForm):
             }),
             'resolution_notes': forms.Textarea(attrs={
                 'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all',
-                'placeholder': 'อธิบายสรุปวิธีการแก้ไขปัญหา...',
+                'placeholder': 'Describe resolution summary...',
                 'rows': 3
             }),
             'attachment': forms.ClearableFileInput(attrs={
@@ -292,8 +292,8 @@ class TicketUpdateForm(forms.ModelForm):
         self.fields['description'].required = False
         self.fields['ticket_category'].required = False
         self.fields['module_category'].required = False
-        self.fields['ticket_category'].label = "หมวดหมู่ปัญหา (Category)"
-        self.fields['module_category'].label = "หมวดหมู่โมดูล (Module Category)"
+        self.fields['ticket_category'].label = "Category"
+        self.fields['module_category'].label = "Module Category"
         ticket_company = self.instance.company if self.instance else (user.company if user else None)
 
         if user and user.company:
@@ -363,7 +363,7 @@ class TicketUpdateForm(forms.ModelForm):
                             label=f_obj.label,
                             required=f_obj.is_required,
                             initial=initial_val,
-                            choices=[('', '-- เลือก --')] + choices,
+                            choices=[('', '-- Select --')] + choices,
                             widget=forms.Select(attrs={'class': 'w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all'})
                         )
                     elif f_obj.field_type == CompanyTicketField.FIELD_TYPE_DATE:
@@ -454,7 +454,7 @@ class TicketUpdateForm(forms.ModelForm):
                 require_note = company.ticket_config.require_resolution_note
                 
             if require_note and not resolution_notes:
-                self.add_error('resolution_notes', 'กรุณาระบุรายละเอียดสรุปวิธีแก้ไขปัญหาก่อนเปลี่ยนสถานะเป็น Resolved/Closed')
+                self.add_error('resolution_notes', 'Please provide a resolution summary before changing status to Resolved/Closed')
 
         files = []
         if self.files:
@@ -463,7 +463,7 @@ class TicketUpdateForm(forms.ModelForm):
         for f in files:
             if f.size > max_size:
                 size_mb = f.size / (1024 * 1024)
-                self.add_error('attachment', f"ขนาดไฟล์แนบ '{f.name}' ต้องไม่เกิน 50 MB (ไฟล์ของคุณขนาด {size_mb:.1f} MB)")
+                self.add_error('attachment', f"Attachment file size for '{f.name}' must not exceed 50 MB (your file is {size_mb:.1f} MB)")
 
         return cleaned_data
 
@@ -473,11 +473,11 @@ class TicketCategoryForm(forms.ModelForm):
         model = TicketCategory
         fields = ['name', 'company', 'description', 'icon_code', 'color_code', 'is_active']
         widgets = {
-            'name': forms.TextInput(attrs={'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white', 'placeholder': 'ชื่อหมวดหมู่ปัญหา...'}),
+            'name': forms.TextInput(attrs={'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white', 'placeholder': 'Category Name...'}),
             'company': forms.Select(attrs={'class': 'w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white'}),
-            'description': forms.Textarea(attrs={'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white', 'rows': 2, 'placeholder': 'คำอธิบายหมวดหมู่...'}),
-            'icon_code': forms.TextInput(attrs={'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white', 'placeholder': 'เช่น cpu, code, wifi'}),
-            'color_code': forms.TextInput(attrs={'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white', 'placeholder': 'เช่น #6366f1, #10b981'}),
+            'description': forms.Textarea(attrs={'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white', 'rows': 2, 'placeholder': 'Category Description...'}),
+            'icon_code': forms.TextInput(attrs={'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white', 'placeholder': 'e.g. cpu, code, wifi'}),
+            'color_code': forms.TextInput(attrs={'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white', 'placeholder': 'e.g. #6366f1, #10b981'}),
             'is_active': forms.CheckboxInput(attrs={'class': 'rounded bg-slate-900 border-slate-700 text-indigo-600 h-4 w-4'}),
         }
 
@@ -498,9 +498,9 @@ class ResolutionCategoryForm(forms.ModelForm):
         model = ResolutionCategory
         fields = ['name', 'company', 'description', 'is_active']
         widgets = {
-            'name': forms.TextInput(attrs={'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white', 'placeholder': 'ชื่อหมวดหมู่การแก้ปัญหา...'}),
+            'name': forms.TextInput(attrs={'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white', 'placeholder': 'Resolution Category Name...'}),
             'company': forms.Select(attrs={'class': 'w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white'}),
-            'description': forms.Textarea(attrs={'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white', 'rows': 2, 'placeholder': 'คำอธิบายหมวดหมู่การแก้ปัญหา...'}),
+            'description': forms.Textarea(attrs={'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white', 'rows': 2, 'placeholder': 'Resolution Category Description...'}),
             'is_active': forms.CheckboxInput(attrs={'class': 'rounded bg-slate-900 border-slate-700 text-indigo-600 h-4 w-4'}),
         }
 
@@ -517,11 +517,11 @@ class ModuleCategoryForm(forms.ModelForm):
         model = ModuleCategory
         fields = ['name', 'company', 'description', 'icon_code', 'color_code', 'is_active']
         widgets = {
-            'name': forms.TextInput(attrs={'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white', 'placeholder': 'ชื่อหมวดหมู่โมดูล...'}),
+            'name': forms.TextInput(attrs={'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white', 'placeholder': 'Module Category Name...'}),
             'company': forms.Select(attrs={'class': 'w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white'}),
-            'description': forms.Textarea(attrs={'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white', 'rows': 2, 'placeholder': 'คำอธิบายโมดูล...'}),
-            'icon_code': forms.TextInput(attrs={'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white', 'placeholder': 'เช่น cpu, code, layers'}),
-            'color_code': forms.TextInput(attrs={'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white', 'placeholder': 'เช่น #10b981, #3b82f6'}),
+            'description': forms.Textarea(attrs={'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white', 'rows': 2, 'placeholder': 'Module Category Description...'}),
+            'icon_code': forms.TextInput(attrs={'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white', 'placeholder': 'e.g. cpu, code, layers'}),
+            'color_code': forms.TextInput(attrs={'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white', 'placeholder': 'e.g. #10b981, #3b82f6'}),
             'is_active': forms.CheckboxInput(attrs={'class': 'rounded bg-slate-900 border-slate-700 text-indigo-600 h-4 w-4'}),
         }
 
@@ -543,8 +543,8 @@ class CompanyTicketConfigForm(forms.ModelForm):
         model = CompanyTicketConfig
         fields = ['ticket_prefix', 'require_resolution_note', 'custom_help_text', 'allow_file_attachments']
         widgets = {
-            'ticket_prefix': forms.TextInput(attrs={'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white', 'placeholder': 'เช่น ACME-, SEC-'}),
-            'custom_help_text': forms.Textarea(attrs={'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white', 'rows': 3, 'placeholder': 'ข้อความแนะนำช่วยเหลือประจำฟอร์ม...'}),
+            'ticket_prefix': forms.TextInput(attrs={'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white', 'placeholder': 'e.g. ACME-, SEC-'}),
+            'custom_help_text': forms.Textarea(attrs={'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white', 'rows': 3, 'placeholder': 'Form help guidelines...'}),
             'require_resolution_note': forms.CheckboxInput(attrs={'class': 'rounded bg-slate-900 border-slate-700 text-indigo-600 h-4 w-4'}),
             'allow_file_attachments': forms.CheckboxInput(attrs={'class': 'rounded bg-slate-900 border-slate-700 text-indigo-600 h-4 w-4'}),
         }
@@ -553,17 +553,17 @@ class CompanyTicketConfigForm(forms.ModelForm):
 class CompanyTicketCustomFieldForm(forms.ModelForm):
     options_raw = forms.CharField(
         required=False,
-        widget=forms.TextInput(attrs={'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white', 'placeholder': 'ตัวเลือก A, ตัวเลือก B, ตัวเลือก C (คั่นด้วยจุลภาค)'})
+        widget=forms.TextInput(attrs={'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white', 'placeholder': 'Option A, Option B, Option C (comma separated)'})
     )
 
     class Meta:
         model = CompanyTicketField
         fields = ['label', 'field_key', 'field_type', 'placeholder', 'is_required', 'order']
         widgets = {
-            'label': forms.TextInput(attrs={'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white', 'placeholder': 'เช่น หมายเลขอุปกรณ์ (Asset ID)'}),
-            'field_key': forms.TextInput(attrs={'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white', 'placeholder': 'เช่น asset_id, location'}),
+            'label': forms.TextInput(attrs={'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white', 'placeholder': 'e.g. Asset ID'}),
+            'field_key': forms.TextInput(attrs={'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white', 'placeholder': 'e.g. asset_id, location'}),
             'field_type': forms.Select(attrs={'class': 'w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white'}),
-            'placeholder': forms.TextInput(attrs={'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white', 'placeholder': 'เช่น ระบุรหัสทรัพย์สิน...'}),
+            'placeholder': forms.TextInput(attrs={'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white', 'placeholder': 'e.g. Enter asset ID...'}),
             'is_required': forms.CheckboxInput(attrs={'class': 'rounded bg-slate-900 border-slate-700 text-indigo-600 h-4 w-4'}),
             'order': forms.NumberInput(attrs={'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white'}),
         }
@@ -578,7 +578,7 @@ class SMTPConfigurationForm(forms.ModelForm):
         widgets = {
             'name': forms.TextInput(attrs={
                 'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all',
-                'placeholder': 'เช่น Gmail ส่วนตัว, Outlook บริษัท'
+                'placeholder': 'e.g. Personal Gmail, Corporate Outlook'
             }),
             'provider': forms.Select(attrs={
                 'id': 'id_provider',
@@ -587,7 +587,7 @@ class SMTPConfigurationForm(forms.ModelForm):
             'host': forms.TextInput(attrs={
                 'id': 'id_host',
                 'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all',
-                'placeholder': 'เช่น smtp.gmail.com'
+                'placeholder': 'e.g. smtp.gmail.com'
             }),
             'port': forms.NumberInput(attrs={
                 'id': 'id_port',
@@ -599,11 +599,11 @@ class SMTPConfigurationForm(forms.ModelForm):
             }),
             'username': forms.TextInput(attrs={
                 'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all',
-                'placeholder': 'เช่น narunaithaisenee@gmail.com'
+                'placeholder': 'e.g. user@example.com'
             }),
             'password': forms.PasswordInput(attrs={
                 'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg pl-4 pr-10 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all',
-                'placeholder': 'ใส่รหัสผ่านแอป 16 หลัก หรือรหัสผ่าน SMTP'
+                'placeholder': 'Enter 16-digit App Password or SMTP password'
             }, render_value=True),
             'is_active': forms.CheckboxInput(attrs={
                 'class': 'rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-slate-900 h-4 w-4'
@@ -614,14 +614,14 @@ class SMTPConfigurationForm(forms.ModelForm):
 class MonthlyReportScheduleForm(forms.ModelForm):
     send_hour = forms.ChoiceField(
         choices=[(f'{hour:02d}', f'{hour:02d}') for hour in range(24)],
-        label='ชั่วโมง',
+        label='Hour',
         widget=forms.Select(attrs={
             'class': 'w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-white',
         }),
     )
     send_minute = forms.ChoiceField(
         choices=[(f'{minute:02d}', f'{minute:02d}') for minute in range(60)],
-        label='นาที',
+        label='Minute',
         widget=forms.Select(attrs={
             'class': 'w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-white',
         }),
@@ -636,7 +636,7 @@ class MonthlyReportScheduleForm(forms.ModelForm):
         widgets = {
             'name': forms.TextInput(attrs={
                 'class': 'w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-white',
-                'placeholder': 'เช่น ส่งรายงานให้ฝ่ายบริหาร',
+                'placeholder': 'e.g. Send Report to Management',
             }),
             'company': forms.Select(attrs={
                 'class': 'w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-white',
@@ -711,7 +711,7 @@ class MonthlyReportScheduleForm(forms.ModelForm):
         if recipients is not None and cc_recipients is not None:
             overlap = set(recipients.values_list('pk', flat=True)) & set(cc_recipients.values_list('pk', flat=True))
             if overlap:
-                raise forms.ValidationError('ผู้รับหลักและผู้รับ CC ต้องไม่เป็นบุคคลเดียวกัน')
+                raise forms.ValidationError('Primary recipient and CC recipient cannot be the same person.')
         return cleaned
 
     def save(self, commit=True):
@@ -725,7 +725,7 @@ class MonthlyReportScheduleForm(forms.ModelForm):
             self.save_m2m()
         return schedule
 
-def get_company_tree_choices(excluded_ids=None, allow_empty=True, empty_label='--------- (ไม่มี - เป็นบริษัทแม่สูงสุด)'):
+def get_company_tree_choices(excluded_ids=None, allow_empty=True, empty_label='--------- (None - Parent Company)'):
     if excluded_ids is None:
         excluded_ids = []
     
@@ -765,7 +765,7 @@ class CompanyForm(forms.ModelForm):
         widgets = {
             'name': forms.TextInput(attrs={
                 'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all',
-                'placeholder': 'ชื่อบริษัท/องค์กร...'
+                'placeholder': 'Company Name...'
             }),
             'parent': forms.Select(attrs={
                 'class': 'w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all'
@@ -780,7 +780,7 @@ class CompanyForm(forms.ModelForm):
         self.fields['parent'].choices = get_company_tree_choices(
             excluded_ids=excluded_ids,
             allow_empty=True,
-            empty_label='--------- (ไม่มี - เป็นบริษัทแม่สูงสุด)'
+            empty_label='--------- (None - Parent Company)'
         )
 
 
@@ -788,10 +788,10 @@ class CustomUserForm(forms.ModelForm):
     password = forms.CharField(
         widget=forms.PasswordInput(attrs={
             'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg pl-4 pr-10 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all',
-            'placeholder': 'ระบุรหัสผ่าน...'
+            'placeholder': 'Enter password...'
         }),
         required=False,
-        help_text="หากเว้นว่างไว้สำหรับผู้ใช้เดิม รหัสผ่านจะไม่ถูกเปลี่ยน"
+        help_text="Leave blank if you do not want to change the password."
     )
 
     class Meta:
@@ -800,11 +800,11 @@ class CustomUserForm(forms.ModelForm):
         widgets = {
             'username': forms.TextInput(attrs={
                 'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all',
-                'placeholder': 'ระบุชื่อผู้ใช้...'
+                'placeholder': 'Enter username...'
             }),
             'email': forms.EmailInput(attrs={
                 'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all',
-                'placeholder': 'ระบุอีเมล...'
+                'placeholder': 'Enter email...'
             }),
             'role': forms.Select(attrs={
                 'class': 'w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all'
@@ -992,7 +992,7 @@ class TicketCreateView(LoginRequiredMixin, CreateView):
             if first_comp:
                 form.instance.company = first_comp
             else:
-                form.add_error(None, "ยังไม่มีบริษัทในระบบ กรุณาสร้างบริษัทก่อนเปิด Ticket")
+                form.add_error(None, "No companies exist. Please create a company before opening a ticket.")
                 return self.form_invalid(form)
 
         form.instance.created_by = user
@@ -1005,7 +1005,7 @@ class TicketCreateView(LoginRequiredMixin, CreateView):
             actor=user,
             old_status=None,
             new_status=self.object.status,
-            details=f"เปิด Ticket ใหม่: '{self.object.title}'"
+            details=f"Opened new ticket: '{self.object.title}'"
         )
         return response
 
@@ -1026,7 +1026,7 @@ class TicketUpdateView(LoginRequiredMixin, UpdateView):
         user = self.request.user
         if not user.is_superuser and user.role != CustomUser.SYSTEM_ADMIN:
             if not user.company or obj.company_id not in user.company.get_all_subsidiary_ids():
-                raise PermissionDenied("คุณไม่มีสิทธิ์เข้าถึงหรือแก้ไข Ticket ของบริษัทอื่น")
+                raise PermissionDenied("You do not have permission to view or edit this ticket.")
         return obj
 
     def form_valid(self, form):
@@ -1041,13 +1041,13 @@ class TicketUpdateView(LoginRequiredMixin, UpdateView):
         # Compare and record audit changes
         changes = []
         if old_status != new_status:
-            changes.append(f"สถานะเปลี่ยนจาก '{old_ticket.get_status_display()}' เป็น '{self.object.get_status_display()}'")
+            changes.append(f"Status changed from '{old_ticket.get_status_display()}' to '{self.object.get_status_display()}'")
         if old_priority != self.object.priority:
-            changes.append(f"ความสำคัญเปลี่ยนจาก '{old_ticket.get_priority_display()}' เป็น '{self.object.get_priority_display()}'")
+            changes.append(f"Priority changed from '{old_ticket.get_priority_display()}' to '{self.object.get_priority_display()}'")
         if old_assignee != self.object.assigned_to:
-            old_name = old_assignee.username if old_assignee else "ยังไม่ได้มอบหมาย"
-            new_name = self.object.assigned_to.username if self.object.assigned_to else "ยังไม่ได้มอบหมาย"
-            changes.append(f"ผู้รับผิดชอบเปลี่ยนจาก '{old_name}' เป็น '{new_name}'")
+            old_name = old_assignee.username if old_assignee else "Not Assigned"
+            new_name = self.object.assigned_to.username if self.object.assigned_to else "Not Assigned"
+            changes.append(f"Assignee changed from '{old_name}' to '{new_name}'")
 
         if changes:
             TicketAuditLog.objects.create(
@@ -1070,7 +1070,7 @@ class TicketDetailView(LoginRequiredMixin, DetailView):
         user = self.request.user
         if not user.is_superuser and user.role != CustomUser.SYSTEM_ADMIN:
             if not user.company or obj.company_id not in user.company.get_all_subsidiary_ids():
-                raise PermissionDenied("คุณไม่มีสิทธิ์ดูรายละเอียด Ticket ของบริษัทอื่น")
+                raise PermissionDenied("You do not have permission to view this ticket.")
         return obj
 
     def get_context_data(self, **kwargs):
@@ -1093,19 +1093,19 @@ class TicketDetailView(LoginRequiredMixin, DetailView):
         for f in files:
             if f.size > max_size:
                 size_mb = f.size / (1024 * 1024)
-                messages.error(request, f"ไม่สามารถส่งความคิดเห็นได้: ไฟล์ '{f.name}' มีขนาดเกิน 10 MB (ขนาดไฟล์คือ {size_mb:.1f} MB)")
+                messages.error(request, f"Unable to post comment: File '{f.name}' exceeds 10 MB (your file is {size_mb:.1f} MB)")
                 return redirect('ticket_detail', pk=self.object.id)
 
         if content or files:
             comment = TicketComment.objects.create(
                 ticket=self.object,
                 author=request.user,
-                content=content or "(แนบไฟล์ประกอบ)"
+                content=content or "(attachment attached)"
             )
             TicketAuditLog.objects.create(
                 ticket=self.object,
                 actor=request.user,
-                details=f"💬 เพิ่มความคิดเห็น: \"{comment.content[:100]}\""
+                details=f"💬 Posted comment: \"{comment.content[:100]}\""
             )
 
             from .models import CommentAttachment
@@ -1118,9 +1118,9 @@ class TicketDetailView(LoginRequiredMixin, DetailView):
                 )
             # Send email notifications to stakeholders
             self.send_comment_notifications(comment)
-            messages.success(request, "โพสต์ความคิดเห็นและแนบไฟล์เรียบร้อยแล้ว")
+            messages.success(request, "Comment posted and files attached successfully.")
         else:
-            messages.success(request, 'เพิ่มความคิดเห็นเรียบร้อยแล้ว')
+            messages.success(request, "Comment posted successfully.")
         return redirect('ticket_detail', pk=self.object.pk)
 
     def send_comment_notifications(self, comment):
@@ -1140,18 +1140,18 @@ class TicketDetailView(LoginRequiredMixin, DetailView):
         if not recipients:
             return
             
-        subject = f"[TicketSolve] ความคิดเห็นใหม่ใน Ticket #{ticket.id}: {ticket.title}"
+        subject = f"[TicketSolve] New Comment on Ticket #{ticket.id}: {ticket.title}"
         message_body = (
-            f"สวัสดีครับ,\n\n"
-            f"มีการแสดงความคิดเห็นใหม่ใน Ticket #{ticket.id} ({ticket.title})\n\n"
-            f"โดย: {comment.author.username} ({comment.author.get_role_display()})\n"
-            f"ข้อความ:\n"
+            f"Hello,\n\n"
+            f"A new comment has been added to Ticket #{ticket.id} ({ticket.title})\n\n"
+            f"By: {comment.author.username} ({comment.author.get_role_display()})\n"
+            f"Message:\n"
             f"----------------------------------------\n"
             f"{comment.content}\n"
             f"----------------------------------------\n\n"
-            f"คุณสามารถดูรายละเอียดและตอบกลับได้ที่: http://127.0.0.1:8000/ticket/{ticket.id}/\n\n"
-            f"ขอบคุณครับ,\n"
-            f"ระบบ TicketSolve"
+            f"You can view the details and reply at: http://127.0.0.1:8000/ticket/{ticket.id}/\n\n"
+            f"Best regards,\n"
+            f"TicketSolve System"
         )
         
         connection = get_smtp_connection()
@@ -1169,7 +1169,7 @@ class TicketDetailView(LoginRequiredMixin, DetailView):
                     message=message_body,
                     action_type=EmailLog.ACTION_COMMENT_ADDED,
                     success=False,
-                    error_message="ข้ามการส่งตามกฎตั้งค่าการแจ้งเตือนของผู้รับ/บริษัท (Notification Filtered)"
+                    error_message="Filtered out by recipient/company notification rules (Notification Filtered)"
                 )
                 continue
 
@@ -1349,10 +1349,10 @@ class TicketDeleteManagementView(LoginRequiredMixin, SystemStaffRequiredMixin, V
             'companies': Company.objects.all().order_by('name'),
             'years_list': years_list,
             'months_list': [
-                (1, 'มกราคม (Jan)'), (2, 'กุมภาพันธ์ (Feb)'), (3, 'มีนาคม (Mar)'),
-                (4, 'เมษายน (Apr)'), (5, 'พฤษภาคม (May)'), (6, 'มิถุนายน (Jun)'),
-                (7, 'กรกฎาคม (Jul)'), (8, 'สิงหาคม (Aug)'), (9, 'กันยายน (Sep)'),
-                (10, 'ตุลาคม (Oct)'), (11, 'พฤศจิกายน (Nov)'), (12, 'ธันวาคม (Dec)')
+                (1, 'January'), (2, 'February'), (3, 'March'),
+                (4, 'April'), (5, 'May'), (6, 'June'),
+                (7, 'July'), (8, 'August'), (9, 'September'),
+                (10, 'October'), (11, 'November'), (12, 'December')
             ],
             'selected_company_id': int(company_id) if (company_id and company_id.isdigit()) else '',
             'selected_year': int(year) if (year and year.isdigit()) else '',
@@ -1380,17 +1380,17 @@ class TicketDeleteManagementView(LoginRequiredMixin, SystemStaffRequiredMixin, V
 
             id_summary = ", ".join([f"#{t.id}" for t in tickets_to_delete[:10]])
             if count > 10:
-                id_summary += f" และอื่นๆ อีก {count - 10} รายการ"
+                id_summary += f" and {count - 10} others"
 
             tickets_to_delete.delete()
             deleted_mb = deleted_bytes / (1024 ** 2)
             messages.success(
                 request,
-                f"ลบ Ticket จำนวน {count} รายการ ({id_summary}) สำเร็จ "
-                f"คืนพื้นที่จากไฟล์แนบ {deleted_mb:.2f} MB"
+                f"Successfully deleted {count} ticket(s) ({id_summary}) "
+                f"and freed {deleted_mb:.2f} MB of attachment storage."
             )
         else:
-            messages.warning(request, "กรุณาเลือก Ticket ที่ต้องการลบอย่างน้อย 1 รายการ")
+            messages.warning(request, "Please select at least 1 ticket to delete.")
 
         redirect_url = reverse('ticket_delete_manage')
         query_params = request.GET.urlencode()
@@ -1412,8 +1412,8 @@ class TicketDeleteView(LoginRequiredMixin, SystemStaffRequiredMixin, View):
         deleted_mb = deleted_bytes / (1024 ** 2)
         messages.success(
             request,
-            f"ลบ Ticket #{ticket_id} ('{ticket_title}') เรียบร้อยแล้ว "
-            f"คืนพื้นที่จากไฟล์แนบ {deleted_mb:.2f} MB"
+            f"Deleted ticket #{ticket_id} ('{ticket_title}') successfully "
+            f"and freed {deleted_mb:.2f} MB of attachment storage."
         )
         next_url = request.POST.get('next') or reverse('dashboard')
         return redirect(next_url)
@@ -1432,7 +1432,7 @@ class ConfirmDeploymentView(LoginRequiredMixin, View):
 
         if not user.is_superuser and user.role != CustomUser.SYSTEM_ADMIN:
             if not user.company or ticket.company_id not in user.company.get_all_subsidiary_ids():
-                raise PermissionDenied("คุณไม่มีสิทธิ์เข้าถึงหรือยืนยันการ Deploy งานของบริษัทอื่น")
+                raise PermissionDenied("You do not have permission to deploy tickets for another company.")
 
         if ticket.status == Ticket.STATUS_DEPLOYMENT_REQUESTED:
             old_status = ticket.status
@@ -1444,13 +1444,13 @@ class ConfirmDeploymentView(LoginRequiredMixin, View):
                 actor=user,
                 old_status=old_status,
                 new_status=ticket.status,
-                details=f"ยืนยันการอนุมัติให้ Deploy งานเรียบร้อยโดย {user.username} (สถานะเปลี่ยนเป็น Ready to Deploy)"
+                details=f"Deployment approved by {user.username} (Status changed to Ready to Deploy)"
             )
-            messages.success(request, f"⚡ ยืนยันการอนุมัติ Deploy งานสำหรับ Ticket #{ticket.id} เรียบร้อยแล้ว (สถานะเปลี่ยนเป็น Ready to Deploy)")
+            messages.success(request, f"⚡ Deployment approved for Ticket #{ticket.id} (Status changed to Ready to Deploy)")
         elif ticket.status == Ticket.STATUS_READY_TO_DEPLOY:
-            messages.info(request, f"Ticket #{ticket.id} อยู่ในสถานะ Ready to Deploy เรียบร้อยแล้ว")
+            messages.info(request, f"Ticket #{ticket.id} is already in Ready to Deploy status.")
         else:
-            messages.warning(request, f"Ticket #{ticket.id} ไม่อยู่ในสถานะ Production Deployment Request (สถานะปัจจุบันคือ '{ticket.get_status_display()}')")
+            messages.warning(request, f"Ticket #{ticket.id} is not in Production Deployment Request status (current: '{ticket.get_status_display()}')")
 
 
         return redirect('ticket_detail', pk=ticket.id)
@@ -1469,7 +1469,7 @@ class ResendEmailView(LoginRequiredMixin, SystemStaffRequiredMixin, View):
             if not log.success and not _is_filtered_email_log(log)
         ]
         if not retry_logs:
-            messages.info(request, "รายการนี้ไม่มีอีเมลที่ล้มเหลวและต้องส่งซ้ำ")
+            messages.info(request, "There are no failed emails to retry in this log.")
             return redirect(request.META.get('HTTP_REFERER') or reverse('log_list'))
 
         to_recipients = [
@@ -1506,7 +1506,7 @@ class ResendEmailView(LoginRequiredMixin, SystemStaffRequiredMixin, View):
                 log.error_message = ""
                 log.sent_at = resent_at
             EmailLog.objects.bulk_update(retry_logs, ['success', 'error_message', 'sent_at'])
-            messages.success(request, f"🔄 ส่งอีเมลซ้ำสำเร็จ {len(retry_logs)} ผู้รับ")
+            messages.success(request, f"🔄 Resent emails to {len(retry_logs)} recipient(s) successfully.")
         else:
             attempted_at = timezone.now()
             for log in retry_logs:
@@ -1514,7 +1514,7 @@ class ResendEmailView(LoginRequiredMixin, SystemStaffRequiredMixin, View):
                 log.error_message = err_msg
                 log.sent_at = attempted_at
             EmailLog.objects.bulk_update(retry_logs, ['success', 'error_message', 'sent_at'])
-            messages.error(request, f"❌ ส่งอีเมลซ้ำไม่สำเร็จ: {err_msg}")
+            messages.error(request, f"❌ Email retry failed: {err_msg}")
 
         next_url = request.POST.get('next') or request.META.get('HTTP_REFERER') or reverse('dashboard')
         return redirect(next_url)
@@ -1582,12 +1582,12 @@ class UserUpdateView(LoginRequiredMixin, AdminRequiredMixin, UpdateView):
             if user.role == CustomUser.CLIENT_ADMIN:
                 sub_ids = user.company.get_all_subsidiary_ids() if user.company else []
                 if obj.company_id not in sub_ids:
-                    raise PermissionDenied("คุณไม่มีสิทธิ์จัดการบัญชีผู้ใช้งานของบริษัทอื่น")
+                    raise PermissionDenied("You do not have permission to manage accounts for other companies.")
                 if obj.role in [CustomUser.SYSTEM_ADMIN, CustomUser.SYSTEM_SUB_ADMIN]:
-                    raise PermissionDenied("คุณไม่มีสิทธิ์แก้ไขบัญชีผู้ดูแลระบบส่วนกลาง")
+                    raise PermissionDenied("You do not have permission to modify a central administrator account.")
             elif user.role == CustomUser.SYSTEM_SUB_ADMIN:
                 if obj.role in [CustomUser.SYSTEM_ADMIN, CustomUser.SYSTEM_SUB_ADMIN]:
-                    raise PermissionDenied("คุณไม่มีสิทธิ์แก้ไขบัญชีผู้ดูแลระบบส่วนกลาง")
+                    raise PermissionDenied("You do not have permission to modify a central administrator account.")
         return obj
 
     def form_valid(self, form):
@@ -1926,15 +1926,15 @@ def get_report_context(user, company_id=None):
 
 
 def _monthly_report_email_content(context):
-    subject = f"[TicketSolve] รายงานสรุปสถานะการแจ้งปัญหารายเดือน - {context['company_name']}"
+    subject = f"[TicketSolve] Monthly Ticket Summary Report - {context['company_name']}"
     body = (
-        f"เรียน ทีมงาน / พนักงาน {context['company_name']},\n\n"
-        f"ระบบ TicketSolve ได้ออกรายงานสรุปสถานะการแจ้งปัญหารอบประจำเดือน {context['month_name']} เรียบร้อยแล้ว\n"
-        f"ผู้ส่งรายงาน: {context['actor_name']} ({context['actor_role']})\n"
-        f"จำนวนเคสทั้งหมดประจำเดือนนี้: {context['tickets_count']} รายการ (แก้ไขเสร็จสิ้น {context['done_count']} รายการ)\n\n"
-        f"รายละเอียดเพิ่มเติมกรุณาเปิดไฟล์ PDF รายงานแนบฉบับนี้\n\n"
-        f"ขอแสดงความนับถือ,\n"
-        f"ทีมสนับสนุนระบบ TicketSolve"
+        f"Dear {context['company_name']} Team,\n\n"
+        f"The TicketSolve system has compiled the monthly ticket summary report for {context['month_name']}.\n"
+        f"Report generated by: {context['actor_name']} ({context['actor_role']})\n"
+        f"Total tickets this month: {context['tickets_count']} (Resolved: {context['done_count']})\n\n"
+        f"Please find the detailed PDF summary report attached to this email.\n\n"
+        f"Best regards,\n"
+        f"TicketSolve Support Team"
     )
     return subject, body
 
@@ -1964,12 +1964,12 @@ def send_scheduled_monthly_report(schedule):
     """Generate and send one saved schedule. Raises on delivery failure."""
     actor = schedule.created_by
     if not actor:
-        raise ValueError('ไม่พบผู้สร้างตารางส่ง กรุณาแก้ไขและบันทึกรายการใหม่')
+        raise ValueError('Report creator not found. Please edit and save the schedule again.')
 
     context = get_report_context(actor, schedule.company_id)
     pdf_bytes = generate_pdf('tickets/report_pdf_template.html', context)
     if not pdf_bytes:
-        raise RuntimeError('ไม่สามารถสร้างไฟล์รายงาน PDF ได้')
+        raise RuntimeError('Unable to generate monthly report PDF file.')
 
     recipient_emails = list(dict.fromkeys(
         schedule.recipients.exclude(email='').values_list('email', flat=True)
@@ -1979,7 +1979,7 @@ def send_scheduled_monthly_report(schedule):
     ))
     cc_emails = [email for email in cc_emails if email not in recipient_emails]
     if not recipient_emails:
-        raise ValueError('ตารางส่งไม่มีผู้รับหลักที่มีอีเมล')
+        raise ValueError('Report schedule does not have any primary recipients with emails.')
 
     subject, body = _monthly_report_email_content(context)
     connection, from_email = _smtp_delivery_options(schedule.smtp_configuration)
@@ -1998,7 +1998,7 @@ def send_scheduled_monthly_report(schedule):
     try:
         sent_count = email.send(fail_silently=False)
         if sent_count <= 0:
-            raise RuntimeError('SMTP ไม่ยืนยันการส่งอีเมล (ส่งได้ 0 ฉบับ)')
+            raise RuntimeError('SMTP did not confirm email delivery (sent 0).')
     except Exception as exc:
         for recipient_type, addresses in (
             (EmailLog.RECIPIENT_TO, recipient_emails),
@@ -2242,10 +2242,10 @@ class SendMonthlyReportView(LoginRequiredMixin, AdminRequiredMixin, View):
                         success=True,
                     )
 
-            cc_label = f" และ CC {len(cc_emails)} บัญชี" if cc_emails else ""
-            messages.success(request, f"จัดส่งรายงานประจำเดือนให้ {target_label} (ผู้รับหลัก {len(recipient_emails)} บัญชี{cc_label}) สำเร็จเรียบร้อยแล้ว!")
+            cc_label = f" and CC {len(cc_emails)} account(s)" if cc_emails else ""
+            messages.success(request, f"Monthly report successfully sent to {target_label} (Primary: {len(recipient_emails)} recipient(s){cc_label})!")
         except Exception as e:
-            messages.error(request, f"เกิดข้อผิดพลาดในการส่งอีเมล: {str(e)}")
+            messages.error(request, f"Error sending monthly report email: {str(e)}")
             for recipient_type, addresses in (
                 (EmailLog.RECIPIENT_TO, recipient_emails),
                 (EmailLog.RECIPIENT_CC, cc_emails),
@@ -2270,7 +2270,7 @@ def _get_manageable_schedule(request, pk):
     user = request.user
     if not (user.is_superuser or user.role in [CustomUser.SYSTEM_ADMIN, CustomUser.SYSTEM_SUB_ADMIN]):
         if schedule.company_id != getattr(user.company, 'id', None):
-            raise PermissionDenied('คุณไม่มีสิทธิ์จัดการตารางส่งของบริษัทอื่น')
+            raise PermissionDenied("You do not have permission to manage another company's report schedules.")
     return schedule
 
 
@@ -2297,7 +2297,7 @@ class MonthlyReportScheduleSaveView(LoginRequiredMixin, AdminRequiredMixin, View
                 schedule.created_by = request.user
             schedule.save()
             form.save_m2m()
-            messages.success(request, f"บันทึกตารางส่งอัตโนมัติ ‘{schedule.name}’ เรียบร้อยแล้ว")
+            messages.success(request, f"Successfully saved automated schedule '{schedule.name}'.")
             redirect_url = reverse('monthly_report')
             if schedule.company_id:
                 redirect_url += f"?company_id={schedule.company_id}"
@@ -2306,7 +2306,7 @@ class MonthlyReportScheduleSaveView(LoginRequiredMixin, AdminRequiredMixin, View
         error_text = ' '.join(
             str(error) for errors in form.errors.values() for error in errors
         )
-        messages.error(request, f"บันทึกตารางส่งไม่สำเร็จ: {error_text}")
+        messages.error(request, f"Failed to save automated schedule: {error_text}")
         redirect_url = reverse('monthly_report')
         if company:
             redirect_url += f"?company_id={company.id}"
@@ -2318,8 +2318,8 @@ class MonthlyReportScheduleToggleView(LoginRequiredMixin, AdminRequiredMixin, Vi
         schedule = _get_manageable_schedule(request, pk)
         schedule.is_active = not schedule.is_active
         schedule.save(update_fields=['is_active', 'updated_at'])
-        status_label = 'เปิดใช้งาน' if schedule.is_active else 'หยุดใช้งาน'
-        messages.success(request, f"{status_label}ตาราง ‘{schedule.name}’ แล้ว")
+        status_label = 'Enabled' if schedule.is_active else 'Disabled'
+        messages.success(request, f"Successfully {status_label.lower()} schedule '{schedule.name}'.")
         return redirect('monthly_report')
 
 
@@ -2328,7 +2328,7 @@ class MonthlyReportScheduleDeleteView(LoginRequiredMixin, AdminRequiredMixin, Vi
         schedule = _get_manageable_schedule(request, pk)
         name = schedule.name
         schedule.delete()
-        messages.success(request, f"ลบตารางส่ง ‘{name}’ แล้ว")
+        messages.success(request, f"Successfully deleted schedule '{name}'.")
         return redirect('monthly_report')
 
 
@@ -2363,7 +2363,7 @@ class SystemSettingsView(LoginRequiredMixin, SuperuserOrSystemAdminRequiredMixin
 
         if form.is_valid():
             form.save()
-            messages.success(request, "บันทึกการตั้งค่า SMTP สำเร็จเรียบร้อยแล้ว!")
+            messages.success(request, "Outbound SMTP settings saved successfully!")
             return redirect('system_settings')
         
         # If invalid, re-render context
@@ -2377,7 +2377,7 @@ class SMTPToggleActiveView(LoginRequiredMixin, SuperuserOrSystemAdminRequiredMix
         config = get_object_or_404(SMTPConfiguration, pk=pk)
         config.is_active = not config.is_active
         config.save()
-        messages.success(request, f"เปลี่ยนสถานะการใช้งานของ '{config.name}' เรียบร้อยแล้ว!")
+        messages.success(request, f"Successfully changed activation status of '{config.name}'!")
         return redirect('system_settings')
 
 
@@ -2386,19 +2386,11 @@ class SMTPDeleteView(LoginRequiredMixin, SuperuserOrSystemAdminRequiredMixin, Vi
         config = get_object_or_404(SMTPConfiguration, pk=pk)
         name = config.name
         config.delete()
-        messages.success(request, f"ลบการตั้งค่า '{name}' เรียบร้อยแล้ว!")
+        messages.success(request, f"Deleted SMTP configuration '{name}' successfully!")
         return redirect('system_settings')
 
 
 from django.http import HttpResponseRedirect
-
-def set_language_view(request):
-    lang = request.GET.get('lang', 'th')
-    if lang not in ['th', 'en']:
-        lang = 'th'
-    response = HttpResponseRedirect(request.META.get('HTTP_REFERER', '/'))
-    response.set_cookie('lang', lang, max_age=365*24*60*60)
-    return response
 
 
 # Category & Resolution Management Views
@@ -2483,13 +2475,13 @@ class TicketCategoryCreateView(LoginRequiredMixin, AdminRequiredMixin, CreateVie
         user = self.request.user
         if not user.is_superuser and user.role not in [CustomUser.SYSTEM_ADMIN, CustomUser.SYSTEM_SUB_ADMIN]:
             form.instance.company = user.company
-        messages.success(self.request, f"เพิ่มหมวดหมู่ '{form.instance.name}' เรียบร้อยแล้ว!")
+        messages.success(self.request, f"Category '{form.instance.name}' added successfully!")
         return super().form_valid(form)
 
     def form_invalid(self, form):
         for field, errors in form.errors.items():
             for error in errors:
-                messages.error(self.request, f"ไม่สามารถสร้างหมวดหมู่ปัญหาได้ ({field}): {error}")
+                messages.error(self.request, f"Unable to create ticket category ({field}): {error}")
         return redirect('category_list')
 
 
@@ -2505,17 +2497,17 @@ class TicketCategoryUpdateView(LoginRequiredMixin, AdminRequiredMixin, UpdateVie
         user = self.request.user
         if not user.is_superuser and user.role not in [CustomUser.SYSTEM_ADMIN, CustomUser.SYSTEM_SUB_ADMIN]:
             if obj.company != user.company:
-                raise PermissionDenied("คุณไม่มีสิทธิ์แก้ไขหมวดหมู่ของบริษัทอื่นหรือหมวดหมู่ส่วนกลาง")
+                raise PermissionDenied("You do not have permission to edit this category.")
         return obj
 
     def form_valid(self, form):
-        messages.success(self.request, f"บันทึกการแก้ไขหมวดหมู่ '{form.instance.name}' เรียบร้อยแล้ว!")
+        messages.success(self.request, f"Category '{form.instance.name}' updated successfully!")
         return super().form_valid(form)
 
     def form_invalid(self, form):
         for field, errors in form.errors.items():
             for error in errors:
-                messages.error(self.request, f"ไม่สามารถแก้ไขหมวดหมู่ปัญหาได้ ({field}): {error}")
+                messages.error(self.request, f"Unable to edit category ({field}): {error}")
         return redirect('category_list')
 
 
@@ -2525,10 +2517,10 @@ class TicketCategoryDeleteView(LoginRequiredMixin, AdminRequiredMixin, View):
         user = request.user
         if not user.is_superuser and user.role not in [CustomUser.SYSTEM_ADMIN, CustomUser.SYSTEM_SUB_ADMIN]:
             if cat.company != user.company:
-                raise PermissionDenied("คุณไม่มีสิทธิ์ลบหมวดหมู่ของบริษัทอื่น")
+                raise PermissionDenied("You do not have permission to delete this category.")
         name = cat.name
         cat.delete()
-        messages.success(request, f"ลบหมวดหมู่ '{name}' เรียบร้อยแล้ว!")
+        messages.success(request, f"Deleted category '{name}' successfully!")
         return redirect('category_list')
 
 
@@ -2541,13 +2533,13 @@ class ResolutionCategoryCreateView(LoginRequiredMixin, AdminRequiredMixin, Creat
         user = self.request.user
         if not user.is_superuser and user.role not in [CustomUser.SYSTEM_ADMIN, CustomUser.SYSTEM_SUB_ADMIN]:
             form.instance.company = user.company
-        messages.success(self.request, f"เพิ่มหมวดหมู่การแก้ปัญหา '{form.instance.name}' เรียบร้อยแล้ว!")
+        messages.success(self.request, f"Resolution category '{form.instance.name}' added successfully!")
         return super().form_valid(form)
 
     def form_invalid(self, form):
         for field, errors in form.errors.items():
             for error in errors:
-                messages.error(self.request, f"ไม่สามารถสร้างหมวดหมู่การแก้ปัญหาได้ ({field}): {error}")
+                messages.error(self.request, f"Unable to create resolution category ({field}): {error}")
         return redirect('category_list')
 
 
@@ -2561,17 +2553,17 @@ class ResolutionCategoryUpdateView(LoginRequiredMixin, AdminRequiredMixin, Updat
         user = self.request.user
         if not user.is_superuser and user.role not in [CustomUser.SYSTEM_ADMIN, CustomUser.SYSTEM_SUB_ADMIN]:
             if obj.company != user.company:
-                raise PermissionDenied("คุณไม่มีสิทธิ์แก้ไขหมวดหมู่การแก้ปัญหาของบริษัทอื่นหรือหมวดหมู่ส่วนกลาง")
+                raise PermissionDenied("You do not have permission to edit this resolution category.")
         return obj
 
     def form_valid(self, form):
-        messages.success(self.request, f"บันทึกการแก้ไขหมวดหมู่การแก้ปัญหา '{form.instance.name}' เรียบร้อยแล้ว!")
+        messages.success(self.request, f"Resolution category '{form.instance.name}' updated successfully!")
         return super().form_valid(form)
 
     def form_invalid(self, form):
         for field, errors in form.errors.items():
             for error in errors:
-                messages.error(self.request, f"ไม่สามารถแก้ไขหมวดหมู่การแก้ปัญหาได้ ({field}): {error}")
+                messages.error(self.request, f"Unable to edit resolution category ({field}): {error}")
         return redirect('category_list')
 
 
@@ -2582,10 +2574,10 @@ class ResolutionCategoryDeleteView(LoginRequiredMixin, AdminRequiredMixin, View)
         user = request.user
         if not user.is_superuser and user.role not in [CustomUser.SYSTEM_ADMIN, CustomUser.SYSTEM_SUB_ADMIN]:
             if cat.company != user.company:
-                raise PermissionDenied("คุณไม่มีสิทธิ์ลบหมวดหมู่การแก้ปัญหาของบริษัทอื่น")
+                raise PermissionDenied("You do not have permission to delete this resolution category.")
         name = cat.name
         cat.delete()
-        messages.success(request, f"ลบหมวดหมู่การแก้ปัญหา '{name}' เรียบร้อยแล้ว!")
+        messages.success(request, f"Deleted resolution category '{name}' successfully!")
         return redirect('category_list')
 
 
@@ -2599,13 +2591,13 @@ class ModuleCategoryCreateView(LoginRequiredMixin, AdminRequiredMixin, CreateVie
         form.instance.is_active = True
         if not user.is_superuser and user.role not in [CustomUser.SYSTEM_ADMIN, CustomUser.SYSTEM_SUB_ADMIN]:
             form.instance.company = user.company
-        messages.success(self.request, f"เพิ่มหมวดหมู่โมดูล '{form.instance.name}' เรียบร้อยแล้ว!")
+        messages.success(self.request, f"Module category '{form.instance.name}' added successfully!")
         return super().form_valid(form)
 
     def form_invalid(self, form):
         for field, errors in form.errors.items():
             for error in errors:
-                messages.error(self.request, f"ไม่สามารถสร้างหมวดหมู่โมดูลได้ ({field}): {error}")
+                messages.error(self.request, f"Unable to create module category ({field}): {error}")
         return redirect('category_list')
 
 
@@ -2619,17 +2611,17 @@ class ModuleCategoryUpdateView(LoginRequiredMixin, AdminRequiredMixin, UpdateVie
         user = self.request.user
         if not user.is_superuser and user.role not in [CustomUser.SYSTEM_ADMIN, CustomUser.SYSTEM_SUB_ADMIN]:
             if obj.company != user.company:
-                raise PermissionDenied("คุณไม่มีสิทธิ์แก้ไขหมวดหมู่โมดูลของบริษัทอื่นหรือหมวดหมู่ส่วนกลาง")
+                raise PermissionDenied("You do not have permission to edit this module category.")
         return obj
 
     def form_valid(self, form):
-        messages.success(self.request, f"บันทึกการแก้ไขหมวดหมู่โมดูล '{form.instance.name}' เรียบร้อยแล้ว!")
+        messages.success(self.request, f"Module category '{form.instance.name}' updated successfully!")
         return super().form_valid(form)
 
     def form_invalid(self, form):
         for field, errors in form.errors.items():
             for error in errors:
-                messages.error(self.request, f"ไม่สามารถแก้ไขหมวดหมู่โมดูลได้ ({field}): {error}")
+                messages.error(self.request, f"Unable to edit module category ({field}): {error}")
         return redirect('category_list')
 
 
@@ -2639,10 +2631,10 @@ class ModuleCategoryDeleteView(LoginRequiredMixin, AdminRequiredMixin, View):
         user = request.user
         if not user.is_superuser and user.role not in [CustomUser.SYSTEM_ADMIN, CustomUser.SYSTEM_SUB_ADMIN]:
             if cat.company != user.company:
-                raise PermissionDenied("คุณไม่มีสิทธิ์ลบหมวดหมู่โมดูลของบริษัทอื่น")
+                raise PermissionDenied("You do not have permission to delete this module category.")
         name = cat.name
         cat.delete()
-        messages.success(request, f"ลบหมวดหมู่โมดูล '{name}' เรียบร้อยแล้ว!")
+        messages.success(request, f"Deleted module category '{name}' successfully!")
         return redirect('category_list')
 
 
@@ -2657,7 +2649,7 @@ class CompanyTicketDesignView(LoginRequiredMixin, AdminRequiredMixin, View):
         elif user.company:
             return user.company
         else:
-            raise PermissionDenied("กรุณาระบุบริษัทที่ต้องการดีไซน์ฟอร์ม Ticket")
+            raise PermissionDenied("Please select a company to design tickets.")
 
     def get(self, request, pk=None):
         from .models import CompanyTicketField
@@ -2693,9 +2685,9 @@ class CompanyTicketDesignView(LoginRequiredMixin, AdminRequiredMixin, View):
                 else:
                     obj.options = []
                 obj.save()
-                messages.success(request, f"เพิ่มฟิลด์เสริม '{obj.label}' เรียบร้อยแล้ว!")
+                messages.success(request, f"Added custom field '{obj.label}' successfully!")
             else:
-                messages.error(request, "เกิดข้อผิดพลาดในการเพิ่มฟิลด์เสริม กรุณาตรวจสอบข้อมูล")
+                messages.error(request, "Error adding custom field. Please review form input.")
 
         elif action == 'move_field':
             field_id = request.POST.get('field_id')
@@ -2709,20 +2701,20 @@ class CompanyTicketDesignView(LoginRequiredMixin, AdminRequiredMixin, View):
                 field_obj.order, prev_field.order = prev_field.order, field_obj.order
                 field_obj.save()
                 prev_field.save()
-                messages.success(request, f"ขยับลำดับฟิลด์ '{field_obj.label}' ขึ้นเรียบร้อยแล้ว")
+                messages.success(request, f"Moved custom field '{field_obj.label}' up successfully.")
             elif direction == 'down' and idx < len(fields) - 1:
                 next_field = fields[idx + 1]
                 field_obj.order, next_field.order = next_field.order, field_obj.order
                 field_obj.save()
                 next_field.save()
-                messages.success(request, f"ขยับลำดับฟิลด์ '{field_obj.label}' ลงเรียบร้อยแล้ว")
+                messages.success(request, f"Moved custom field '{field_obj.label}' down successfully.")
 
         elif action == 'delete_custom_field':
             field_id = request.POST.get('field_id')
             field_obj = get_object_or_404(CompanyTicketField, id=field_id, company=company, is_custom=True)
             lbl = field_obj.label
             field_obj.delete()
-            messages.success(request, f"ลบฟิลด์เสริม '{lbl}' เรียบร้อยแล้ว")
+            messages.success(request, f"Deleted custom field '{lbl}' successfully.")
 
         elif action == 'update_config_and_fields':
             config_form = CompanyTicketConfigForm(request.POST, instance=config)
@@ -2747,7 +2739,7 @@ class CompanyTicketDesignView(LoginRequiredMixin, AdminRequiredMixin, View):
                         pass
                 f_obj.save()
 
-            messages.success(request, f"บันทึกการตั้งค่าและดีไซน์ Ticket ของบริษัท {company.name} เรียบร้อยแล้ว!")
+            messages.success(request, f"Ticket configurations and design saved for {company.name} successfully!")
 
         if pk:
             return redirect('company_ticket_design_pk', pk=company.id)
@@ -2759,7 +2751,7 @@ class NotificationConfigForm(forms.ModelForm):
         choices=Ticket.STATUS_CHOICES,
         widget=forms.CheckboxSelectMultiple,
         required=False,
-        label="เลือกสถานะ Ticket ที่ต้องการทริกเกอร์แจ้งเตือน"
+        label="Select Ticket Statuses to Trigger Notification"
     )
 
     class Meta:
@@ -2853,7 +2845,7 @@ class NotificationConfigCreateView(LoginRequiredMixin, CreateView):
         return context
 
     def form_valid(self, form):
-        messages.success(self.request, f"สร้างกฎการตั้งค่าแจ้งเตือน '{form.instance.name}' เรียบร้อยแล้ว!")
+        messages.success(self.request, f"Created notification configuration rule '{form.instance.name}' successfully!")
         return super().form_valid(form)
 
 
@@ -2893,7 +2885,7 @@ class NotificationConfigUpdateView(LoginRequiredMixin, UpdateView):
         return context
 
     def form_valid(self, form):
-        messages.success(self.request, f"บันทึกการแก้ไขกฎแจ้งเตือน '{form.instance.name}' เรียบร้อยแล้ว!")
+        messages.success(self.request, f"Notification configuration rule '{form.instance.name}' updated successfully!")
         return super().form_valid(form)
 
 
@@ -2912,7 +2904,7 @@ class NotificationConfigDeleteView(LoginRequiredMixin, View):
         config = get_object_or_404(qs, pk=pk)
         name = config.name
         config.delete()
-        messages.success(request, f"ลบกฎการตั้งค่าแจ้งเตือน '{name}' เรียบร้อยแล้ว!")
+        messages.success(request, f"Deleted notification configuration rule '{name}' successfully!")
         return redirect('notification_config_list')
 
 
@@ -2974,7 +2966,7 @@ class TicketAutomationCreateView(LoginRequiredMixin, SystemStaffRequiredMixin, C
 
     def form_valid(self, form):
         form.instance.created_by = self.request.user
-        messages.success(self.request, 'บันทึก Ticket Auto Schedule เรียบร้อยแล้ว')
+        messages.success(self.request, 'Ticket Auto Schedule saved successfully.')
         return super().form_valid(form)
 
 
@@ -2993,7 +2985,7 @@ class TicketAutomationUpdateView(LoginRequiredMixin, SystemStaffRequiredMixin, U
         return kwargs
 
     def form_valid(self, form):
-        messages.success(self.request, 'อัปเดต Ticket Auto Schedule เรียบร้อยแล้ว')
+        messages.success(self.request, 'Ticket Auto Schedule updated successfully.')
         return super().form_valid(form)
 
 
@@ -3002,7 +2994,7 @@ class TicketAutomationDeleteView(LoginRequiredMixin, SystemStaffRequiredMixin, V
         queryset = TicketAutomationListView.get_queryset(self)
         config = get_object_or_404(queryset, pk=pk)
         config.delete()
-        messages.success(request, 'ลบ Ticket Auto Schedule เรียบร้อยแล้ว')
+        messages.success(request, 'Ticket Auto Schedule deleted successfully.')
         return redirect('ticket_automation_list')
 
 

@@ -21,13 +21,13 @@ class Company(models.Model):
         from django.core.exceptions import ValidationError
         if self.parent:
             if self.pk and self.parent_id == self.pk:
-                raise ValidationError({'parent': "บริษัทไม่สามารถตั้งค่าตัวเองเป็นบริษัทแม่ได้"})
+                raise ValidationError({'parent': "A company cannot set itself as its own parent."})
             
             # Check for circular reference
             curr = self.parent
             while curr:
                 if self.pk and curr.pk == self.pk:
-                    raise ValidationError({'parent': "ไม่สามารถเลือกบริษัทลูกหรือหลานของบริษัทนี้มาเป็นบริษัทแม่ได้ (เกิดวงรอบวนลูป)"})
+                    raise ValidationError({'parent': "Cannot select a child or grandchild of this company as its parent (circular loop detected)."})
                 curr = curr.parent
 
     def get_all_subsidiary_ids(self):
@@ -130,7 +130,7 @@ class TicketCategory(models.Model):
         verbose_name_plural = 'Ticket Categories'
 
     def __str__(self):
-        comp = self.company.name if self.company else 'Global (ทุกบริษัท)'
+        comp = self.company.name if self.company else 'Global (All Companies)'
         return f"{self.name} [{comp}]"
 
 
@@ -151,7 +151,7 @@ class ResolutionCategory(models.Model):
         ordering = ['company', 'name']
 
     def __str__(self):
-        comp = self.company.name if self.company else 'Global (ทุกบริษัท)'
+        comp = self.company.name if self.company else 'Global (All Companies)'
         return f"{self.name} [{comp}]"
 
 
@@ -175,7 +175,7 @@ class ModuleCategory(models.Model):
         verbose_name_plural = 'Module Categories'
 
     def __str__(self):
-        comp = self.company.name if self.company else 'Global (ทุกบริษัท)'
+        comp = self.company.name if self.company else 'Global (All Companies)'
         return f"{self.name} [{comp}]"
 
 
@@ -208,9 +208,9 @@ class CompanyTicketConfig(models.Model):
         on_delete=models.CASCADE,
         related_name='ticket_config'
     )
-    ticket_prefix = models.CharField(max_length=10, blank=True, default='', help_text='เช่น ACME-, SEC-')
-    require_resolution_note = models.BooleanField(default=True, help_text='บังคับใส่รายละเอียดวิธีแก้ไขปัญหาเมื่อปิด Ticket')
-    custom_help_text = models.TextField(blank=True, default='', help_text='คำแนะนำคำอธิบายประจำฟอร์มแจ้งปัญหาของบริษัท')
+    ticket_prefix = models.CharField(max_length=10, blank=True, default='', help_text='e.g. ACME-, SEC-')
+    require_resolution_note = models.BooleanField(default=True, help_text='Require resolution note when resolving/closing ticket.')
+    custom_help_text = models.TextField(blank=True, default='', help_text='Help text guidelines displayed at the top of the ticket creation form.')
     allow_file_attachments = models.BooleanField(default=True)
 
     def __str__(self):
@@ -226,12 +226,12 @@ class CompanyTicketField(models.Model):
     FIELD_TYPE_BOOLEAN = 'BOOLEAN'
 
     FIELD_TYPE_CHOICES = [
-        (FIELD_TYPE_TEXT, 'Text Input (บรรทัดเดียว)'),
-        (FIELD_TYPE_TEXTAREA, 'Text Area (หลายบรรทัด)'),
-        (FIELD_TYPE_NUMBER, 'Number (ตัวเลข)'),
-        (FIELD_TYPE_SELECT, 'Dropdown Select (ตัวเลือก)'),
-        (FIELD_TYPE_DATE, 'Date Picker (วันที่)'),
-        (FIELD_TYPE_BOOLEAN, 'Checkbox (สวิตช์ ใช่/ไม่ใช่)'),
+        (FIELD_TYPE_TEXT, 'Text Input (Single Line)'),
+        (FIELD_TYPE_TEXTAREA, 'Text Area (Multi Line)'),
+        (FIELD_TYPE_NUMBER, 'Number'),
+        (FIELD_TYPE_SELECT, 'Dropdown Select'),
+        (FIELD_TYPE_DATE, 'Date Picker'),
+        (FIELD_TYPE_BOOLEAN, 'Checkbox (Yes/No)'),
     ]
 
     company = models.ForeignKey(
@@ -246,7 +246,7 @@ class CompanyTicketField(models.Model):
     is_required = models.BooleanField(default=True)
     is_visible = models.BooleanField(default=True)
     is_custom = models.BooleanField(default=False)
-    options = models.JSONField(default=list, blank=True, help_text='รายการตัวเลือกสำหรับ Dropdown')
+    options = models.JSONField(default=list, blank=True, help_text='Dropdown choices options list')
     order = models.IntegerField(default=0)
 
     class Meta:
@@ -261,12 +261,12 @@ class CompanyTicketField(models.Model):
         if not company:
             return
         defaults = [
-            {'field_key': 'title', 'label': 'หัวข้อปัญหา', 'field_type': cls.FIELD_TYPE_TEXT, 'placeholder': 'ระบุหัวข้อปัญหา...', 'is_required': True, 'is_visible': True, 'is_custom': False, 'order': 10},
-            {'field_key': 'description', 'label': 'รายละเอียดปัญหา', 'field_type': cls.FIELD_TYPE_TEXTAREA, 'placeholder': 'อธิบายรายละเอียดของปัญหา (ไม่บังคับ)...', 'is_required': False, 'is_visible': True, 'is_custom': False, 'order': 20},
-            {'field_key': 'priority', 'label': 'ระดับความสำคัญ', 'field_type': cls.FIELD_TYPE_SELECT, 'placeholder': '', 'is_required': True, 'is_visible': True, 'is_custom': False, 'order': 30},
-            {'field_key': 'ticket_category', 'label': 'หมวดหมู่ปัญหา', 'field_type': cls.FIELD_TYPE_SELECT, 'placeholder': '', 'is_required': True, 'is_visible': True, 'is_custom': False, 'order': 40},
-            {'field_key': 'module_category', 'label': 'หมวดหมู่โมดูล (Module Category)', 'field_type': cls.FIELD_TYPE_SELECT, 'placeholder': '', 'is_required': False, 'is_visible': True, 'is_custom': False, 'order': 45},
-            {'field_key': 'attachment', 'label': 'ไฟล์แนบประกอบ', 'field_type': cls.FIELD_TYPE_TEXT, 'placeholder': '', 'is_required': False, 'is_visible': True, 'is_custom': False, 'order': 50},
+            {'field_key': 'title', 'label': 'Title', 'field_type': cls.FIELD_TYPE_TEXT, 'placeholder': 'Enter ticket title...', 'is_required': True, 'is_visible': True, 'is_custom': False, 'order': 10},
+            {'field_key': 'description', 'label': 'Description', 'field_type': cls.FIELD_TYPE_TEXTAREA, 'placeholder': 'Describe issue details (optional)...', 'is_required': False, 'is_visible': True, 'is_custom': False, 'order': 20},
+            {'field_key': 'priority', 'label': 'Priority', 'field_type': cls.FIELD_TYPE_SELECT, 'placeholder': '', 'is_required': True, 'is_visible': True, 'is_custom': False, 'order': 30},
+            {'field_key': 'ticket_category', 'label': 'Category', 'field_type': cls.FIELD_TYPE_SELECT, 'placeholder': '', 'is_required': True, 'is_visible': True, 'is_custom': False, 'order': 40},
+            {'field_key': 'module_category', 'label': 'Module Category', 'field_type': cls.FIELD_TYPE_SELECT, 'placeholder': '', 'is_required': False, 'is_visible': True, 'is_custom': False, 'order': 45},
+            {'field_key': 'attachment', 'label': 'Attachments', 'field_type': cls.FIELD_TYPE_TEXT, 'placeholder': '', 'is_required': False, 'is_visible': True, 'is_custom': False, 'order': 50},
         ]
         for d in defaults:
             cls.objects.get_or_create(
@@ -287,26 +287,26 @@ class TicketAutomationConfig(models.Model):
     UNIT_HOURS = 'HOURS'
     UNIT_DAYS = 'DAYS'
     UNIT_CHOICES = [
-        (UNIT_MINUTES, 'นาที'),
-        (UNIT_HOURS, 'ชั่วโมง'),
-        (UNIT_DAYS, 'วัน'),
+        (UNIT_MINUTES, 'Minutes'),
+        (UNIT_HOURS, 'Hours'),
+        (UNIT_DAYS, 'Days'),
     ]
 
     company = models.OneToOneField(
         Company,
         on_delete=models.CASCADE,
         related_name='ticket_automation_config',
-        verbose_name='บริษัท',
+        verbose_name='Company',
     )
-    open_age_value = models.PositiveIntegerField(default=24, verbose_name='ระยะเวลา')
+    open_age_value = models.PositiveIntegerField(default=24, verbose_name='Duration')
     open_age_unit = models.CharField(
         max_length=10,
         choices=UNIT_CHOICES,
         default=UNIT_HOURS,
-        verbose_name='หน่วย',
+        verbose_name='Unit',
     )
-    is_active = models.BooleanField(default=True, verbose_name='เปิดใช้งาน')
-    apply_to_subsidiaries = models.BooleanField(default=True, verbose_name='ใช้กับบริษัทลูก')
+    is_active = models.BooleanField(default=True, verbose_name='Active')
+    apply_to_subsidiaries = models.BooleanField(default=True, verbose_name='Apply to Subsidiaries')
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -324,7 +324,7 @@ class TicketAutomationConfig(models.Model):
     def clean(self):
         from django.core.exceptions import ValidationError
         if self.open_age_value < 1:
-            raise ValidationError({'open_age_value': 'ระยะเวลาต้องมากกว่าหรือเท่ากับ 1'})
+            raise ValidationError({'open_age_value': 'Duration must be greater than or equal to 1.'})
 
     def threshold_delta(self):
         if self.open_age_unit == self.UNIT_MINUTES:
@@ -478,8 +478,8 @@ class BackupLog(models.Model):
     STATUS_SUCCESS = 'SUCCESS'
     STATUS_FAILED = 'FAILED'
     STATUS_CHOICES = [
-        (STATUS_SUCCESS, 'สำเร็จ (Success)'),
-        (STATUS_FAILED, 'ล้มเหลว (Failed)'),
+        (STATUS_SUCCESS, 'Success'),
+        (STATUS_FAILED, 'Failed'),
     ]
 
     filename = models.CharField(max_length=255)
@@ -503,8 +503,8 @@ class EmailLog(models.Model):
     RECIPIENT_TO = 'TO'
     RECIPIENT_CC = 'CC'
     RECIPIENT_TYPE_CHOICES = [
-        (RECIPIENT_TO, 'ผู้รับหลัก (To)'),
-        (RECIPIENT_CC, 'สำเนา (CC)'),
+        (RECIPIENT_TO, 'Primary (To)'),
+        (RECIPIENT_CC, 'CC'),
     ]
 
     ACTION_TICKET_CREATED = 'TICKET_CREATED'
@@ -515,12 +515,12 @@ class EmailLog(models.Model):
     ACTION_COMMENT_ADDED = 'COMMENT_ADDED'
 
     ACTION_CHOICES = [
-        (ACTION_TICKET_CREATED, 'เปิด Ticket ใหม่'),
-        (ACTION_TICKET_UPDATED, 'อัปเดต Ticket'),
-        (ACTION_WELCOME_USER, 'ต้อนรับสมาชิกใหม่'),
-        (ACTION_COMPANY_REGISTERED, 'ลงทะเบียนบริษัท'),
-        (ACTION_MONTHLY_REPORT, 'รายงานประจำเดือน'),
-        (ACTION_COMMENT_ADDED, 'แสดงความคิดเห็นใหม่'),
+        (ACTION_TICKET_CREATED, 'New Ticket Created'),
+        (ACTION_TICKET_UPDATED, 'Ticket Updated'),
+        (ACTION_WELCOME_USER, 'Welcome New User'),
+        (ACTION_COMPANY_REGISTERED, 'Company Registered'),
+        (ACTION_MONTHLY_REPORT, 'Monthly Report Dispatched'),
+        (ACTION_COMMENT_ADDED, 'New Comment Added'),
     ]
 
     recipient = models.CharField(max_length=255)
@@ -533,7 +533,7 @@ class EmailLog(models.Model):
         null=True,
         blank=True,
         db_index=True,
-        help_text='รหัสรวมผู้รับ To/CC ของการส่งอีเมลครั้งเดียวกัน',
+        help_text='Recipient mapping ID for single email batch',
     )
     subject = models.CharField(max_length=255)
     message = models.TextField()
@@ -676,29 +676,29 @@ class MonthlyReportSchedule(models.Model):
     TIMEZONE_BANGKOK = 'Asia/Bangkok'
     TIMEZONE_HONG_KONG = 'Asia/Hong_Kong'
     TIMEZONE_CHOICES = [
-        (TIMEZONE_BANGKOK, 'ประเทศไทย (UTC+7)'),
-        (TIMEZONE_HONG_KONG, 'ฮ่องกง (UTC+8)'),
+        (TIMEZONE_BANGKOK, 'Bangkok (UTC+7)'),
+        (TIMEZONE_HONG_KONG, 'Hong Kong (UTC+8)'),
     ]
 
-    name = models.CharField(max_length=150, verbose_name="ชื่อตารางส่ง")
+    name = models.CharField(max_length=150, verbose_name="Schedule Name")
     company = models.ForeignKey(
         Company,
         on_delete=models.CASCADE,
         related_name='monthly_report_schedules',
         null=True,
         blank=True,
-        help_text="เว้นว่างสำหรับรายงานรวมทุกบริษัท",
+        help_text="Leave blank to generate a global report across all companies",
     )
     recipients = models.ManyToManyField(
         CustomUser,
         related_name='monthly_report_schedules_as_recipient',
-        verbose_name="ผู้รับหลัก",
+        verbose_name="Primary Recipients",
     )
     cc_recipients = models.ManyToManyField(
         CustomUser,
         blank=True,
         related_name='monthly_report_schedules_as_cc',
-        verbose_name="ผู้รับสำเนา (CC)",
+        verbose_name="CC Recipients",
     )
     smtp_configuration = models.ForeignKey(
         'SMTPConfiguration',
@@ -706,21 +706,21 @@ class MonthlyReportSchedule(models.Model):
         null=True,
         blank=True,
         related_name='monthly_report_schedules',
-        verbose_name="บัญชีอีเมลผู้ส่ง",
+        verbose_name="Sender SMTP Account",
     )
     day_of_month = models.PositiveSmallIntegerField(
         default=31,
-        verbose_name="วันที่ส่งของเดือน",
-        help_text="หากเดือนนั้นไม่มีวันที่ระบุ ระบบจะใช้วันสุดท้ายของเดือน",
+        verbose_name="Send Day of Month",
+        help_text="If the month does not contain this day, the last day of the month will be used",
     )
-    send_time = models.TimeField(default=datetime.time(17, 0), verbose_name="เวลาส่ง")
+    send_time = models.TimeField(default=datetime.time(17, 0), verbose_name="Send Time")
     timezone_name = models.CharField(
         max_length=50,
         choices=TIMEZONE_CHOICES,
         default=TIMEZONE_BANGKOK,
-        verbose_name="เขตเวลา",
+        verbose_name="Timezone",
     )
-    is_active = models.BooleanField(default=True, verbose_name="เปิดใช้งาน")
+    is_active = models.BooleanField(default=True, verbose_name="Active")
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -740,7 +740,7 @@ class MonthlyReportSchedule(models.Model):
     def clean(self):
         from django.core.exceptions import ValidationError
         if not 1 <= self.day_of_month <= 31:
-            raise ValidationError({'day_of_month': 'วันที่ส่งต้องอยู่ระหว่าง 1 ถึง 31'})
+            raise ValidationError({'day_of_month': 'Send day of month must be between 1 and 31.'})
 
     def scheduled_datetime(self, year, month):
         """Return the configured run time, clipping day 29-31 to month end."""
@@ -788,7 +788,7 @@ class MonthlyReportSchedule(models.Model):
         return local_value.strftime('%d/%m/%Y %H:%M')
 
     def __str__(self):
-        return f"{self.name} - วันที่ {self.day_of_month} เวลา {self.send_time.strftime('%H:%M')} ({self.get_timezone_name_display()})"
+        return f"{self.name} - Day {self.day_of_month} at {self.send_time.strftime('%H:%M')} ({self.get_timezone_name_display()})"
 
 
 class SMTPConfiguration(models.Model):
@@ -848,14 +848,14 @@ class NotificationConfig(models.Model):
     STATUS_NOTIFY_NONE = 'NONE'
 
     STATUS_NOTIFY_CHOICES = [
-        (STATUS_NOTIFY_ALL, 'ทุกสถานะ (All Statuses)'),
-        (STATUS_NOTIFY_IMPORTANT_ONLY, 'เฉพาะสถานะสำคัญเท่านั้น (Production Deployment Request, Ready to Deploy, Resolved, Closed)'),
-        (STATUS_NOTIFY_CUSTOM, 'กำหนดเลือกสถานะเฉพาะ (Custom Select Statuses)'),
-        (STATUS_NOTIFY_NONE, 'ปิดการแจ้งเตือนการเปลี่ยนสถานะ (None)'),
+        (STATUS_NOTIFY_ALL, 'All Statuses'),
+        (STATUS_NOTIFY_IMPORTANT_ONLY, 'Important Statuses Only (Production Deployment Request, Ready to Deploy, Resolved, Closed)'),
+        (STATUS_NOTIFY_CUSTOM, 'Custom Select Statuses'),
+        (STATUS_NOTIFY_NONE, 'Disabled (None)'),
     ]
 
 
-    name = models.CharField(max_length=255, default="กฎการตั้งค่าการแจ้งเตือน")
+    name = models.CharField(max_length=255, default="Notification Configuration Rule")
     company = models.ForeignKey(
         Company,
         on_delete=models.CASCADE,
@@ -865,24 +865,24 @@ class NotificationConfig(models.Model):
         CustomUser,
         blank=True,
         related_name='notification_configs',
-        help_text="หากไม่ระบุผู้ใช้ กฎนี้จะบังคับใช้กับสมาชิกทุกคนในบริษัท"
+        help_text="If no user is specified, this rule applies to all members of the company."
     )
-    notify_ticket_created = models.BooleanField(default=True, verbose_name="แจ้งเตือนการเปิด Ticket ใหม่")
+    notify_ticket_created = models.BooleanField(default=True, verbose_name="Notify on New Ticket Created")
     status_notification_mode = models.CharField(
         max_length=20,
         choices=STATUS_NOTIFY_CHOICES,
         default=STATUS_NOTIFY_ALL,
-        verbose_name="โหมดแจ้งเตือนการเปลี่ยนสถานะ"
+        verbose_name="Status Change Notification Mode"
     )
     allowed_statuses = models.JSONField(
         default=list,
         blank=True,
-        verbose_name="รายการสถานะที่เลือกให้แจ้งเตือน"
+        verbose_name="Notify on Selected Statuses"
     )
-    notify_comments = models.BooleanField(default=True, verbose_name="แจ้งเตือนความคิดเห็น / ตอบกลับ")
+    notify_comments = models.BooleanField(default=True, verbose_name="Notify on Comments & Replies")
     apply_to_subsidiaries = models.BooleanField(
         default=True,
-        verbose_name="บังคับใช้กับบริษัทลูกทั้งหมดด้วย"
+        verbose_name="Apply to All Subsidiaries"
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -896,7 +896,7 @@ class NotificationConfig(models.Model):
 
 def should_send_email_notification(recipient_email, ticket=None, event_type=None, new_status=None, recipient_user=None):
     """
-    ตรวจสอบว่า recipient_email ควรได้รับอีเมลตามเงื่อนไข notification_configs หรือไม่
+    Check if the recipient_email is allowed to receive notification emails based on notification_configs.
     """
     if not recipient_email:
         return False

@@ -1,7 +1,7 @@
 {% extends 'tickets/base.html' %}
 
-{% block title %}ดีไซน์ Ticket ประจำบริษัท - {{ company.name }} - TicketSolve{% endblock %}
-{% block header_title %}ออกแบบฟอร์ม Ticket ประจำบริษัท (Company Ticket Designer){% endblock %}
+{% block title %}{{ t.categories_ticket_design }} - {{ company.name }} - TicketSolve{% endblock %}
+{% block header_title %}{{ t.categories_ticket_design }}{% endblock %}
 
 {% block content %}
 <div class="max-w-5xl mx-auto space-y-6">
@@ -9,7 +9,7 @@
         <svg class="w-4 h-4 transform group-hover:translate-x-[-3px] transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
         </svg>
-        กลับไปหน้าจัดการหมวดหมู่
+        {{ t.back }}
     </a>
 
     {% if messages %}
@@ -30,10 +30,10 @@
         <div class="glass-panel p-6 sm:p-8 rounded-2xl border border-slate-800/80 shadow-2xl relative space-y-6">
             <div class="border-b border-slate-800 pb-4">
                 <h2 class="text-xl font-bold text-white flex items-center gap-3">
-                    🏢 1. การตั้งค่าทั่วไปสำหรับบริษัท: <span class="text-indigo-400">{{ company.name }}</span>
+                    🏢 1. Company Ticket Settings: <span class="text-indigo-400">{{ company.name }}</span>
                 </h2>
                 <p class="text-sm text-slate-400 mt-1">
-                    กำหนดรหัสนำหน้า Ticket (Prefix), คำแนะนำช่วยเหลือประจำฟอร์ม และข้อกำหนดการปิดตั๋ว
+                    Set ticket code prefix, help banner text, and ticket closing rules.
                 </p>
             </div>
 
@@ -41,16 +41,16 @@
                 <!-- Ticket Prefix -->
                 <div>
                     <label for="{{ config_form.ticket_prefix.id_for_label }}" class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
-                        รหัส Ticket นำหน้า (Ticket Code Prefix)
+                        Ticket Code Prefix
                     </label>
                     {{ config_form.ticket_prefix }}
-                    <p class="text-xs text-slate-500 mt-1">ตัวอย่างเช่น ใส่ <code class="text-indigo-400 font-mono">ACME-</code> จะได้รหัสตั๋ว <code class="text-indigo-400 font-mono">ACME-0001</code></p>
+                    <p class="text-xs text-slate-500 mt-1">e.g. Entering <code class="text-indigo-400 font-mono">ACME-</code> generates ticket ID <code class="text-indigo-400 font-mono">ACME-0001</code></p>
                 </div>
 
                 <!-- Custom Help Text -->
                 <div>
                     <label for="{{ config_form.custom_help_text.id_for_label }}" class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
-                        คำแนะนำและข้อความช่วยเหลือประจำฟอร์ม (Help Banner)
+                        Form Help Banner
                     </label>
                     {{ config_form.custom_help_text }}
                 </div>
@@ -59,16 +59,16 @@
             <div class="p-4 rounded-xl bg-slate-900/60 border border-slate-800 grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class="flex items-center justify-between">
                     <div>
-                        <span class="block text-sm font-semibold text-white">บังคับใส่บันทึกวิธีแก้ปัญหา (Require Resolution Note)</span>
-                        <span class="block text-xs text-slate-400">เมื่อสถานะเปลี่ยนเป็น Resolved หรือ Closed</span>
+                        <span class="block text-sm font-semibold text-white">Require Resolution Note</span>
+                        <span class="block text-xs text-slate-400">When status changes to Resolved or Closed</span>
                     </div>
                     {{ config_form.require_resolution_note }}
                 </div>
 
                 <div class="flex items-center justify-between">
                     <div>
-                        <span class="block text-sm font-semibold text-white">อนุญาตให้แนบไฟล์ประกอบคำขอ (Allow Attachments)</span>
-                        <span class="block text-xs text-slate-400">ให้ผู้เปิด Ticket แนบรูปหรือเอกสารได้</span>
+                        <span class="block text-sm font-semibold text-white">Allow File Attachments</span>
+                        <span class="block text-xs text-slate-400">Allow users to attach images or documents</span>
                     </div>
                     {{ config_form.allow_file_attachments }}
                 </div>
@@ -80,15 +80,15 @@
             <div class="border-b border-slate-800 pb-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h2 class="text-xl font-bold text-white flex items-center gap-3">
-                        📋 2. ออกแบบโครงสร้างและจัดเรียงฟิลด์ (Form Fields & Ordering)
+                        📋 2. Form Layout & Field Designer
                     </h2>
                     <p class="text-sm text-slate-400 mt-1">
-                        สามารถเปลี่ยนชื่อป้ายกำกับ (Label), เปิด/ปิดการแสดงผล, กำหนดการบังคับกรอก และเลื่อนลำดับขึ้น-ลงของฟิลด์ได้ตามต้องการ
+                        Customize field labels, toggle visibility, enforce required inputs, and reorder form fields.
                     </p>
                 </div>
                 <div>
                     <button type="button" onclick="document.getElementById('addCustomFieldModal').classList.remove('hidden')" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 shadow-lg transition-all">
-                        + เพิ่มฟิลด์เสริม (Add Custom Field)
+                        + Add Custom Field
                     </button>
                 </div>
             </div>
@@ -98,12 +98,12 @@
                 <table class="w-full text-left border-collapse">
                     <thead>
                         <tr class="border-b border-slate-800 text-xs font-semibold uppercase tracking-wider text-slate-400 bg-slate-900/40">
-                            <th class="py-3 px-4 w-28">ลำดับ (Order)</th>
-                            <th class="py-3 px-4">ชื่อฟิลด์แสดงผล (Label)</th>
+                            <th class="py-3 px-4 w-28">Order</th>
+                            <th class="py-3 px-4">Label</th>
                             <th class="py-3 px-4">Field Key & Type</th>
-                            <th class="py-3 px-4 text-center">บังคับกรอก</th>
-                            <th class="py-3 px-4 text-center">แสดงผล</th>
-                            <th class="py-3 px-4 text-right">การจัดการ</th>
+                            <th class="py-3 px-4 text-center">Required</th>
+                            <th class="py-3 px-4 text-center">Visible</th>
+                            <th class="py-3 px-4 text-right">Actions</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-800/60 text-sm">
@@ -115,10 +115,10 @@
                                     <input type="number" name="field_{{ f.id }}_order" value="{{ f.order }}" class="w-14 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white font-mono text-center">
                                     
                                     <div class="flex flex-col gap-0.5">
-                                        <button type="submit" name="action" value="move_field" onclick="document.getElementById('moveFieldId').value='{{ f.id }}'; document.getElementById('moveDir').value='up';" class="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-colors" title="เลื่อนขึ้น">
+                                        <button type="submit" name="action" value="move_field" onclick="document.getElementById('moveFieldId').value='{{ f.id }}'; document.getElementById('moveDir').value='up';" class="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-colors" title="Move Up">
                                             ▲
                                         </button>
-                                        <button type="submit" name="action" value="move_field" onclick="document.getElementById('moveFieldId').value='{{ f.id }}'; document.getElementById('moveDir').value='down';" class="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-colors" title="เลื่อนลง">
+                                        <button type="submit" name="action" value="move_field" onclick="document.getElementById('moveFieldId').value='{{ f.id }}'; document.getElementById('moveDir').value='down';" class="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-colors" title="Move Down">
                                             ▼
                                         </button>
                                     </div>
@@ -159,11 +159,11 @@
                             <!-- Actions -->
                             <td class="py-3 px-4 text-right">
                                 {% if f.is_custom %}
-                                <button type="submit" name="action" value="delete_custom_field" onclick="document.getElementById('deleteFieldId').value='{{ f.id }}'; return confirm('ยืนยันลบฟิลด์เสริม {{ f.label }} หรือไม่?');" class="px-2.5 py-1 text-xs font-semibold text-rose-400 hover:bg-rose-500/10 rounded border border-rose-500/20 transition-colors">
-                                    ลบ
+                                <button type="submit" name="action" value="delete_custom_field" onclick="document.getElementById('deleteFieldId').value='{{ f.id }}'; return confirm('Confirm deletion of custom field {{ f.label }}?');" class="px-2.5 py-1 text-xs font-semibold text-rose-400 hover:bg-rose-500/10 rounded border border-rose-500/20 transition-colors">
+                                    {{ t.delete }}
                                 </button>
                                 {% else %}
-                                <span class="text-xs text-slate-500 italic">ฟิลด์มาตรฐาน</span>
+                                <span class="text-xs text-slate-500 italic">Baseline</span>
                                 {% endif %}
                             </td>
                         </tr>
@@ -179,7 +179,7 @@
 
             <div class="pt-6 border-t border-slate-800 flex items-center justify-end gap-4">
                 <button type="submit" class="px-6 py-2.5 rounded-lg text-sm font-semibold text-white bg-theme-gradient hover:opacity-90 shadow-theme-glow active:scale-[0.98] transition-all">
-                    💾 บันทึกการตั้งค่าและดีไซน์ Ticket ทั้งหมด
+                    {{ t.save }}
                 </button>
             </div>
         </div>
@@ -190,7 +190,7 @@
 <div id="addCustomFieldModal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
     <div class="glass-panel p-6 sm:p-8 rounded-2xl border border-slate-800 shadow-2xl max-w-lg w-full space-y-6">
         <div class="flex items-center justify-between border-b border-slate-800 pb-4">
-            <h3 class="font-bold text-white text-lg">+ เพิ่มฟิลด์ข้อมูลเสริม (Add Custom Field)</h3>
+            <h3 class="font-bold text-white text-lg">+ Add Custom Field</h3>
             <button type="button" onclick="document.getElementById('addCustomFieldModal').classList.add('hidden')" class="text-slate-400 hover:text-white">✕</button>
         </div>
 
@@ -199,48 +199,48 @@
             <input type="hidden" name="action" value="add_custom_field">
 
             <div>
-                <label class="block text-xs text-slate-400 mb-1">ชื่อฟิลด์สำหรับแสดงผล (Label)</label>
+                <label class="block text-xs text-slate-400 mb-1">Display Label</label>
                 {{ custom_field_form.label }}
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                    <label class="block text-xs text-slate-400 mb-1">Field Key (รหัสระบบภาษาอังกฤษ)</label>
+                    <label class="block text-xs text-slate-400 mb-1">Field Key (English)</label>
                     {{ custom_field_form.field_key }}
                 </div>
                 <div>
-                    <label class="block text-xs text-slate-400 mb-1">ประเภทข้อมูล (Field Type)</label>
+                    <label class="block text-xs text-slate-400 mb-1">Field Type</label>
                     {{ custom_field_form.field_type }}
                 </div>
             </div>
 
             <div>
-                <label class="block text-xs text-slate-400 mb-1">คำแนะนำประจำฟิลด์ (Placeholder)</label>
+                <label class="block text-xs text-slate-400 mb-1">Placeholder</label>
                 {{ custom_field_form.placeholder }}
             </div>
 
             <div>
-                <label class="block text-xs text-slate-400 mb-1">รายการตัวเลือก (เฉพาะกรณีเลือก Dropdown Select - คั่นด้วยจุลภาค)</label>
+                <label class="block text-xs text-slate-400 mb-1">Options List (Dropdown Select only - comma separated)</label>
                 {{ custom_field_form.options_raw }}
             </div>
 
             <div class="flex items-center justify-between pt-2">
                 <div class="flex items-center gap-2">
                     {{ custom_field_form.is_required }}
-                    <label for="{{ custom_field_form.is_required.id_for_label }}" class="text-xs text-slate-300 font-medium">บังคับกรอกข้อมูล (Required)</label>
+                    <label for="{{ custom_field_form.is_required.id_for_label }}" class="text-xs text-slate-300 font-medium">Required</label>
                 </div>
                 <div class="w-24">
-                    <label class="block text-[11px] text-slate-400 mb-1">ลำดับ (Order)</label>
+                    <label class="block text-[11px] text-slate-400 mb-1">Order</label>
                     {{ custom_field_form.order }}
                 </div>
             </div>
 
             <div class="pt-4 border-t border-slate-800 flex items-center justify-end gap-3">
                 <button type="button" onclick="document.getElementById('addCustomFieldModal').classList.add('hidden')" class="px-4 py-2 rounded-lg text-xs font-semibold border border-slate-700 text-slate-300 hover:text-white">
-                    ยกเลิก
+                    {{ t.cancel }}
                 </button>
                 <button type="submit" class="px-4 py-2 rounded-lg text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 shadow-lg">
-                    บันทึกฟิลด์เสริม
+                    {{ t.save }}
                 </button>
             </div>
         </form>

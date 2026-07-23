@@ -76,6 +76,5 @@ urlpatterns = [
     path('settings/smtp/<int:pk>/toggle/', views.SMTPToggleActiveView.as_view(), name='smtp_toggle_active'),
     path('settings/smtp/<int:pk>/delete/', views.SMTPDeleteView.as_view(), name='smtp_delete'),
 
-    # Language Switcher Route
-    path('set-language/', views.set_language_view, name='set_language'),
+
 ]

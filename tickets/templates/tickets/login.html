@@ -1,6 +1,6 @@
 {% extends 'tickets/base.html' %}
 
-{% block title %}เข้าสู่ระบบ - TicketSolve{% endblock %}
+{% block title %}{{ t.login }} - TicketSolve{% endblock %}
 
 {% block content %}
 <div class="min-h-[80vh] flex flex-col items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
@@ -18,17 +18,17 @@
                 T
             </div>
             <h2 class="mt-6 text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-white via-slate-100 to-indigo-300">
-                เข้าสู่ระบบใช้งาน
+                {{ t.login }}
             </h2>
             <p class="mt-2 text-sm text-slate-400">
-                ระบบจัดการแจ้งปัญหาแยกข้อมูลองค์กร (Multi-tenant Ticket)
+                Multi-Tenant Issue & Ticket Management System
             </p>
         </div>
 
         <!-- Form errors -->
         {% if form.errors %}
         <div class="bg-rose-500/10 border border-rose-500/20 text-rose-400 p-4 rounded-xl text-sm space-y-1">
-            <span class="font-semibold block">เกิดข้อผิดพลาด:</span>
+            <span class="font-semibold block">Error:</span>
             {% for field in form %}
                 {% for error in field.errors %}
                     <p>• {{ error }}</p>
@@ -48,7 +48,7 @@
             <div class="rounded-md space-y-4">
                 <!-- Username / Email Input -->
                 <div>
-                    <label for="id_username" class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">ชื่อผู้ใช้งาน หรือ อีเมล (Username or Email)</label>
+                    <label for="id_username" class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">{{ t.username }} / Email</label>
                     <div class="relative">
                         <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-500">
                             <!-- User SVG -->
@@ -56,13 +56,13 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
                             </svg>
                         </span>
-                        <input id="id_username" name="username" type="text" required class="appearance-none rounded-lg relative block w-full pl-11 pr-4 py-3 bg-slate-900/50 border border-slate-700 placeholder-slate-500 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all sm:text-sm" placeholder="ระบุชื่อผู้ใช้งาน หรือ อีเมล...">
+                        <input id="id_username" name="username" type="text" required class="appearance-none rounded-lg relative block w-full pl-11 pr-4 py-3 bg-slate-900/50 border border-slate-700 placeholder-slate-500 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all sm:text-sm" placeholder="Enter username or email...">
                     </div>
                 </div>
 
                 <!-- Password Input -->
                 <div>
-                    <label for="id_password" class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">รหัสผ่าน (Password)</label>
+                    <label for="id_password" class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">{{ t.password }}</label>
                     <div class="relative">
                         <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-500">
                             <!-- Lock SVG -->
@@ -70,8 +70,8 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
                             </svg>
                         </span>
-                        <input id="id_password" name="password" type="password" required class="appearance-none rounded-lg relative block w-full pl-11 pr-10 py-3 bg-slate-900/50 border border-slate-700 placeholder-slate-500 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all sm:text-sm" placeholder="ระบุรหัสผ่าน...">
-                        <button type="button" onclick="togglePasswordVisibility('id_password')" class="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-500 hover:text-white cursor-pointer" title="แสดง/ซ่อนรหัสผ่าน">
+                        <input id="id_password" name="password" type="password" required class="appearance-none rounded-lg relative block w-full pl-11 pr-10 py-3 bg-slate-900/50 border border-slate-700 placeholder-slate-500 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all sm:text-sm" placeholder="Enter password...">
+                        <button type="button" onclick="togglePasswordVisibility('id_password')" class="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-500 hover:text-white cursor-pointer" title="Show/Hide Password">
                             <!-- eye icon SVG -->
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
@@ -85,14 +85,14 @@
             <!-- Submit Button -->
             <div>
                 <button type="submit" class="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-semibold rounded-lg text-white bg-theme-gradient hover:opacity-90 transition-all shadow-theme-glow active:scale-[0.98]">
-                    เข้าสู่ระบบ
+                    {{ t.login }}
                 </button>
             </div>
         </form>
 
         <!-- Development notice helper -->
         <div class="mt-6 pt-6 border-t border-slate-800 text-center">
-            <span class="text-xs text-slate-500 block">สามารถล็อกอินด้วยแอคเคาท์ Superuser เพื่อจัดการบริษัทและผู้ใช้อื่นๆ</span>
+            <span class="text-xs text-slate-500 block">Log in using a Superuser account to manage organizations and other users.</span>
         </div>
     </div>
 </div>

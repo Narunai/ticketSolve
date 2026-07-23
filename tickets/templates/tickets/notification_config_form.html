@@ -1,6 +1,6 @@
 {% extends 'tickets/base.html' %}
 
-{% block header_title %}{% if form.instance.pk %}แก้ไขกฎการแจ้งเตือน{% else %}สร้างกฎการแจ้งเตือนใหม่{% endif %}{% endblock %}
+{% block header_title %}{% if form.instance.pk %}{{ t.edit_ticket_title }}{% else %}Create{% endif %} {{ t.notification_settings }}{% endblock %}
 
 {% block content %}
 <div class="max-w-3xl mx-auto space-y-6">
@@ -9,10 +9,10 @@
         <div class="border-b border-slate-800 pb-4 mb-6">
             <h2 class="text-xl font-bold text-white flex items-center gap-2">
                 <span>⚙️</span>
-                <span>{% if form.instance.pk %}แก้ไขกฎการแจ้งเตือน (Edit Config){% else %}สร้างกฎการแจ้งเตือนใหม่ (Create Config){% endif %}</span>
+                <span>{% if form.instance.pk %}{{ t.edit_ticket_title }} (Edit Notification Config){% else %}Create Notification Email Config{% endif %}</span>
             </h2>
             <p class="text-xs text-slate-400 mt-1">
-                กำหนดขอบเขตและเงื่อนไขการส่งแจ้งเตือนทางอีเมล
+                Configure notification delivery rules and scope options.
             </p>
         </div>
 
@@ -29,7 +29,7 @@
 
             <!-- Name -->
             <div class="space-y-2">
-                <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider">ชื่อกฎการตั้งค่า *</label>
+                <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider">Rule Name *</label>
                 {{ form.name }}
                 {% if form.name.errors %}
                 <span class="text-xs text-rose-400 block font-medium">{{ form.name.errors.0 }}</span>
@@ -38,7 +38,7 @@
 
             <!-- Company -->
             <div class="space-y-2">
-                <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider">บริษัท *</label>
+                <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider">{{ t.company }} *</label>
                 {{ form.company }}
                 {% if form.company.errors %}
                 <span class="text-xs text-rose-400 block font-medium">{{ form.company.errors.0 }}</span>
@@ -50,9 +50,9 @@
                 {{ form.apply_to_subsidiaries }}
                 <div>
                     <label for="{{ form.apply_to_subsidiaries.id_for_label }}" class="text-xs font-bold text-white cursor-pointer block">
-                        บังคับใช้กฎนี้กับบริษัทลูก (Subsidiaries) ทั้งหมดด้วย
+                        Apply rule to all subsidiaries as well
                     </label>
-                    <span class="text-[11px] text-slate-400 block">หากติ๊กเลือก บริษัทลูกที่อยู่ภายใต้บริษัทนี้จะใช้กฎนี้โดยอัตโนมัติหากไม่ได้ตั้งค่าไว้แยกต่างหาก</span>
+                    <span class="text-[11px] text-slate-400 block">Subsidiary organizations under this company will automatically inherit this rule unless overridden.</span>
                 </div>
             </div>
 
@@ -60,20 +60,20 @@
             <div class="space-y-2">
                 <div class="flex items-center justify-between">
                     <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider">
-                        ผู้ใช้งานเฉพาะบุคคล (Optional - เลือกได้หลายคน)
+                        Specific Target Users (Optional - Multi-select)
                     </label>
-                    <span class="text-[10px] text-indigo-400 font-mono">กด Ctrl/Cmd เพื่อเลือกหลายคน</span>
+                    <span class="text-[10px] text-indigo-400 font-mono">Hold Ctrl/Cmd to select multiple users</span>
                 </div>
                 
                 <!-- Quick Filter Input -->
                 <div class="relative">
-                    <input type="text" id="user-search-input" placeholder="🔍 พิมพ์ค้นหาชื่อผู้ใช้หรือชื่อบริษัท..." class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500">
+                    <input type="text" id="user-search-input" placeholder="🔍 Type to filter users or company name..." class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500">
                 </div>
 
                 {{ form.target_users }}
 
                 <p class="text-[11px] text-slate-400">
-                    💡 หากไม่เลือกผู้ใช้ กฎนี้จะบังคับใช้กับสมาชิกทุกคนในบริษัท. หากเลือกผู้ใช้ กฎนี้จะมีความสำคัญสูงสุดเฉพาะบุคคลที่เลือก (User-Specific Override)
+                    💡 If no users selected, applies to all members in the organization. If users selected, creates a user-specific override rule.
                 </p>
                 {% if form.target_users.errors %}
                 <span class="text-xs text-rose-400 block font-medium">{{ form.target_users.errors.0 }}</span>
@@ -83,21 +83,21 @@
             <div class="border-t border-slate-800 pt-6 space-y-4">
                 <h3 class="font-bold text-white text-sm flex items-center gap-2">
                     <span>🔔</span>
-                    <span>ตั้งค่าเปิด/ปิด แต่ละเหตุการณ์</span>
+                    <span>Event Notification Toggles</span>
                 </h3>
 
                 <!-- Ticket Created -->
                 <div class="p-4 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center gap-3">
                     {{ form.notify_ticket_created }}
                     <label for="{{ form.notify_ticket_created.id_for_label }}" class="text-xs font-bold text-white cursor-pointer">
-                        แจ้งเตือนเมื่อมีการเปิด Ticket ใหม่ (Ticket Created)
+                        Notify on New Ticket Created
                     </label>
                 </div>
 
                 <!-- Status Changes Mode -->
                 <div class="space-y-2">
                     <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider">
-                        โหมดการแจ้งเตือนเมื่อเปลี่ยนสถานะ Ticket
+                        Status Change Notification Mode
                     </label>
                     {{ form.status_notification_mode }}
                 </div>
@@ -105,7 +105,7 @@
                 <!-- Custom Selectable Status Checkboxes -->
                 <div id="custom-status-container" class="space-y-3 p-4 rounded-xl bg-slate-900/80 border border-indigo-500/30">
                     <label class="block text-xs font-bold text-indigo-300 uppercase tracking-wider">
-                        🎯 เลือกสถานะที่ต้องการทริกเกอร์แจ้งเตือน:
+                        🎯 Select status triggers for notifications:
                     </label>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-200">
                         {% for choice in form.status_checkboxes %}
@@ -121,7 +121,7 @@
                 <div class="p-4 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center gap-3">
                     {{ form.notify_comments }}
                     <label for="{{ form.notify_comments.id_for_label }}" class="text-xs font-bold text-white cursor-pointer">
-                        แจ้งเตือนความคิดเห็น / ตอบกลับข้อความ (Comments & Replies)
+                        Notify on Comments & Replies
                     </label>
                 </div>
             </div>
@@ -129,10 +129,10 @@
             <!-- Actions -->
             <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
                 <a href="{% url 'notification_config_list' %}" class="px-4 py-2.5 rounded-xl font-bold text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 transition-all">
-                    ยกเลิก
+                    {{ t.cancel }}
                 </a>
                 <button type="submit" class="px-5 py-2.5 rounded-xl font-bold text-xs bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/20 transition-all active:scale-95 cursor-pointer">
-                    💾 บันทึกการตั้งค่า
+                    {{ t.save }}
                 </button>
             </div>
         </form>

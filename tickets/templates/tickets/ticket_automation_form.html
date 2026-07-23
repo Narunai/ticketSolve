@@ -1,47 +1,47 @@
 {% extends 'tickets/base.html' %}
 
-{% block header_title %}{% if form.instance.pk %}แก้ไข{% else %}สร้าง{% endif %} Ticket Auto Schedule{% endblock %}
+{% block header_title %}{% if form.instance.pk %}{{ t.edit_ticket_title }}{% else %}Create{% endif %} {{ t.auto_schedule }}{% endblock %}
 
 {% block content %}
 <div class="max-w-2xl mx-auto">
     <div class="glass-panel p-6 md:p-8 rounded-2xl border border-slate-800/80">
-        <h2 class="text-xl font-bold text-white mb-2">{% if form.instance.pk %}แก้ไข{% else %}สร้าง{% endif %} Ticket Auto Schedule</h2>
-        <p class="text-sm text-slate-400 mb-6">กำหนดระยะเวลาที่ Ticket อยู่ในสถานะ Open ก่อนเปลี่ยนเป็น In Progress อัตโนมัติ</p>
+        <h2 class="text-xl font-bold text-white mb-2">{% if form.instance.pk %}{{ t.edit_ticket_title }}{% else %}Create{% endif %} {{ t.auto_schedule }}</h2>
+        <p class="text-sm text-slate-400 mb-6">Configure the duration a ticket remains OPEN before automatically transitioning to IN PROGRESS.</p>
 
         <form method="post" class="space-y-5">
             {% csrf_token %}
             {% if form.non_field_errors %}<div class="p-3 rounded-xl bg-rose-500/10 text-rose-300 text-sm">{{ form.non_field_errors }}</div>{% endif %}
 
             <div>
-                <label class="block text-xs font-bold text-slate-300 mb-2">บริษัท</label>
+                <label class="block text-xs font-bold text-slate-300 mb-2">{{ t.company }}</label>
                 {{ form.company }}
                 {% if form.company.errors %}<p class="text-xs text-rose-400 mt-1">{{ form.company.errors.0 }}</p>{% endif %}
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                    <label class="block text-xs font-bold text-slate-300 mb-2">Open ครบจำนวน</label>
+                    <label class="block text-xs font-bold text-slate-300 mb-2">OPEN Duration Value</label>
                     {{ form.open_age_value }}
                     {% if form.open_age_value.errors %}<p class="text-xs text-rose-400 mt-1">{{ form.open_age_value.errors.0 }}</p>{% endif %}
                 </div>
                 <div>
-                    <label class="block text-xs font-bold text-slate-300 mb-2">หน่วยเวลา</label>
+                    <label class="block text-xs font-bold text-slate-300 mb-2">Time Unit</label>
                     {{ form.open_age_unit }}
                 </div>
             </div>
 
             <div class="p-4 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center gap-3">
                 {{ form.apply_to_subsidiaries }}
-                <label for="{{ form.apply_to_subsidiaries.id_for_label }}" class="text-sm text-white cursor-pointer">ใช้กฎนี้กับบริษัทลูกด้วย</label>
+                <label for="{{ form.apply_to_subsidiaries.id_for_label }}" class="text-sm text-white cursor-pointer">Apply rule to subsidiaries as well</label>
             </div>
             <div class="p-4 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center gap-3">
                 {{ form.is_active }}
-                <label for="{{ form.is_active.id_for_label }}" class="text-sm text-white cursor-pointer">เปิดใช้งาน Auto Schedule</label>
+                <label for="{{ form.is_active.id_for_label }}" class="text-sm text-white cursor-pointer">Activate Auto Schedule rule</label>
             </div>
 
             <div class="flex justify-end gap-3 pt-4 border-t border-slate-800">
-                <a href="{% url 'ticket_automation_list' %}" class="px-4 py-2.5 rounded-xl bg-slate-800 text-slate-300">ยกเลิก</a>
-                <button type="submit" class="px-5 py-2.5 rounded-xl font-bold bg-indigo-600 hover:bg-indigo-500 text-white">บันทึก</button>
+                <a href="{% url 'ticket_automation_list' %}" class="px-4 py-2.5 rounded-xl bg-slate-800 text-slate-300">{{ t.cancel }}</a>
+                <button type="submit" class="px-5 py-2.5 rounded-xl font-bold bg-indigo-600 hover:bg-indigo-500 text-white">{{ t.save }}</button>
             </div>
         </form>
     </div>

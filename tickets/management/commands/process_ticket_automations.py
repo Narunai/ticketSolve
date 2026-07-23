@@ -47,8 +47,8 @@ class Command(BaseCommand):
                     old_status=old_status,
                     new_status=ticket.status,
                     details=(
-                        'ระบบอัตโนมัติเปลี่ยนสถานะจาก Open เป็น In Progress '
-                        f'หลังจากค้าง Open ครบ {config.open_age_value} '
+                        'Automated system changed status from Open to In Progress '
+                        f'after remaining Open for {config.open_age_value} '
                         f'{config.get_open_age_unit_display()} (Ticket Auto Schedule)'
                     ),
                 )

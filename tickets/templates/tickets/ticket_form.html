@@ -35,7 +35,7 @@
         <div class="bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 p-4 rounded-xl text-sm mb-6 flex items-start gap-3">
             <span class="text-lg">💡</span>
             <div>
-                <span class="font-semibold block text-indigo-200">คำแนะนำการเปิด Ticket ของ {{ user.company.name }}:</span>
+                <span class="font-semibold block text-indigo-200">Ticket Guideline ({{ user.company.name }}):</span>
                 <p class="mt-0.5 leading-relaxed">{{ user.company.ticket_config.custom_help_text }}</p>
             </div>
         </div>
@@ -79,24 +79,24 @@
                                     <div class="flex items-center gap-3">
                                         <button type="button" id="btn-add-file" onclick="const input = document.getElementById('real-file-input'); input.value = ''; input.click();" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold text-indigo-300 bg-slate-900 border border-slate-700 hover:bg-slate-800 hover:text-white transition-all cursor-pointer active:scale-95 shadow-md">
                                             <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
-                                            <span>+ เพิ่มไฟล์แนบ (กดเลือกเพิ่มทีละไฟล์ได้)</span>
+                                            <span>{{ t.add_attachment_hint }}</span>
                                         </button>
-                                        <span class="text-[11px] text-slate-400">สูงสุด 10 MB ต่อไฟล์</span>
+                                        <span class="text-[11px] text-slate-400">{{ t.max_file_size_hint }}</span>
                                     </div>
 
                                     <div id="file-list-preview" class="space-y-2 hidden">
-                                        <p class="text-xs font-semibold text-slate-300">ไฟล์แนบที่เลือก (<span id="file-count">0</span> รายการ):</p>
+                                        <p class="text-xs font-semibold text-slate-300">Selected attachments (<span id="file-count">0</span>):</p>
                                         <div id="file-items-container" class="space-y-1.5 max-h-48 overflow-y-auto pr-1"></div>
                                     </div>
 
                                     <p id="file-size-error" class="hidden text-xs text-rose-400 font-semibold flex items-center gap-1">
-                                        ⚠️ <span>ขนาดไฟล์แนบต้องไม่เกิน 10 MB</span>
+                                        ⚠️ <span>File size must not exceed 10 MB per file</span>
                                     </p>
                                 </div>
 
                                 {% if object and object.attachments.all %}
                                     <div class="mt-3 space-y-1 pt-2 border-t border-slate-800">
-                                        <p class="text-xs text-slate-400 font-semibold">ไฟล์แนบเดิมในระบบ:</p>
+                                        <p class="text-xs text-slate-400 font-semibold">Existing attachments:</p>
                                         {% for att in object.attachments.all %}
                                             <p class="text-xs text-indigo-400 flex items-center gap-1">
                                                 <span>📎</span>
@@ -106,7 +106,7 @@
                                     </div>
                                 {% elif object and object.attachment %}
                                     <p class="text-xs text-indigo-400 mt-2 flex items-center gap-1">
-                                        <span>ไฟล์ปัจจุบัน:</span>
+                                        <span>Current File:</span>
                                         <a href="{{ object.attachment.url }}" class="hover:underline font-semibold" target="_blank">{{ object.attachment.name }}</a>
                                     </p>
                                 {% endif %}
@@ -145,21 +145,21 @@
                 {% if form.resolution_category or form.resolution_notes %}
                 <div class="p-5 rounded-2xl bg-indigo-950/30 border border-indigo-500/20 space-y-4">
                     <h4 class="text-sm font-bold text-indigo-300 flex items-center gap-2">
-                        🛠️ การสรุปวิธีแก้ไขปัญหา (Resolution Details)
+                        🛠️ {{ t.resolution_details }}
                     </h4>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
                         {% if form.resolution_category %}
                         <div>
-                            <label for="{{ form.resolution_category.id_for_label }}" class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">ประเภทการแก้ปัญหา (Resolution Category)</label>
+                            <label for="{{ form.resolution_category.id_for_label }}" class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">{{ t.resolution_category }}</label>
                             {{ form.resolution_category }}
                         </div>
                         {% endif %}
                     </div>
                     {% if form.resolution_notes %}
                     <div>
-                        <label for="{{ form.resolution_notes.id_for_label }}" class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">รายละเอียดและสรุปผลวิธีแก้ไข (Resolution Notes)</label>
+                        <label for="{{ form.resolution_notes.id_for_label }}" class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">{{ t.resolution_notes }}</label>
                         {{ form.resolution_notes }}
-                        <p class="text-[11px] text-slate-500 mt-1">จำเป็นต้องระบุเมื่อแก้ไขงานเสร็จสิ้น (Resolved) หรือปิดเคส (Closed)</p>
+                        <p class="text-[11px] text-slate-500 mt-1">Required when status is changed to Resolved or Closed</p>
                     </div>
                     {% endif %}
                 </div>
@@ -174,7 +174,7 @@
                             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                         </svg>
-                        <span id="upload-status-text">⏳ กำลังอัปโหลดข้อมูลและไฟล์แนบ...</span>
+                        <span id="upload-status-text">⏳ Uploading ticket data and attachments...</span>
                     </div>
                     <span id="upload-percent-text" class="text-indigo-400 font-mono font-bold">0%</span>
                 </div>
@@ -183,8 +183,8 @@
                     <div id="upload-progress-bar" class="bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 h-2 rounded-full transition-all duration-200 w-0"></div>
                 </div>
                 <div class="flex items-center justify-between text-[11px] text-slate-400">
-                    <span id="upload-speed-text">ความเร็ว: -- MB/s</span>
-                    <span>กรุณารอสักครู่ ห้ามปิดหรือเปลี่ยนหน้าต่างนี้</span>
+                    <span id="upload-speed-text">Speed: -- MB/s</span>
+                    <span>Please wait, do not close or navigate away from this page</span>
                 </div>
             </div>
 
@@ -203,106 +203,104 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const realInput = document.getElementById('real-file-input');
-    const previewContainer = document.getElementById('file-list-preview');
-    const itemsContainer = document.getElementById('file-items-container');
-    const fileCountSpan = document.getElementById('file-count');
+    const fileInput = document.getElementById('multi-file-input');
+    const btnAddFile = document.getElementById('btn-add-file');
+    const fileListContainer = document.getElementById('file-list');
     const errorMsg = document.getElementById('file-size-error');
-    const form = document.querySelector('form');
+    const form = document.getElementById('ticket-form');
+    
+    // UI Progress Elements
     const btnSubmit = document.getElementById('btn-submit-form');
     const submitBtnText = document.getElementById('submit-btn-text');
     const btnCancel = document.getElementById('btn-cancel');
-    const btnAddFile = document.getElementById('btn-add-file');
-
     const progressPanel = document.getElementById('upload-progress-panel');
     const progressBar = document.getElementById('upload-progress-bar');
     const progressPercent = document.getElementById('upload-percent-text');
     const progressSpeed = document.getElementById('upload-speed-text');
     const statusText = document.getElementById('upload-status-text');
 
-    const MAX_SIZE_BYTES = 50 * 1024 * 1024; // 50 MB Max per file
+    const MAX_SIZE_BYTES = 50 * 1024 * 1024; // 50MB per file limit
     let accumulatedFiles = [];
     let isUploading = false;
 
+    function formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
     function renderFileList() {
-        if (!itemsContainer) return;
-        itemsContainer.innerHTML = '';
-
-        if (accumulatedFiles.length === 0) {
-            previewContainer.classList.add('hidden');
-            if (fileCountSpan) fileCountSpan.textContent = '0';
-            updateRealInput();
-            return;
-        }
-
-        previewContainer.classList.remove('hidden');
-        if (fileCountSpan) fileCountSpan.textContent = accumulatedFiles.length;
-
+        if (!fileListContainer) return;
+        fileListContainer.innerHTML = '';
+        
         accumulatedFiles.forEach((file, index) => {
-            const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
             const isOver = file.size > MAX_SIZE_BYTES;
-
-            const div = document.createElement('div');
-            div.className = `flex items-center justify-between p-2.5 rounded-xl border text-xs transition-all ${
-                isOver ? 'bg-rose-500/10 border-rose-500/30 text-rose-300' : 'bg-slate-900/80 border-slate-700/80 text-slate-200'
+            const fileItem = document.createElement('div');
+            fileItem.className = `flex items-center justify-between p-3 rounded-lg border text-xs font-mono transition-all ${
+                isOver ? 'bg-rose-500/10 border-rose-500/30 text-rose-300' : 'bg-slate-900/60 border-slate-800 text-slate-300'
             }`;
-
-            const ext = file.name.split('.').pop() || 'FILE';
-
-            div.innerHTML = `
-                <div class="flex items-center gap-2 min-w-0 pr-2">
-                    <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase ${
-                        isOver ? 'bg-rose-500/20 text-rose-400' : 'bg-indigo-500/20 text-indigo-300'
-                    }">${ext}</span>
-                    <span class="truncate font-medium">${file.name}</span>
-                    <span class="text-[10px] text-slate-400 shrink-0">(${sizeMB} MB)</span>
+            
+            fileItem.innerHTML = `
+                <div class="flex items-center gap-2.5 truncate pr-2">
+                    <span class="text-base">${isOver ? '⚠️' : '📎'}</span>
+                    <span class="truncate font-medium text-slate-200">${file.name}</span>
+                    <span class="text-[10px] text-slate-500 shrink-0">(${formatFileSize(file.size)})</span>
                 </div>
-                <button type="button" data-index="${index}" class="remove-file-btn p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer shrink-0 font-bold">
+                <button type="button" data-index="${index}" class="btn-remove-file p-1 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 rounded transition-colors" title="Remove file">
                     ✕
                 </button>
             `;
-
-            itemsContainer.appendChild(div);
+            fileListContainer.appendChild(fileItem);
         });
 
-        itemsContainer.querySelectorAll('.remove-file-btn').forEach(btn => {
+        // Add event listeners to remove buttons
+        document.querySelectorAll('.btn-remove-file').forEach(btn => {
             btn.addEventListener('click', function() {
-                if (isUploading) return;
                 const idx = parseInt(this.getAttribute('data-index'));
                 accumulatedFiles.splice(idx, 1);
                 renderFileList();
             });
         });
-
-        updateRealInput();
     }
 
     function updateRealInput() {
-        if (!realInput) return;
-        try {
-            const dt = new DataTransfer();
-            accumulatedFiles.forEach(file => dt.items.add(file));
-            realInput.files = dt.files;
-        } catch(e) {
-            console.log("DataTransfer not fully supported", e);
-        }
+        if (!fileInput) return;
+        const dt = new DataTransfer();
+        accumulatedFiles.forEach(file => dt.items.add(file));
+        fileInput.files = dt.files;
     }
 
-    if (realInput) {
-        realInput.addEventListener('change', function() {
-            if (this.files && this.files.length > 0) {
-                let overFiles = [];
+    function resetFormState() {
+        isUploading = false;
+        if (btnSubmit) {
+            btnSubmit.disabled = false;
+            btnSubmit.classList.remove('opacity-50', 'cursor-not-allowed');
+            if (submitBtnText) submitBtnText.textContent = '{% if object %}{{ t.save_changes }}{% else %}{{ t.submit_ticket }}{% endif %}';
+        }
+        if (btnAddFile) btnAddFile.classList.remove('pointer-events-none', 'opacity-50');
+        if (btnCancel) btnCancel.classList.remove('pointer-events-none', 'opacity-50');
+        if (progressPanel) progressPanel.classList.add('hidden');
+    }
 
-                Array.from(this.files).forEach(file => {
+    if (btnAddFile && fileInput) {
+        btnAddFile.addEventListener('click', () => fileInput.click());
+
+        fileInput.addEventListener('change', function(e) {
+            const files = Array.from(e.target.files);
+            if (files.length > 0) {
+                let overFiles = [];
+                files.forEach(file => {
                     if (file.size > MAX_SIZE_BYTES) {
-                        overFiles.push(file.name);
+                        overFiles.push(`${file.name} (${formatFileSize(file.size)})`);
                     } else {
                         accumulatedFiles.push(file);
                     }
                 });
 
                 if (overFiles.length > 0) {
-                    alert(`❌ ไฟล์ต่อไปนี้มีขนาดเกิน 50 MB:\n${overFiles.join('\n')}\n\nไฟล์ที่ขนาดเกินจะไม่ถูกเพิ่มในรายการครับ`);
+                    alert(`❌ The following files exceed 50 MB:\n${overFiles.join('\n')}\n\nFiles exceeding the limit will not be added.`);
                     if (errorMsg) errorMsg.classList.remove('hidden');
                 } else {
                     if (errorMsg) errorMsg.classList.add('hidden');
@@ -318,13 +316,13 @@ document.addEventListener('DOMContentLoaded', function() {
             e.preventDefault();
 
             if (isUploading) {
-                alert('⏳ กำลังอัปโหลดข้อมูลคำขอชิ้นแรกอยู่ กรุณารอสักครู่ให้เสร็จสิ้น...');
+                alert('⏳ Request upload in progress, please wait...');
                 return false;
             }
 
             let hasOver = accumulatedFiles.some(f => f.size > MAX_SIZE_BYTES);
             if (hasOver) {
-                alert('❌ ไม่สามารถส่งฟอร์มได้ เนื่องจากมีไฟล์แนบที่มีขนาดเกิน 50 MB');
+                alert('❌ Cannot submit form because some attachments exceed 50 MB.');
                 return false;
             }
 
@@ -335,7 +333,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (btnSubmit) {
                 btnSubmit.disabled = true;
                 btnSubmit.classList.add('opacity-50', 'cursor-not-allowed');
-                if (submitBtnText) submitBtnText.textContent = '⏳ กำลังส่งข้อมูล...';
+                if (submitBtnText) submitBtnText.textContent = '⏳ Submitting...';
             }
             if (btnAddFile) btnAddFile.classList.add('pointer-events-none', 'opacity-50');
             if (btnCancel) btnCancel.classList.add('pointer-events-none', 'opacity-50');
@@ -353,7 +351,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
                     if (progressBar) progressBar.style.width = percentComplete + '%';
                     if (progressPercent) progressPercent.textContent = percentComplete + '%';
-                    if (progressSpeed) progressSpeed.textContent = `ความเร็ว: ${uploadSpeed} MB/s (${(event.loaded / (1024 * 1024)).toFixed(1)} / ${(event.total / (1024 * 1024)).toFixed(1)} MB)`;
+                    if (progressSpeed) progressSpeed.textContent = `Speed: ${uploadSpeed} MB/s (${(event.loaded / (1024 * 1024)).toFixed(1)} / ${(event.total / (1024 * 1024)).toFixed(1)} MB)`;
                 }
             };
 
@@ -361,22 +359,22 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (xhr.status >= 200 && xhr.status < 400) {
                     if (progressBar) progressBar.style.width = '100%';
                     if (progressPercent) progressPercent.textContent = '100%';
-                    if (statusText) statusText.textContent = '✅ อัปโหลดและบันทึกข้อมูลสำเร็จ กำลังเปลี่ยนหน้า...';
+                    if (statusText) statusText.textContent = '✅ Saved successfully! Redirecting...';
                     
                     setTimeout(() => {
                         window.location.href = xhr.responseURL || "{% url 'dashboard' %}";
                     }, 500);
                 } else if (xhr.status === 413) {
-                    alert('❌ เกิดข้อผิดพลาด 413: ขนาดไฟล์รวมใหญ่เกินกำหนดที่เซิร์ฟเวอร์อนุญาต');
+                    alert('❌ Error 413: Total file payload size exceeds server limit.');
                     resetFormState();
                 } else {
-                    alert(`❌ เกิดข้อผิดพลาดในการบันทึกข้อมูล (${xhr.status})`);
+                    alert(`❌ Error saving data (${xhr.status})`);
                     resetFormState();
                 }
             };
 
             xhr.onerror = function() {
-                alert('❌ ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้ กรุณาตรวจสอบอินเทอร์เน็ต');
+                alert('❌ Unable to connect to server. Please check your network connection.');
                 resetFormState();
             };
 

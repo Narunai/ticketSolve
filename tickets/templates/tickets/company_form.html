@@ -1,11 +1,11 @@
 {% extends 'tickets/base.html' %}
 
 {% block title %}
-    {% if object %}แก้ไขชื่อบริษัท - {{ object.name }} - TicketSolve{% else %}เพิ่มบริษัทใหม่ - TicketSolve{% endif %}
+    {% if object %}{{ t.manage_companies }} - {{ object.name }} - TicketSolve{% else %}{{ t.add_new_company }} - TicketSolve{% endif %}
 {% endblock %}
 
 {% block header_title %}
-    {% if object %}แก้ไขบริษัท{% else %}เพิ่มบริษัทใหม่{% endif %}
+    {% if object %}{{ t.manage_companies }}{% else %}{{ t.add_new_company }}{% endif %}
 {% endblock %}
 
 {% block content %}
@@ -15,7 +15,7 @@
         <svg class="w-4 h-4 transform group-hover:translate-x-[-3px] transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
         </svg>
-        กลับไปยังรายชื่อบริษัททั้งหมด
+        {{ t.back }}
     </a>
 
     <!-- Form Card -->
@@ -24,21 +24,17 @@
 
         <div class="border-b border-slate-800 pb-5 mb-6">
             <h2 class="text-xl font-bold text-white">
-                {% if object %}แก้ไขบริษัท: {{ object.name }}{% else %}สร้างข้อมูลองค์กรใหม่{% endif %}
+                {% if object %}{{ t.company_name }}: {{ object.name }}{% else %}{{ t.add_new_company }}{% endif %}
             </h2>
             <p class="text-sm text-slate-400 mt-1">
-                {% if object %}
-                    ทำการปรับเปลี่ยนชื่อบริษัทอย่างสมบูรณ์ในระดับระบบฐานข้อมูล
-                {% else %}
-                    เพิ่มบริษัทลูกค้าผู้เช่ารายใหม่เพื่อขยายโครงข่ายการใช้งาน Multi-tenant
-                {% endif %}
+                {{ t.company_list_desc }}
             </p>
         </div>
 
         <!-- Form errors -->
         {% if form.errors %}
         <div class="bg-rose-500/10 border border-rose-500/20 text-rose-400 p-4 rounded-xl text-sm mb-6 space-y-1">
-            <span class="font-semibold block">เกิดข้อผิดพลาดในการกรอกข้อมูล:</span>
+            <span class="font-semibold block">{{ t.input_error }}:</span>
             {% for field in form %}
                 {% for error in field.errors %}
                     <p>• {{ field.label }}: {{ error }}</p>
@@ -57,26 +53,25 @@
             <div class="space-y-5">
                 <!-- Company Name -->
                 <div>
-                    <label for="{{ form.name.id_for_label }}" class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">ชื่อบริษัท/องค์กร (Company Name)</label>
+                    <label for="{{ form.name.id_for_label }}" class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">{{ t.company_name }}</label>
                     {{ form.name }}
                 </div>
 
                 <!-- Parent Company -->
                 <div>
-                    <label for="{{ form.parent.id_for_label }}" class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">สังกัดบริษัทแม่ (Parent Company / Head Office)</label>
+                    <label for="{{ form.parent.id_for_label }}" class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">{{ t.parent_org }}</label>
                     {{ form.parent }}
-                    <p class="text-xs text-slate-500 mt-1.5">หากเป็นบริษัทหลักให้เว้นว่างไว้ หากเป็นบริษัทลูกให้เลือกระบุบริษัทแม่ที่สังกัดอยู่</p>
+                    <p class="text-xs text-slate-500 mt-1.5">Leave blank if parent organization, or select parent company if this is a subsidiary.</p>
                 </div>
             </div>
-
 
             <!-- Action buttons -->
             <div class="pt-6 border-t border-slate-800 flex items-center justify-end gap-4">
                 <a href="{% url 'company_list' %}" class="px-5 py-2.5 rounded-lg text-sm font-semibold border border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800 transition-all">
-                    ยกเลิก
+                    {{ t.cancel }}
                 </a>
                 <button type="submit" class="px-5 py-2.5 rounded-lg text-sm font-semibold text-white bg-theme-gradient hover:opacity-90 shadow-theme-glow active:scale-[0.98] transition-all">
-                    บันทึกข้อมูล
+                    {{ t.save }}
                 </button>
             </div>
         </form>
