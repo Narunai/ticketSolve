@@ -1,7 +1,7 @@
 #!/bin/bash
 # TicketSolve Continuous Automated Backup Script
 # Schedule: Every 2 Hours
-# Policy: Cloud backup to Personal Google Drive, local temporary files automatically purged to save VM disk space
+# Policy: Cloud backup to Personal Google Drive via Service Account or OAuth2, local temporary files automatically purged
 
 set -e
 
@@ -37,7 +37,7 @@ tar -czf "$TEMP_ARCHIVE" $FILES_TO_BACKUP
 mv "$TEMP_ARCHIVE" "${BACKUPS_DIR}/${ARCHIVE_NAME}"
 echo "✅ Temporary Backup Archive created: ${BACKUPS_DIR}/${ARCHIVE_NAME}"
 
-# 2. Upload to Personal Google Drive via OAuth2 Refresh Token & Drive API v3
+# 2. Upload to Personal Google Drive via Service Account or OAuth2 Refresh Token
 upload_file_to_gdrive() {
     local FILE_PATH="$1"
     local FILE_NAME=$(basename "$FILE_PATH")
@@ -58,31 +58,54 @@ if os.path.exists(".env"):
                 k, v = line.split("=", 1)
                 env_vars[k.strip()] = v.strip().strip('"').strip("'")
 
-refresh_token = os.environ.get("GDRIVE_REFRESH_TOKEN", env_vars.get("GDRIVE_REFRESH_TOKEN", ""))
-client_id = os.environ.get("GDRIVE_CLIENT_ID", env_vars.get("GDRIVE_CLIENT_ID", ""))
-client_secret = os.environ.get("GDRIVE_CLIENT_SECRET", env_vars.get("GDRIVE_CLIENT_SECRET", ""))
-
 access_token = None
 
-# Attempt 1: Refresh token via OAuth2
-if refresh_token and client_id and client_secret:
+# Method A: Google Cloud Service Account JSON Key File
+sa_key_paths = [
+    os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", env_vars.get("GOOGLE_APPLICATION_CREDENTIALS", "")),
+    "/var/www/ticketSolve/service_account.json",
+    "/var/www/ticketSolve/gdrive_key.json",
+    "/var/www/ticketSolve/credentials.json"
+]
+
+sa_key_file = next((p for p in sa_key_paths if p and os.path.exists(p)), None)
+
+if sa_key_file:
     try:
-        token_url = "https://oauth2.googleapis.com/token"
-        token_data = urllib.parse.urlencode({
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "refresh_token": refresh_token,
-            "grant_type": "refresh_token"
-        }).encode("utf-8")
-
-        req = urllib.request.Request(token_url, data=token_data, headers={"Content-Type": "application/x-www-form-urlencoded"})
-        with urllib.request.urlopen(req) as resp:
-            token_res = json.loads(resp.read().decode("utf-8"))
-            access_token = token_res.get("access_token")
+        from google.oauth2 import service_account
+        import google.auth.transport.requests
+        SCOPES = ['https://www.googleapis.com/auth/drive']
+        creds = service_account.Credentials.from_service_account_file(sa_key_file, scopes=SCOPES)
+        creds.refresh(google.auth.transport.requests.Request())
+        access_token = creds.token
+        print("🔑 Authenticated using Service Account:", creds.service_account_email)
     except Exception as e:
-        print("⚠️ OAuth Refresh Token Error:", str(e))
+        print("⚠️ Service Account Auth Error:", str(e))
 
-# Attempt 2: Fallback to gcloud CLI if available
+# Method B: OAuth2 Refresh Token
+if not access_token:
+    refresh_token = os.environ.get("GDRIVE_REFRESH_TOKEN", env_vars.get("GDRIVE_REFRESH_TOKEN", ""))
+    client_id = os.environ.get("GDRIVE_CLIENT_ID", env_vars.get("GDRIVE_CLIENT_ID", ""))
+    client_secret = os.environ.get("GDRIVE_CLIENT_SECRET", env_vars.get("GDRIVE_CLIENT_SECRET", ""))
+
+    if refresh_token and client_id and client_secret:
+        try:
+            token_url = "https://oauth2.googleapis.com/token"
+            token_data = urllib.parse.urlencode({
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "refresh_token": refresh_token,
+                "grant_type": "refresh_token"
+            }).encode("utf-8")
+
+            req = urllib.request.Request(token_url, data=token_data, headers={"Content-Type": "application/x-www-form-urlencoded"})
+            with urllib.request.urlopen(req) as resp:
+                token_res = json.loads(resp.read().decode("utf-8"))
+                access_token = token_res.get("access_token")
+        except Exception as e:
+            print("⚠️ OAuth Refresh Token Error:", str(e))
+
+# Method C: gcloud CLI fallback
 if not access_token and shutil.which("gcloud"):
     try:
         access_token = subprocess.check_output(["gcloud", "auth", "print-access-token"]).decode("utf-8").strip()
@@ -90,7 +113,7 @@ if not access_token and shutil.which("gcloud"):
         pass
 
 if not access_token:
-    print("ℹ️ Google Drive cloud sync skipped (GDRIVE_REFRESH_TOKEN not configured).")
+    print("ℹ️ Google Drive cloud sync skipped (No valid Service Account key or OAuth token configured).")
     sys.exit(0)
 
 try:
