@@ -1,8 +1,7 @@
 #!/bin/bash
 # TicketSolve Continuous Automated Backup Script
 # Schedule: Every 2 Hours
-# Policy: Continuous recording without deletion limits
-# Uploads directly to Personal Google Drive via Google Drive API v3
+# Policy: Cloud backup to Personal Google Drive, local temporary files automatically purged to save VM disk space
 
 set -e
 
@@ -17,7 +16,7 @@ mkdir -p "$BACKUPS_DIR"
 
 echo "[$(date)] 🚀 Starting TicketSolve 2-Hour Continuous Backup..."
 
-# 1. Create 2-Hour Backup Archive
+# 1. Create 2-Hour Temporary Backup Archive
 ARCHIVE_NAME="backup_${NOW}.tar.gz"
 TEMP_ARCHIVE="/tmp/${ARCHIVE_NAME}"
 
@@ -36,7 +35,7 @@ fi
 
 tar -czf "$TEMP_ARCHIVE" $FILES_TO_BACKUP
 mv "$TEMP_ARCHIVE" "${BACKUPS_DIR}/${ARCHIVE_NAME}"
-echo "✅ 2-Hour Backup Archive created: ${BACKUPS_DIR}/${ARCHIVE_NAME}"
+echo "✅ Temporary Backup Archive created: ${BACKUPS_DIR}/${ARCHIVE_NAME}"
 
 # 2. Upload to Personal Google Drive via OAuth2 Refresh Token & Drive API v3
 upload_file_to_gdrive() {
@@ -91,7 +90,7 @@ if not access_token and shutil.which("gcloud"):
         pass
 
 if not access_token:
-    print("ℹ️ Google Drive cloud sync skipped (GDRIVE_REFRESH_TOKEN not configured). Local archive saved successfully.")
+    print("ℹ️ Google Drive cloud sync skipped (GDRIVE_REFRESH_TOKEN not configured).")
     sys.exit(0)
 
 try:
@@ -146,6 +145,9 @@ BackupLog.objects.create(
     details='Backup Archive created successfully (${FILE_SIZE} bytes)'
 )
 "
+    # Auto-purge local archive from VM disk to avoid taking up local storage space
+    rm -f "${BACKUPS_DIR}/${ARCHIVE_NAME}"
+    echo "🧹 Purged temporary backup archive from local VM disk to conserve storage."
 fi
 
-echo "[$(date)] 🎉 2-Hour backup workflow finished successfully."
+echo "[$(date)] 🎉 Backup workflow finished successfully."
