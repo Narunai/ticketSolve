@@ -169,4 +169,4 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 # File Upload Size Limit (Unlimited request payload size, each file limited to 10MB by validation)
 DATA_UPLOAD_MAX_MEMORY_SIZE = None
-FILE_UPLOAD_MAX_MEMORY_SIZE = None
+FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10 MB in-memory buffer limit
