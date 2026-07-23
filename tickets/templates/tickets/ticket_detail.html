@@ -161,7 +161,7 @@
                 </div>
                 
                 <!-- Comment form -->
-                <form method="POST" enctype="multipart/form-data" class="border-t border-slate-800 pt-5 space-y-4">
+                <form method="POST" enctype="multipart/form-data" id="comment-form" class="border-t border-slate-800 pt-5 space-y-4">
                     {% csrf_token %}
                     <div>
                         <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">{{ t.write_comment }}</label>
@@ -186,9 +186,32 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- Upload Progress & Queue Indicator -->
+                    <div id="comment-upload-progress-panel" class="hidden p-4 rounded-xl bg-slate-900/90 border border-indigo-500/30 space-y-3 shadow-lg my-4">
+                        <div class="flex items-center justify-between text-xs font-semibold text-slate-300">
+                            <div class="flex items-center gap-2">
+                                <svg class="animate-spin h-4 w-4 text-indigo-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                <span id="comment-upload-status-text">⏳ Uploading comment and attachments...</span>
+                            </div>
+                            <span id="comment-upload-percent-text" class="text-indigo-400 font-mono font-bold">0%</span>
+                        </div>
+                        <!-- Progress Bar -->
+                        <div class="w-full bg-slate-800 rounded-full h-2 overflow-hidden border border-slate-700">
+                            <div id="comment-upload-progress-bar" class="bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 h-2 rounded-full transition-all duration-200 w-0"></div>
+                        </div>
+                        <div class="flex items-center justify-between text-[11px] text-slate-400">
+                            <span id="comment-upload-speed-text">Speed: -- MB/s</span>
+                            <span>Please wait, do not close or navigate away from this page</span>
+                        </div>
+                    </div>
+
                     <div class="flex justify-end">
-                        <button type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold text-white bg-theme-gradient hover:opacity-90 shadow-theme-glow active:scale-[0.98] transition-all">
-                            {{ t.submit_comment }}
+                        <button type="submit" id="btn-submit-comment" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold text-white bg-theme-gradient hover:opacity-90 shadow-theme-glow active:scale-[0.98] transition-all">
+                            <span id="btn-submit-comment-text">{{ t.submit_comment }}</span>
                         </button>
                     </div>
                 </form>
@@ -397,26 +420,37 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const realInput = document.getElementById('comment-real-file-input');
+    const btnAddFile = document.getElementById('btn-comment-add-file');
     const previewContainer = document.getElementById('comment-file-list-preview');
     const itemsContainer = document.getElementById('comment-file-items-container');
     const fileCountSpan = document.getElementById('comment-file-count');
-    const form = realInput ? realInput.closest('form') : null;
-    const MAX_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+    const form = document.getElementById('comment-form') || (realInput ? realInput.closest('form') : null);
+    
+    // UI Progress Elements
+    const btnSubmit = document.getElementById('btn-submit-comment');
+    const submitBtnText = document.getElementById('btn-submit-comment-text');
+    const progressPanel = document.getElementById('comment-upload-progress-panel');
+    const progressBar = document.getElementById('comment-upload-progress-bar');
+    const progressPercent = document.getElementById('comment-upload-percent-text');
+    const progressSpeed = document.getElementById('comment-upload-speed-text');
+    const statusText = document.getElementById('comment-upload-status-text');
 
+    const MAX_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
     let accumulatedFiles = [];
+    let isUploading = false;
 
     function renderFileList() {
         if (!itemsContainer) return;
         itemsContainer.innerHTML = '';
 
         if (accumulatedFiles.length === 0) {
-            previewContainer.classList.add('hidden');
+            if (previewContainer) previewContainer.classList.add('hidden');
             if (fileCountSpan) fileCountSpan.textContent = '0';
             updateRealInput();
             return;
         }
 
-        previewContainer.classList.remove('hidden');
+        if (previewContainer) previewContainer.classList.remove('hidden');
         if (fileCountSpan) fileCountSpan.textContent = accumulatedFiles.length;
 
         accumulatedFiles.forEach((file, index) => {
@@ -468,6 +502,17 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    function resetFormState() {
+        isUploading = false;
+        if (btnSubmit) {
+            btnSubmit.disabled = false;
+            btnSubmit.classList.remove('opacity-50', 'cursor-not-allowed');
+            if (submitBtnText) submitBtnText.textContent = '{{ t.submit_comment }}';
+        }
+        if (btnAddFile) btnAddFile.classList.remove('pointer-events-none', 'opacity-50');
+        if (progressPanel) progressPanel.classList.add('hidden');
+    }
+
     if (realInput) {
         realInput.addEventListener('change', function() {
             if (this.files && this.files.length > 0) {
@@ -492,13 +537,72 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (form) {
         form.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            if (isUploading) {
+                alert('⏳ Comment upload in progress, please wait...');
+                return false;
+            }
+
             let hasOver = accumulatedFiles.some(f => f.size > MAX_SIZE_BYTES);
             if (hasOver) {
-                e.preventDefault();
                 alert('❌ Cannot submit comment because some attachments exceed 10 MB.');
                 return false;
             }
+
             updateRealInput();
+
+            // Lock Form & UI
+            isUploading = true;
+            if (btnSubmit) {
+                btnSubmit.disabled = true;
+                btnSubmit.classList.add('opacity-50', 'cursor-not-allowed');
+                if (submitBtnText) submitBtnText.textContent = '⏳ Posting Comment...';
+            }
+            if (btnAddFile) btnAddFile.classList.add('pointer-events-none', 'opacity-50');
+            if (progressPanel) progressPanel.classList.remove('hidden');
+
+            const formData = new FormData(form);
+            const xhr = new XMLHttpRequest();
+            const startTime = Date.now();
+
+            xhr.upload.onprogress = function(event) {
+                if (event.lengthComputable) {
+                    const percentComplete = Math.round((event.loaded / event.total) * 100);
+                    const elapsedTime = (Date.now() - startTime) / 1000;
+                    const uploadSpeed = elapsedTime > 0 ? (event.loaded / (1024 * 1024 * elapsedTime)).toFixed(1) : 0;
+
+                    if (progressBar) progressBar.style.width = percentComplete + '%';
+                    if (progressPercent) progressPercent.textContent = percentComplete + '%';
+                    if (progressSpeed) progressSpeed.textContent = `Speed: ${uploadSpeed} MB/s (${(event.loaded / (1024 * 1024)).toFixed(1)} / ${(event.total / (1024 * 1024)).toFixed(1)} MB)`;
+                }
+            };
+
+            xhr.onload = function() {
+                if (xhr.status >= 200 && xhr.status < 400) {
+                    if (progressBar) progressBar.style.width = '100%';
+                    if (progressPercent) progressPercent.textContent = '100%';
+                    if (statusText) statusText.textContent = '✅ Comment posted successfully! Reloading...';
+                    
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 500);
+                } else if (xhr.status === 413) {
+                    alert('❌ Error 413: Payload size exceeds server limit.');
+                    resetFormState();
+                } else {
+                    alert(`❌ Error posting comment (${xhr.status})`);
+                    resetFormState();
+                }
+            };
+
+            xhr.onerror = function() {
+                alert('❌ Unable to connect to server. Please check network connection.');
+                resetFormState();
+            };
+
+            xhr.open('POST', form.action || window.location.href, true);
+            xhr.send(formData);
         });
     }
 });
