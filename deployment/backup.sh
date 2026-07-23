@@ -38,26 +38,63 @@ tar -czf "$TEMP_ARCHIVE" $FILES_TO_BACKUP
 mv "$TEMP_ARCHIVE" "${BACKUPS_DIR}/${ARCHIVE_NAME}"
 echo "✅ 2-Hour Backup Archive created: ${BACKUPS_DIR}/${ARCHIVE_NAME}"
 
-# 2. Upload to Personal Google Drive via gcloud OAuth token & Drive API v3 (if gcloud available)
+# 2. Upload to Personal Google Drive via OAuth2 Refresh Token & Drive API v3
 upload_file_to_gdrive() {
     local FILE_PATH="$1"
     local FILE_NAME=$(basename "$FILE_PATH")
     echo "☁️ Uploading $FILE_NAME to Personal Google Drive..."
     "${PROJECT_DIR}/venv/bin/python3" - "$FILE_PATH" "$GDRIVE_FOLDER_ID" << 'EOF'
-import sys, urllib.request, json, os, subprocess, shutil
+import sys, urllib.request, urllib.parse, json, os, subprocess, shutil
 
 file_path = sys.argv[1]
 file_name = os.path.basename(file_path)
 folder_id = sys.argv[2]
 
+# Read settings from .env
+env_vars = {}
+if os.path.exists(".env"):
+    with open(".env", "r") as env_f:
+        for line in env_f:
+            if "=" in line and not line.startswith("#"):
+                k, v = line.split("=", 1)
+                env_vars[k.strip()] = v.strip().strip('"').strip("'")
+
+refresh_token = os.environ.get("GDRIVE_REFRESH_TOKEN", env_vars.get("GDRIVE_REFRESH_TOKEN", ""))
+client_id = os.environ.get("GDRIVE_CLIENT_ID", env_vars.get("GDRIVE_CLIENT_ID", ""))
+client_secret = os.environ.get("GDRIVE_CLIENT_SECRET", env_vars.get("GDRIVE_CLIENT_SECRET", ""))
+
+access_token = None
+
+# Attempt 1: Refresh token via OAuth2
+if refresh_token and client_id and client_secret:
+    try:
+        token_url = "https://oauth2.googleapis.com/token"
+        token_data = urllib.parse.urlencode({
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "refresh_token": refresh_token,
+            "grant_type": "refresh_token"
+        }).encode("utf-8")
+
+        req = urllib.request.Request(token_url, data=token_data, headers={"Content-Type": "application/x-www-form-urlencoded"})
+        with urllib.request.urlopen(req) as resp:
+            token_res = json.loads(resp.read().decode("utf-8"))
+            access_token = token_res.get("access_token")
+    except Exception as e:
+        print("⚠️ OAuth Refresh Token Error:", str(e))
+
+# Attempt 2: Fallback to gcloud CLI if available
+if not access_token and shutil.which("gcloud"):
+    try:
+        access_token = subprocess.check_output(["gcloud", "auth", "print-access-token"]).decode("utf-8").strip()
+    except Exception:
+        pass
+
+if not access_token:
+    print("ℹ️ Google Drive cloud sync skipped (GDRIVE_REFRESH_TOKEN not configured). Local archive saved successfully.")
+    sys.exit(0)
+
 try:
-    if not shutil.which("gcloud"):
-        print("ℹ️ gcloud CLI not detected on system. Local backup archive saved successfully.")
-        sys.exit(0)
-
-    # 1. Get Access Token from gcloud authenticated user
-    access_token = subprocess.check_output(["gcloud", "auth", "print-access-token"]).decode("utf-8").strip()
-
     # 2. Initiate Resumable Upload
     metadata = json.dumps({"name": file_name, "parents": [folder_id]}).encode("utf-8")
     init_req = urllib.request.Request(
@@ -93,7 +130,7 @@ try:
         result = json.loads(upload_resp.read().decode("utf-8"))
         print("🎉 Successfully uploaded to Personal Google Drive! File ID:", result.get("id"))
 except Exception as e:
-    print("⚠️ Google Drive Upload Note:", str(e))
+    print("⚠️ Google Drive Upload Error:", str(e))
 EOF
 }
 
