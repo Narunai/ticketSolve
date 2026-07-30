@@ -8,7 +8,7 @@ from django.urls import reverse, reverse_lazy
 from django.core.exceptions import PermissionDenied
 from django.http import FileResponse
 from .models import Ticket, CustomUser, Company, EmailLog, TicketAuditLog, ReportViewLog, MonthlyReportSchedule, TicketAutomationConfig, SMTPConfiguration, get_smtp_connection, get_smtp_from_email, TicketComment, TicketCategory, ResolutionCategory, ModuleCategory, TicketStatusConfig, CompanyTicketConfig, CompanyTicketField, NotificationConfig, should_send_email_notification, BackupLog
-from .backup_service import perform_full_backup, perform_incremental_backup, get_backup_file_path
+from .backup_service import perform_full_backup, perform_incremental_backup, get_backup_file_path, FileLock
 
 
 from django.db import models
@@ -234,16 +234,17 @@ class TicketForm(forms.ModelForm):
             if self.files:
                 files = self.files.getlist('attachments') or self.files.getlist('attachment')
             from .models import TicketAttachment
-            for f in files:
-                att = TicketAttachment.objects.create(
-                    ticket=instance,
-                    file=f,
-                    filename=f.name,
-                    file_size=f.size
-                )
-                if not instance.attachment:
-                    instance.attachment = att.file
-                    instance.save(update_fields=['attachment'])
+            with FileLock("system_backup.lock", timeout=30):
+                for f in files:
+                    att = TicketAttachment.objects.create(
+                        ticket=instance,
+                        file=f,
+                        filename=f.name,
+                        file_size=f.size
+                    )
+                    if not instance.attachment:
+                        instance.attachment = att.file
+                        instance.save(update_fields=['attachment'])
         return instance
 
 
@@ -427,16 +428,17 @@ class TicketUpdateForm(forms.ModelForm):
             if self.files:
                 files = self.files.getlist('attachments') or self.files.getlist('attachment')
             from .models import TicketAttachment
-            for f in files:
-                att = TicketAttachment.objects.create(
-                    ticket=instance,
-                    file=f,
-                    filename=f.name,
-                    file_size=f.size
-                )
-                if not instance.attachment:
-                    instance.attachment = att.file
-                    instance.save(update_fields=['attachment'])
+            with FileLock("system_backup.lock", timeout=30):
+                for f in files:
+                    att = TicketAttachment.objects.create(
+                        ticket=instance,
+                        file=f,
+                        filename=f.name,
+                        file_size=f.size
+                    )
+                    if not instance.attachment:
+                        instance.attachment = att.file
+                        instance.save(update_fields=['attachment'])
         return instance
 
 
@@ -1114,13 +1116,14 @@ class TicketDetailView(LoginRequiredMixin, DetailView):
             )
 
             from .models import CommentAttachment
-            for f in files:
-                CommentAttachment.objects.create(
-                    comment=comment,
-                    file=f,
-                    filename=f.name,
-                    file_size=f.size
-                )
+            with FileLock("system_backup.lock", timeout=30):
+                for f in files:
+                    CommentAttachment.objects.create(
+                        comment=comment,
+                        file=f,
+                        filename=f.name,
+                        file_size=f.size
+                    )
             # Send email notifications to stakeholders
             self.send_comment_notifications(comment)
             messages.success(request, "Comment posted and files attached successfully.")

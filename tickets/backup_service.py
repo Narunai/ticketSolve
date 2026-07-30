@@ -133,58 +133,147 @@ def upload_to_gdrive(file_path, folder_id=GDRIVE_FOLDER_ID):
         return False, f"Google Drive Upload Error: {e}"
 
 
+import time
+import sqlite3
+
+class FileLock:
+    """
+    Cross-platform inter-process lock manager.
+    Ensures safe synchronization between background backup operations,
+    active database queues, and file uploads.
+    """
+    def __init__(self, lock_file_name="system_backup.lock", timeout=60, poll_interval=0.5):
+        os.makedirs(BACKUP_DIR, exist_ok=True)
+        self.lock_file_path = os.path.join(BACKUP_DIR, lock_file_name)
+        self.timeout = timeout
+        self.poll_interval = poll_interval
+        self.fd = None
+
+    def acquire(self):
+        end_time = time.time() + self.timeout
+        while True:
+            try:
+                self.fd = os.open(self.lock_file_path, os.O_CREAT | os.O_RDWR | os.O_EXCL)
+                return True
+            except OSError:
+                try:
+                    mtime = os.path.getmtime(self.lock_file_path)
+                    if time.time() - mtime > (self.timeout + 10):
+                        try:
+                            os.remove(self.lock_file_path)
+                        except OSError:
+                            pass
+                except OSError:
+                    pass
+
+                if time.time() >= end_time:
+                    return False
+                time.sleep(self.poll_interval)
+
+    def release(self):
+        if self.fd is not None:
+            try:
+                os.close(self.fd)
+            except OSError:
+                pass
+            self.fd = None
+            try:
+                if os.path.exists(self.lock_file_path):
+                    os.remove(self.lock_file_path)
+            except OSError:
+                pass
+
+    def __enter__(self):
+        self.acquire()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.release()
+
+
 def perform_full_backup():
     """
-    Creates a full backup of db.sqlite3, media, and .env.
+    Creates a full backup of db.sqlite3 (via SQLite Online Backup API), media, and .env.
+    Waits for active locks/queues (up to 60s) before execution.
     Saves to BACKUP_DIR for local download and uploads to Google Drive if configured.
     """
     os.makedirs(BACKUP_DIR, exist_ok=True)
     now_str = timezone.now().strftime("%Y-%m-%d_%H-%M-%S")
     archive_name = f"full_backup_{now_str}.tar.gz"
     backup_filepath = os.path.join(BACKUP_DIR, archive_name)
+    temp_db_path = os.path.join(BACKUP_DIR, f"temp_db_{now_str}.sqlite3")
 
-    try:
-        with tarfile.open(backup_filepath, "w:gz") as tar:
+    with FileLock("system_backup.lock", timeout=60):
+        try:
+            # 1. Perform safe online SQLite backup to temp_db_path to prevent WAL corruption
             db_path = os.path.join(settings.BASE_DIR, "db.sqlite3")
             if os.path.exists(db_path):
-                tar.add(db_path, arcname="db.sqlite3")
+                src_conn = sqlite3.connect(db_path)
+                dst_conn = sqlite3.connect(temp_db_path)
+                with dst_conn:
+                    src_conn.backup(dst_conn, pages=100, sleep=0.01)
+                dst_conn.close()
+                src_conn.close()
 
-            media_path = os.path.join(settings.BASE_DIR, "media")
-            if os.path.exists(media_path):
-                tar.add(media_path, arcname="media")
+            # 2. Package online-backed up SQLite db, media folder, and .env
+            with tarfile.open(backup_filepath, "w:gz") as tar:
+                if os.path.exists(temp_db_path):
+                    tar.add(temp_db_path, arcname="db.sqlite3")
+                elif os.path.exists(db_path):
+                    tar.add(db_path, arcname="db.sqlite3")
 
-            env_path = os.path.join(settings.BASE_DIR, ".env")
-            if os.path.exists(env_path):
-                tar.add(env_path, arcname=".env")
+                media_path = os.path.join(settings.BASE_DIR, "media")
+                if os.path.exists(media_path):
+                    tar.add(media_path, arcname="media")
 
-        file_size = os.path.getsize(backup_filepath)
-        uploaded, cloud_msg = upload_to_gdrive(backup_filepath)
+                env_path = os.path.join(settings.BASE_DIR, ".env")
+                if os.path.exists(env_path):
+                    tar.add(env_path, arcname=".env")
 
-        details = f"Full Backup ({file_size} bytes). {cloud_msg}"
-        log = BackupLog.objects.create(
-            filename=archive_name,
-            file_size_bytes=file_size,
-            backup_type=BackupLog.TYPE_FULL,
-            status=BackupLog.STATUS_SUCCESS,
-            details=details
-        )
-        return {"success": True, "log": log, "details": details, "file_path": backup_filepath}
-    except Exception as e:
-        if os.path.exists(backup_filepath):
-            os.remove(backup_filepath)
-        log = BackupLog.objects.create(
-            filename=archive_name,
-            file_size_bytes=0,
-            backup_type=BackupLog.TYPE_FULL,
-            status=BackupLog.STATUS_FAILED,
-            details=f"Backup Failed: {str(e)}"
-        )
-        return {"success": False, "log": log, "error": str(e)}
+            # Clean up temporary online backup db file
+            if os.path.exists(temp_db_path):
+                try:
+                    os.remove(temp_db_path)
+                except OSError:
+                    pass
+
+            file_size = os.path.getsize(backup_filepath)
+            uploaded, cloud_msg = upload_to_gdrive(backup_filepath)
+
+            details = f"Full Backup ({file_size} bytes). {cloud_msg}"
+            log = BackupLog.objects.create(
+                filename=archive_name,
+                file_size_bytes=file_size,
+                backup_type=BackupLog.TYPE_FULL,
+                status=BackupLog.STATUS_SUCCESS,
+                details=details
+            )
+            return {"success": True, "log": log, "details": details, "file_path": backup_filepath}
+        except Exception as e:
+            if os.path.exists(temp_db_path):
+                try:
+                    os.remove(temp_db_path)
+                except OSError:
+                    pass
+            if os.path.exists(backup_filepath):
+                try:
+                    os.remove(backup_filepath)
+                except OSError:
+                    pass
+            log = BackupLog.objects.create(
+                filename=archive_name,
+                file_size_bytes=0,
+                backup_type=BackupLog.TYPE_FULL,
+                status=BackupLog.STATUS_FAILED,
+                details=f"Backup Failed: {str(e)}"
+            )
+            return {"success": False, "log": log, "error": str(e)}
 
 
 def perform_incremental_backup(hours=2):
     """
     Exports tickets created in the last `hours` hours + their comments & attachments.
+    Waits for active locks/queues (up to 60s) before execution.
     Saves to BACKUP_DIR for local download and uploads to Google Drive if configured.
     """
     os.makedirs(BACKUP_DIR, exist_ok=True)
@@ -193,99 +282,100 @@ def perform_incremental_backup(hours=2):
     now_str = now.strftime("%Y-%m-%d_%H-%M-%S")
     archive_name = f"incremental_backup_{now_str}.zip"
 
-    tickets = Ticket.objects.filter(created_at__gte=since).select_related('company', 'created_by', 'assigned_to', 'ticket_category', 'module_category')
+    with FileLock("system_backup.lock", timeout=60):
+        tickets = Ticket.objects.filter(created_at__gte=since).select_related('company', 'created_by', 'assigned_to', 'ticket_category', 'module_category')
 
-    if not tickets.exists():
-        log = BackupLog.objects.create(
-            filename=archive_name,
-            file_size_bytes=0,
-            backup_type=BackupLog.TYPE_INCREMENTAL,
-            status=BackupLog.STATUS_SUCCESS,
-            details=f"No new tickets created in the last {hours} hours."
-        )
-        return {"success": True, "log": log, "count": 0, "message": f"No new tickets created in the last {hours} hours."}
+        if not tickets.exists():
+            log = BackupLog.objects.create(
+                filename=archive_name,
+                file_size_bytes=0,
+                backup_type=BackupLog.TYPE_INCREMENTAL,
+                status=BackupLog.STATUS_SUCCESS,
+                details=f"No new tickets created in the last {hours} hours."
+            )
+            return {"success": True, "log": log, "count": 0, "message": f"No new tickets created in the last {hours} hours."}
 
-    zip_path = os.path.join(BACKUP_DIR, archive_name)
+        zip_path = os.path.join(BACKUP_DIR, archive_name)
 
-    try:
-        tickets_data = []
-        attachments_to_pack = []
+        try:
+            tickets_data = []
+            attachments_to_pack = []
 
-        for ticket in tickets:
-            t_data = {
-                "id": ticket.id,
-                "ticket_code": ticket.get_ticket_code(),
-                "title": ticket.title,
-                "description": ticket.description,
-                "status": ticket.status,
-                "priority": ticket.priority,
-                "company": ticket.company.name if ticket.company else None,
-                "created_by": ticket.created_by.username if ticket.created_by else None,
-                "assigned_to": ticket.assigned_to.username if ticket.assigned_to else None,
-                "category": ticket.ticket_category.name if ticket.ticket_category else None,
-                "module_category": ticket.module_category.name if ticket.module_category else None,
-                "custom_fields": ticket.custom_fields_data,
-                "resolution_notes": ticket.resolution_notes,
-                "created_at": ticket.created_at.isoformat(),
-                "updated_at": ticket.updated_at.isoformat(),
-                "comments": []
-            }
-
-            # Gather comments
-            comments = TicketComment.objects.filter(ticket=ticket).select_related('author')
-            for c in comments:
-                c_data = {
-                    "id": c.id,
-                    "author": c.author.username if c.author else "System",
-                    "content": c.content,
-                    "created_at": c.created_at.isoformat(),
-                    "attachments": []
+            for ticket in tickets:
+                t_data = {
+                    "id": ticket.id,
+                    "ticket_code": ticket.get_ticket_code(),
+                    "title": ticket.title,
+                    "description": ticket.description,
+                    "status": ticket.status,
+                    "priority": ticket.priority,
+                    "company": ticket.company.name if ticket.company else None,
+                    "created_by": ticket.created_by.username if ticket.created_by else None,
+                    "assigned_to": ticket.assigned_to.username if ticket.assigned_to else None,
+                    "category": ticket.ticket_category.name if ticket.ticket_category else None,
+                    "module_category": ticket.module_category.name if ticket.module_category else None,
+                    "custom_fields": ticket.custom_fields_data,
+                    "resolution_notes": ticket.resolution_notes,
+                    "created_at": ticket.created_at.isoformat(),
+                    "updated_at": ticket.updated_at.isoformat(),
+                    "comments": []
                 }
-                for att in c.attachments.all():
-                    if att.file and os.path.exists(att.file.path):
-                        c_data["attachments"].append({
-                            "filename": att.filename or os.path.basename(att.file.name),
-                            "path": f"attachments/comment_{c.id}_{os.path.basename(att.file.name)}"
-                        })
-                        attachments_to_pack.append((att.file.path, f"attachments/comment_{c.id}_{os.path.basename(att.file.name)}"))
-                t_data["comments"].append(c_data)
 
-            # Ticket direct attachments
-            if hasattr(ticket, 'attachments'):
-                for att in ticket.attachments.all():
-                    if att.file and os.path.exists(att.file.path):
-                        attachments_to_pack.append((att.file.path, f"attachments/ticket_{ticket.id}_{os.path.basename(att.file.name)}"))
+                # Gather comments
+                comments = TicketComment.objects.filter(ticket=ticket).select_related('author')
+                for c in comments:
+                    c_data = {
+                        "id": c.id,
+                        "author": c.author.username if c.author else "System",
+                        "content": c.content,
+                        "created_at": c.created_at.isoformat(),
+                        "attachments": []
+                    }
+                    for att in c.attachments.all():
+                        if att.file and os.path.exists(att.file.path):
+                            c_data["attachments"].append({
+                                "filename": att.filename or os.path.basename(att.file.name),
+                                "path": f"attachments/comment_{c.id}_{os.path.basename(att.file.name)}"
+                            })
+                            attachments_to_pack.append((att.file.path, f"attachments/comment_{c.id}_{os.path.basename(att.file.name)}"))
+                    t_data["comments"].append(c_data)
 
-            tickets_data.append(t_data)
+                # Ticket direct attachments
+                if hasattr(ticket, 'attachments'):
+                    for att in ticket.attachments.all():
+                        if att.file and os.path.exists(att.file.path):
+                            attachments_to_pack.append((att.file.path, f"attachments/ticket_{ticket.id}_{os.path.basename(att.file.name)}"))
 
-        # Create Zip file
-        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-            zipf.writestr("tickets.json", json.dumps(tickets_data, indent=2, ensure_ascii=False))
-            for file_on_disk, arcname in attachments_to_pack:
-                if os.path.exists(file_on_disk):
-                    zipf.write(file_on_disk, arcname)
+                tickets_data.append(t_data)
 
-        file_size = os.path.getsize(zip_path)
-        uploaded, cloud_msg = upload_to_gdrive(zip_path)
+            # Create Zip file
+            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                zipf.writestr("tickets.json", json.dumps(tickets_data, indent=2, ensure_ascii=False))
+                for file_on_disk, arcname in attachments_to_pack:
+                    if os.path.exists(file_on_disk):
+                        zipf.write(file_on_disk, arcname)
 
-        ticket_ids = ", ".join([f"#{t.id}" for t in tickets])
-        details = f"2-Hour Incremental Backup of {tickets.count()} ticket(s) ({ticket_ids}). {cloud_msg}"
-        log = BackupLog.objects.create(
-            filename=archive_name,
-            file_size_bytes=file_size,
-            backup_type=BackupLog.TYPE_INCREMENTAL,
-            status=BackupLog.STATUS_SUCCESS,
-            details=details
-        )
-        return {"success": True, "log": log, "count": tickets.count(), "details": details, "file_path": zip_path}
-    except Exception as e:
-        if os.path.exists(zip_path):
-            os.remove(zip_path)
-        log = BackupLog.objects.create(
-            filename=archive_name,
-            file_size_bytes=0,
-            backup_type=BackupLog.TYPE_INCREMENTAL,
-            status=BackupLog.STATUS_FAILED,
-            details=f"Incremental Backup Failed: {str(e)}"
-        )
-        return {"success": False, "log": log, "error": str(e)}
+            file_size = os.path.getsize(zip_path)
+            uploaded, cloud_msg = upload_to_gdrive(zip_path)
+
+            ticket_ids = ", ".join([f"#{t.id}" for t in tickets])
+            details = f"2-Hour Incremental Backup of {tickets.count()} ticket(s) ({ticket_ids}). {cloud_msg}"
+            log = BackupLog.objects.create(
+                filename=archive_name,
+                file_size_bytes=file_size,
+                backup_type=BackupLog.TYPE_INCREMENTAL,
+                status=BackupLog.STATUS_SUCCESS,
+                details=details
+            )
+            return {"success": True, "log": log, "count": tickets.count(), "details": details, "file_path": zip_path}
+        except Exception as e:
+            if os.path.exists(zip_path):
+                os.remove(zip_path)
+            log = BackupLog.objects.create(
+                filename=archive_name,
+                file_size_bytes=0,
+                backup_type=BackupLog.TYPE_INCREMENTAL,
+                status=BackupLog.STATUS_FAILED,
+                details=f"Incremental Backup Failed: {str(e)}"
+            )
+            return {"success": False, "log": log, "error": str(e)}
