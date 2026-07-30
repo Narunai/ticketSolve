@@ -398,6 +398,10 @@
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
                     {{ t.logs }}
                 </a>
+                <a href="{% url 'backup_list' %}" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/50 transition-all text-xs font-medium {% if request.resolver_match.url_name == 'backup_list' %}bg-theme-bg border border-theme-border text-theme-accent{% endif %}">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
+                    <span>Backup System</span>
+                </a>
                 {% endif %}
 
                 {% if user.role == 'SYSTEM_ADMIN' or user.role == 'SYSTEM_SUB_ADMIN' or user.role == 'CLIENT_ADMIN' or user.is_superuser %}

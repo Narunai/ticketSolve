@@ -482,8 +482,16 @@ class BackupLog(models.Model):
         (STATUS_FAILED, 'Failed'),
     ]
 
+    TYPE_FULL = 'FULL'
+    TYPE_INCREMENTAL = 'INCREMENTAL'
+    TYPE_CHOICES = [
+        (TYPE_FULL, 'Full Backup'),
+        (TYPE_INCREMENTAL, '2-Hour Incremental'),
+    ]
+
     filename = models.CharField(max_length=255)
     file_size_bytes = models.BigIntegerField(default=0)
+    backup_type = models.CharField(max_length=20, choices=TYPE_CHOICES, default=TYPE_FULL)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_SUCCESS)
     details = models.TextField(blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
@@ -492,11 +500,12 @@ class BackupLog(models.Model):
         ordering = ['-created_at']
 
     def __str__(self):
-        return f"{self.filename} ({self.status}) - {self.created_at.strftime('%Y-%m-%d %H:%M')}"
+        return f"{self.filename} ({self.get_backup_type_display()} - {self.status}) - {self.created_at.strftime('%Y-%m-%d %H:%M')}"
 
     @property
     def file_size_mb(self):
         return round(self.file_size_bytes / (1024 * 1024), 2)
+
 
 
 class EmailLog(models.Model):

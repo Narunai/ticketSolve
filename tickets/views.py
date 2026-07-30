@@ -6,7 +6,9 @@ from django.views.generic import CreateView, UpdateView, DetailView, TemplateVie
 from django.urls import reverse, reverse_lazy
 
 from django.core.exceptions import PermissionDenied
+from django.http import FileResponse
 from .models import Ticket, CustomUser, Company, EmailLog, TicketAuditLog, ReportViewLog, MonthlyReportSchedule, TicketAutomationConfig, SMTPConfiguration, get_smtp_connection, get_smtp_from_email, TicketComment, TicketCategory, ResolutionCategory, ModuleCategory, TicketStatusConfig, CompanyTicketConfig, CompanyTicketField, NotificationConfig, should_send_email_notification, BackupLog
+from .backup_service import perform_full_backup, perform_incremental_backup, get_backup_file_path
 
 
 from django.db import models
@@ -24,7 +26,10 @@ from django.contrib import messages
 from django.http import HttpResponse, Http404
 from io import BytesIO
 from django.template.loader import get_template
-from xhtml2pdf import pisa
+try:
+    from xhtml2pdf import pisa
+except Exception:
+    pisa = None
 from django.core.mail import EmailMessage, send_mail
 
 from django.utils import timezone
@@ -1838,6 +1843,8 @@ def generate_pdf(template_src, context):
     tempfile.NamedTemporaryFile = custom_NamedTemporaryFile
 
     try:
+        if not pisa:
+            return None
         # xhtml2pdf handles UTF-8 correctly
         pdf = pisa.pisaDocument(
             BytesIO(html.encode("utf-8")),
@@ -2986,9 +2993,6 @@ class TicketAutomationUpdateView(LoginRequiredMixin, SystemStaffRequiredMixin, U
 
     def form_valid(self, form):
         messages.success(self.request, 'Ticket Auto Schedule updated successfully.')
-        return super().form_valid(form)
-
-
 class TicketAutomationDeleteView(LoginRequiredMixin, SystemStaffRequiredMixin, View):
     def post(self, request, pk, *args, **kwargs):
         queryset = TicketAutomationListView.get_queryset(self)
@@ -2996,6 +3000,121 @@ class TicketAutomationDeleteView(LoginRequiredMixin, SystemStaffRequiredMixin, V
         config.delete()
         messages.success(request, 'Ticket Auto Schedule deleted successfully.')
         return redirect('ticket_automation_list')
+
+
+class BackupManagementView(LoginRequiredMixin, SystemStaffRequiredMixin, TemplateView):
+    template_name = 'tickets/backup_list.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        all_logs = BackupLog.objects.all()
+
+        q = self.request.GET.get('q', '').strip()
+        backup_type = self.request.GET.get('type', '').strip()
+        min_size = self.request.GET.get('min_size', '').strip()
+        sort = self.request.GET.get('sort', '-created_at').strip()
+
+        logs = all_logs
+
+        if q:
+            logs = logs.filter(models.Q(filename__icontains=q) | models.Q(details__icontains=q))
+
+        if backup_type in [BackupLog.TYPE_FULL, BackupLog.TYPE_INCREMENTAL]:
+            logs = logs.filter(backup_type=backup_type)
+
+        if min_size:
+            try:
+                min_mb = float(min_size)
+                min_bytes = int(min_mb * 1024 * 1024)
+                logs = logs.filter(file_size_bytes__gte=min_bytes)
+            except ValueError:
+                pass
+
+        if sort == 'size_desc':
+            logs = logs.order_by('-file_size_bytes', '-created_at')
+        elif sort == 'size_asc':
+            logs = logs.order_by('file_size_bytes', '-created_at')
+        elif sort == 'created_at':
+            logs = logs.order_by('created_at')
+        else:
+            sort = '-created_at'
+            logs = logs.order_by('-created_at')
+
+        context['backup_logs'] = logs
+        context['total_count'] = all_logs.count()
+        context['filtered_count'] = logs.count()
+        context['full_count'] = all_logs.filter(backup_type=BackupLog.TYPE_FULL).count()
+        context['incremental_count'] = all_logs.filter(backup_type=BackupLog.TYPE_INCREMENTAL).count()
+        context['large_count'] = all_logs.filter(file_size_bytes__gte=1024 * 1024).count()
+        context['last_backup'] = all_logs.first()
+
+        context['q'] = q
+        context['selected_type'] = backup_type
+        context['min_size'] = min_size
+        context['selected_sort'] = sort
+        context['has_filter'] = bool(q or backup_type or min_size or sort != '-created_at')
+        return context
+
+
+class TriggerBackupView(LoginRequiredMixin, SystemStaffRequiredMixin, View):
+    def post(self, request, *args, **kwargs):
+        backup_type = request.POST.get('backup_type', 'full')
+        if backup_type == 'incremental':
+            hours = int(request.POST.get('hours', 2))
+            res = perform_incremental_backup(hours=hours)
+            if res.get('success'):
+                messages.success(request, f"✅ 2-Hour Incremental Backup completed! {res.get('details', res.get('message'))}")
+            else:
+                messages.error(request, f"❌ Backup failed: {res.get('error')}")
+        else:
+            res = perform_full_backup()
+            if res.get('success'):
+                messages.success(request, f"✅ Full System Backup completed! {res.get('details')}")
+            else:
+                messages.error(request, f"❌ Backup failed: {res.get('error')}")
+
+        return redirect('backup_list')
+
+
+class DownloadBackupView(LoginRequiredMixin, SystemStaffRequiredMixin, View):
+    def get(self, request, pk, *args, **kwargs):
+        log = get_object_or_404(BackupLog, pk=pk)
+        file_path = get_backup_file_path(log.filename)
+
+        if not file_path or not os.path.exists(file_path):
+            # Attempt on-demand generation if file is missing locally
+            if log.backup_type == BackupLog.TYPE_FULL:
+                res = perform_full_backup()
+                if res.get('success'):
+                    file_path = res.get('file_path')
+            else:
+                res = perform_incremental_backup(hours=24)
+                if res.get('success'):
+                    file_path = res.get('file_path')
+
+        if not file_path or not os.path.exists(file_path):
+            messages.error(request, f"Backup file '{log.filename}' is not available on server for download.")
+            return redirect('backup_list')
+
+        response = FileResponse(open(file_path, 'rb'), as_attachment=True, filename=log.filename)
+        return response
+
+
+class DeleteBackupLogView(LoginRequiredMixin, SystemStaffRequiredMixin, View):
+    def post(self, request, pk, *args, **kwargs):
+        log = get_object_or_404(BackupLog, pk=pk)
+        filename = log.filename
+        file_path = get_backup_file_path(filename)
+        if file_path and os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+            except Exception:
+                pass
+        log.delete()
+        messages.success(request, f"🗑️ Deleted backup record and file '{filename}'.")
+        return redirect('backup_list')
+
+
 
 
 

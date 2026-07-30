@@ -9,3 +9,5 @@ venv/
 .idea/
 .vscode/
 media/
+backups/*.zip
+backups/*.tar.gz

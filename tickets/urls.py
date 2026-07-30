@@ -76,5 +76,10 @@ urlpatterns = [
     path('settings/smtp/<int:pk>/toggle/', views.SMTPToggleActiveView.as_view(), name='smtp_toggle_active'),
     path('settings/smtp/<int:pk>/delete/', views.SMTPDeleteView.as_view(), name='smtp_delete'),
 
-
+    # Backup Management URLs
+    path('backups/', views.BackupManagementView.as_view(), name='backup_list'),
+    path('backups/trigger/', views.TriggerBackupView.as_view(), name='backup_trigger'),
+    path('backups/<int:pk>/download/', views.DownloadBackupView.as_view(), name='backup_download'),
+    path('backups/<int:pk>/delete/', views.DeleteBackupLogView.as_view(), name='backup_delete'),
 ]
+

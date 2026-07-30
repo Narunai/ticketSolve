@@ -242,11 +242,14 @@ def ensure_default_categories_and_configs(sender, **kwargs):
             ('Other', 'General questions or miscellaneous issues', 'help-circle', '#6b7280'),
         ]
         for name, desc, icon, color in defaults_cats:
-            TicketCategory.objects.get_or_create(
-                name=name,
-                company=None,
-                defaults={'description': desc, 'icon_code': icon, 'color_code': color}
-            )
+            if not TicketCategory.objects.filter(name=name, company=None).exists():
+                TicketCategory.objects.create(
+                    name=name,
+                    company=None,
+                    description=desc,
+                    icon_code=icon,
+                    color_code=color
+                )
 
         default_resolutions = [
             ('Hardware Replacement', 'Replaced faulty hardware or components'),
@@ -258,11 +261,12 @@ def ensure_default_categories_and_configs(sender, **kwargs):
             ('Other / Cancelled', 'Other types of resolutions or user cancelled request'),
         ]
         for name, desc in default_resolutions:
-            ResolutionCategory.objects.get_or_create(
-                name=name,
-                company=None,
-                defaults={'description': desc}
-            )
+            if not ResolutionCategory.objects.filter(name=name, company=None).exists():
+                ResolutionCategory.objects.create(
+                    name=name,
+                    company=None,
+                    description=desc
+                )
 
 
 

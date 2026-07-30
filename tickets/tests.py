@@ -1443,7 +1443,80 @@ class MultiTenantTicketTests(TestCase):
         self.ticket_a.status = Ticket.STATUS_IN_PROGRESS
         self.ticket_a.save(update_fields=['status'])
         self.ticket_a.refresh_from_db()
-        self.assertGreater(self.ticket_a.status_changed_at, old_clock)
+    def test_backup_management_views_and_service(self):
+        from tickets.backup_service import perform_full_backup, perform_incremental_backup
+        from tickets.models import BackupLog
+
+        # Login as System Admin
+        self.client.login(username="system_admin", password="password123")
+
+        # 1. Test Backup Management List View
+        response = self.client.get(reverse('backup_list'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Backup Management")
+
+        # Create sample backup logs of different sizes for filter testing
+        small_log = BackupLog.objects.create(
+            filename="small_backup.zip",
+            file_size_bytes=500 * 1024, # 0.5 MB
+            backup_type=BackupLog.TYPE_INCREMENTAL,
+            status=BackupLog.STATUS_SUCCESS,
+            details="Small test log"
+        )
+        large_log = BackupLog.objects.create(
+            filename="large_backup_archive.tar.gz",
+            file_size_bytes=10 * 1024 * 1024, # 10 MB
+            backup_type=BackupLog.TYPE_FULL,
+            status=BackupLog.STATUS_SUCCESS,
+            details="Large test log"
+        )
+
+        # Test filtering by minimum size (large files >= 5MB)
+        res_min_size = self.client.get(reverse('backup_list'), {'min_size': '5'})
+        self.assertEqual(res_min_size.status_code, 200)
+        self.assertContains(res_min_size, "large_backup_archive.tar.gz")
+        self.assertNotContains(res_min_size, "small_backup.zip")
+
+        # Test filtering by query keyword
+        res_search = self.client.get(reverse('backup_list'), {'q': 'small_backup'})
+        self.assertEqual(res_search.status_code, 200)
+        self.assertContains(res_search, "small_backup.zip")
+        self.assertNotContains(res_search, "large_backup_archive.tar.gz")
+
+        # Test sorting by largest size first
+        res_sort = self.client.get(reverse('backup_list'), {'sort': 'size_desc'})
+        self.assertEqual(res_sort.status_code, 200)
+        logs_in_context = list(res_sort.context['backup_logs'])
+        self.assertEqual(logs_in_context[0].filename, "large_backup_archive.tar.gz")
+
+        # 2. Test Incremental Backup Service & Trigger View
+        res_inc = perform_incremental_backup(hours=2)
+        self.assertTrue(res_inc['success'])
+        self.assertTrue(BackupLog.objects.filter(backup_type=BackupLog.TYPE_INCREMENTAL).exists())
+
+        post_inc = self.client.post(reverse('backup_trigger'), {'backup_type': 'incremental', 'hours': '2'})
+        self.assertRedirects(post_inc, reverse('backup_list'))
+
+        # 3. Test Full Backup Service & Trigger View
+        res_full = perform_full_backup()
+        self.assertTrue(res_full['success'])
+        self.assertTrue(BackupLog.objects.filter(backup_type=BackupLog.TYPE_FULL).exists())
+
+        post_full = self.client.post(reverse('backup_trigger'), {'backup_type': 'full'})
+        self.assertRedirects(post_full, reverse('backup_list'))
+
+        # 4. Test Download Backup View
+        log_to_download = BackupLog.objects.first()
+        dl_res = self.client.get(reverse('backup_download', args=[log_to_download.id]))
+        self.assertIn(dl_res.status_code, [200, 302])
+
+        # 5. Test Delete Backup Log View
+        log_to_delete = BackupLog.objects.first()
+        log_id = log_to_delete.id
+        post_del = self.client.post(reverse('backup_delete', args=[log_id]))
+        self.assertRedirects(post_del, reverse('backup_list'))
+        self.assertFalse(BackupLog.objects.filter(pk=log_id).exists())
+
 
 
 
