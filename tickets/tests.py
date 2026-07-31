@@ -669,6 +669,177 @@ class MultiTenantTicketTests(TestCase):
         from_email = get_smtp_from_email("default@test.com")
         self.assertEqual(from_email, "narunai@company.com")
 
+    def test_smtp_active_configuration_is_scoped_by_feature(self):
+        from .models import SMTPConfiguration, get_smtp_connection
+
+        outbound = SMTPConfiguration.objects.create(
+            name='Outbound only',
+            provider='GMAIL',
+            host='smtp.gmail.com',
+            username='outbound@example.com',
+            password='outbound-password',
+            feature_scope=SMTPConfiguration.FEATURE_OUTBOUND_EMAIL,
+            is_active=True,
+        )
+        inbound = SMTPConfiguration.objects.create(
+            name='Inbound only',
+            provider='GMAIL',
+            host='smtp.gmail.com',
+            username='inbound@example.com',
+            password='inbound-password',
+            feature_scope=SMTPConfiguration.FEATURE_EMAIL_TO_TICKET,
+            incoming_host='imap.gmail.com',
+            email_to_ticket_company=self.company_a,
+            email_to_ticket_creator=self.user_a,
+            is_active=True,
+        )
+
+        outbound.refresh_from_db()
+        inbound.refresh_from_db()
+        self.assertTrue(outbound.is_active)
+        self.assertTrue(inbound.is_active)
+        self.assertEqual(get_smtp_connection().username, 'outbound@example.com')
+
+        both = SMTPConfiguration.objects.create(
+            name='Both features',
+            provider='GMAIL',
+            host='smtp.gmail.com',
+            username='both@example.com',
+            password='both-password',
+            feature_scope=SMTPConfiguration.FEATURE_BOTH,
+            incoming_host='imap.gmail.com',
+            email_to_ticket_company=self.company_a,
+            email_to_ticket_creator=self.user_a,
+            is_active=True,
+        )
+        outbound.refresh_from_db()
+        inbound.refresh_from_db()
+        self.assertFalse(outbound.is_active)
+        self.assertFalse(inbound.is_active)
+        self.assertTrue(both.is_active)
+
+    def test_email_to_ticket_import_creates_ticket_and_prevents_duplicate(self):
+        import tempfile
+        from email.message import EmailMessage as RawEmailMessage
+        from unittest import mock
+        from django.test import override_settings
+        from .email_to_ticket import InboundMessage, _is_issue_message, import_email_to_tickets
+        from .models import InboundEmailReceipt, SMTPConfiguration, TicketAttachment
+
+        raw_message = RawEmailMessage()
+        raw_message['Subject'] = 'Issue: VPN connection failed'
+        raw_message['From'] = 'External User <external@example.com>'
+        raw_message['Message-ID'] = '<email-to-ticket-1@example.com>'
+        raw_message.set_content('The VPN client reports error 500.')
+        raw_message.add_attachment(
+            b'log data',
+            maintype='text',
+            subtype='plain',
+            filename='vpn-error.txt',
+        )
+
+        config = SMTPConfiguration.objects.create(
+            name='Inbound mailbox',
+            provider='GMAIL',
+            host='smtp.gmail.com',
+            username='support@example.com',
+            password='app-password',
+            feature_scope=SMTPConfiguration.FEATURE_EMAIL_TO_TICKET,
+            incoming_host='imap.gmail.com',
+            incoming_port=993,
+            incoming_folder='INBOX',
+            email_to_ticket_company=self.company_a,
+            email_to_ticket_creator=self.user_a,
+            filter_issue_only=True,
+            is_active=True,
+        )
+        system_notification = InboundMessage(
+            uid=b'100',
+            message_id='<system-notification@example.com>',
+            subject='[TicketSolve] New Support Ticket Created: Issue',
+            body='Must never be imported back into TicketSolve.',
+        )
+        self.assertFalse(_is_issue_message(config, system_notification)[0])
+
+        imap_client = mock.Mock()
+        imap_client.select.return_value = ('OK', [b'1'])
+
+        def imap_uid(command, *args):
+            if command == 'search':
+                return 'OK', [b'101']
+            if command == 'fetch':
+                if args[-1] == '(RFC822.SIZE)':
+                    return 'OK', [(b'101 (RFC822.SIZE 512)', b'')]
+                return 'OK', [(b'101 (BODY[] {1})', raw_message.as_bytes()), b')']
+            if command == 'store':
+                return 'OK', [b'101']
+            raise AssertionError(f'Unexpected IMAP UID command: {command}')
+
+        imap_client.uid.side_effect = imap_uid
+        ticket_count = Ticket.objects.count()
+
+        with tempfile.TemporaryDirectory() as media_root, tempfile.TemporaryDirectory() as backup_dir, \
+                override_settings(MEDIA_ROOT=media_root), \
+                mock.patch('tickets.backup_service.BACKUP_DIR', backup_dir), \
+                mock.patch('tickets.email_to_ticket.imaplib.IMAP4_SSL', return_value=imap_client):
+            first = import_email_to_tickets(config)
+            second = import_email_to_tickets(config)
+
+        self.assertTrue(first['success'])
+        self.assertEqual(first['imported'], 1)
+        self.assertEqual(second['duplicates'], 1)
+        self.assertEqual(Ticket.objects.count(), ticket_count + 1)
+        imported_ticket = Ticket.objects.get(title='Issue: VPN connection failed')
+        self.assertEqual(imported_ticket.company, self.company_a)
+        self.assertEqual(imported_ticket.created_by, self.user_a)
+        self.assertEqual(
+            imported_ticket.custom_fields_data['email_to_ticket']['message_id'],
+            '<email-to-ticket-1@example.com>',
+        )
+        self.assertEqual(TicketAttachment.objects.filter(ticket=imported_ticket).count(), 1)
+        receipt = InboundEmailReceipt.objects.get(
+            smtp_configuration=config,
+            message_id='<email-to-ticket-1@example.com>',
+        )
+        self.assertEqual(receipt.status, InboundEmailReceipt.STATUS_IMPORTED)
+        self.assertEqual(receipt.ticket, imported_ticket)
+
+    def test_email_to_ticket_manual_import_requires_system_admin(self):
+        from unittest import mock
+        from .models import SMTPConfiguration
+
+        config = SMTPConfiguration.objects.create(
+            name='Manual import mailbox',
+            provider='GMAIL',
+            username='support@example.com',
+            password='app-password',
+            feature_scope=SMTPConfiguration.FEATURE_EMAIL_TO_TICKET,
+            incoming_host='imap.gmail.com',
+            email_to_ticket_company=self.company_a,
+            email_to_ticket_creator=self.user_a,
+            is_active=True,
+        )
+        url = reverse('smtp_import_email', args=[config.pk])
+
+        self.client.login(username='admin_a', password='password123')
+        self.assertEqual(self.client.post(url).status_code, 403)
+
+        self.client.logout()
+        self.client.login(username='system_admin', password='password123')
+        result = {
+            'success': True,
+            'found': 1,
+            'imported': 1,
+            'skipped': 0,
+            'duplicates': 0,
+            'failed': 0,
+            'error': '',
+        }
+        with mock.patch('tickets.views.import_email_to_tickets', return_value=result) as importer:
+            response = self.client.post(url)
+        self.assertRedirects(response, reverse('system_settings'))
+        importer.assert_called_once_with(config)
+
     def test_sub_admin_permissions(self):
         sub_admin = CustomUser.objects.create_user(
             username="sub_admin_user",

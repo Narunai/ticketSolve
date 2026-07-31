@@ -8,8 +8,9 @@ from django.urls import reverse, reverse_lazy
 
 from django.core.exceptions import PermissionDenied
 from django.http import FileResponse
-from .models import Ticket, CustomUser, Company, EmailLog, TicketAuditLog, ReportViewLog, MonthlyReportSchedule, TicketAutomationConfig, SMTPConfiguration, get_smtp_connection, get_smtp_from_email, TicketComment, TicketAttachment, CommentAttachment, TicketCategory, ResolutionCategory, ModuleCategory, TicketStatusConfig, CompanyTicketConfig, CompanyTicketField, NotificationConfig, should_send_email_notification, BackupLog
+from .models import Ticket, CustomUser, Company, EmailLog, TicketAuditLog, ReportViewLog, MonthlyReportSchedule, TicketAutomationConfig, SMTPConfiguration, InboundEmailReceipt, get_smtp_connection, get_smtp_from_email, TicketComment, TicketAttachment, CommentAttachment, TicketCategory, ResolutionCategory, ModuleCategory, TicketStatusConfig, CompanyTicketConfig, CompanyTicketField, NotificationConfig, should_send_email_notification, BackupLog
 from .backup_service import perform_full_backup, perform_incremental_backup, get_backup_file_path, FileLock
+from .email_to_ticket import import_email_to_tickets
 from .permissions import (
     is_system_staff,
     is_tenant_admin,
@@ -597,7 +598,15 @@ class CompanyTicketCustomFieldForm(forms.ModelForm):
 class SMTPConfigurationForm(forms.ModelForm):
     class Meta:
         model = SMTPConfiguration
-        fields = ['name', 'provider', 'host', 'port', 'use_tls', 'username', 'password', 'is_active']
+        fields = [
+            'name', 'feature_scope', 'provider',
+            'host', 'port', 'use_tls', 'username', 'password',
+            'incoming_host', 'incoming_port', 'incoming_folder',
+            'email_to_ticket_company', 'email_to_ticket_creator',
+            'email_to_ticket_assignee', 'filter_issue_only',
+            'issue_keywords', 'mark_processed_as_read',
+            'max_emails_per_fetch', 'fetch_days_back', 'is_active',
+        ]
         widgets = {
             'name': forms.TextInput(attrs={
                 'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all',
@@ -605,6 +614,10 @@ class SMTPConfigurationForm(forms.ModelForm):
             }),
             'provider': forms.Select(attrs={
                 'id': 'id_provider',
+                'class': 'w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all'
+            }),
+            'feature_scope': forms.Select(attrs={
+                'id': 'id_feature_scope',
                 'class': 'w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all'
             }),
             'host': forms.TextInput(attrs={
@@ -628,10 +641,65 @@ class SMTPConfigurationForm(forms.ModelForm):
                 'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg pl-4 pr-10 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all',
                 'placeholder': 'Leave blank to keep the existing password'
             }, render_value=False),
+            'incoming_host': forms.TextInput(attrs={
+                'id': 'id_incoming_host',
+                'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white',
+                'placeholder': 'e.g. imap.gmail.com',
+            }),
+            'incoming_port': forms.NumberInput(attrs={
+                'id': 'id_incoming_port',
+                'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white',
+            }),
+            'incoming_folder': forms.TextInput(attrs={
+                'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white',
+            }),
+            'email_to_ticket_company': forms.Select(attrs={
+                'id': 'id_email_to_ticket_company',
+                'class': 'w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white',
+            }),
+            'email_to_ticket_creator': forms.Select(attrs={
+                'class': 'w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white',
+            }),
+            'email_to_ticket_assignee': forms.Select(attrs={
+                'class': 'w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white',
+            }),
+            'filter_issue_only': forms.CheckboxInput(attrs={
+                'class': 'rounded bg-slate-900 border-slate-700 text-indigo-600 h-4 w-4',
+            }),
+            'issue_keywords': forms.Textarea(attrs={
+                'rows': 2,
+                'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white',
+                'placeholder': 'Optional: ปัญหา,error,issue,ระบบล่ม',
+            }),
+            'mark_processed_as_read': forms.CheckboxInput(attrs={
+                'class': 'rounded bg-slate-900 border-slate-700 text-indigo-600 h-4 w-4',
+            }),
+            'max_emails_per_fetch': forms.NumberInput(attrs={
+                'min': 1,
+                'max': 100,
+                'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white',
+            }),
+            'fetch_days_back': forms.NumberInput(attrs={
+                'min': 1,
+                'max': 90,
+                'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white',
+            }),
             'is_active': forms.CheckboxInput(attrs={
                 'class': 'rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-slate-900 h-4 w-4'
             })
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['email_to_ticket_company'].queryset = Company.objects.all().order_by('name')
+        self.fields['email_to_ticket_creator'].queryset = CustomUser.objects.filter(
+            company__isnull=False,
+            is_active=True,
+        ).order_by('company__name', 'username')
+        self.fields['email_to_ticket_assignee'].queryset = CustomUser.objects.filter(
+            company__isnull=False,
+            is_active=True,
+        ).order_by('company__name', 'username')
 
     def clean_password(self):
         password = self.cleaned_data.get('password')
@@ -721,7 +789,12 @@ class MonthlyReportScheduleForm(forms.ModelForm):
         users = users.exclude(email='').order_by('username')
         self.fields['recipients'].queryset = users
         self.fields['cc_recipients'].queryset = users
-        self.fields['smtp_configuration'].queryset = SMTPConfiguration.objects.all().order_by('-is_active', 'name')
+        self.fields['smtp_configuration'].queryset = SMTPConfiguration.objects.filter(
+            feature_scope__in=[
+                SMTPConfiguration.FEATURE_OUTBOUND_EMAIL,
+                SMTPConfiguration.FEATURE_BOTH,
+            ],
+        ).order_by('-is_active', 'name')
         if selected_company and not self.is_bound and not self.instance.pk:
             self.fields['company'].initial = selected_company
         if not self.is_bound:
@@ -2079,6 +2152,8 @@ def _smtp_delivery_options(smtp_config=None):
     connection = None
     from_email = settings.DEFAULT_FROM_EMAIL
     if smtp_config:
+        if not smtp_config.uses_outbound_email:
+            raise ValueError('Selected SMTP configuration is not enabled for sending email.')
         if smtp_config.provider != 'SIMULATION':
             from django.core.mail.backends.smtp import EmailBackend
             connection = EmailBackend(
@@ -2216,7 +2291,12 @@ class MonthlyReportView(LoginRequiredMixin, AdminRequiredMixin, TemplateView):
         if user.is_superuser or user.role in [CustomUser.SYSTEM_ADMIN, CustomUser.SYSTEM_SUB_ADMIN]:
             context['companies'] = Company.objects.all()
 
-        context['smtp_configs'] = SMTPConfiguration.objects.all().order_by('-is_active', 'name')
+        context['smtp_configs'] = SMTPConfiguration.objects.filter(
+            feature_scope__in=[
+                SMTPConfiguration.FEATURE_OUTBOUND_EMAIL,
+                SMTPConfiguration.FEATURE_BOTH,
+            ],
+        ).order_by('-is_active', 'name')
         context['schedule_timezone'] = settings.TIME_ZONE
 
         schedule_id = self.request.GET.get('schedule_id')
@@ -2323,7 +2403,13 @@ class SendMonthlyReportView(LoginRequiredMixin, AdminRequiredMixin, View):
         from_email = settings.DEFAULT_FROM_EMAIL
 
         if smtp_config_id:
-            smtp_config = SMTPConfiguration.objects.filter(id=smtp_config_id).first()
+            smtp_config = SMTPConfiguration.objects.filter(
+                id=smtp_config_id,
+                feature_scope__in=[
+                    SMTPConfiguration.FEATURE_OUTBOUND_EMAIL,
+                    SMTPConfiguration.FEATURE_BOTH,
+                ],
+            ).first()
             if smtp_config:
                 if smtp_config.provider != 'SIMULATION':
                     from django.core.mail.backends.smtp import EmailBackend
@@ -2476,6 +2562,10 @@ class SystemSettingsView(LoginRequiredMixin, SuperuserOrSystemAdminRequiredMixin
         context = super().get_context_data(**kwargs)
         configs = SMTPConfiguration.objects.all().order_by('-is_active', 'name')
         context['configs'] = configs
+        context['inbound_receipts'] = InboundEmailReceipt.objects.select_related(
+            'smtp_configuration',
+            'ticket',
+        )[:20]
         
         edit_id = self.request.GET.get('edit')
         if edit_id:
@@ -2499,7 +2589,7 @@ class SystemSettingsView(LoginRequiredMixin, SuperuserOrSystemAdminRequiredMixin
 
         if form.is_valid():
             form.save()
-            messages.success(request, "Outbound SMTP settings saved successfully!")
+            messages.success(request, "SMTP feature settings saved successfully!")
             return redirect('system_settings')
         
         # If invalid, re-render context
@@ -2514,6 +2604,25 @@ class SMTPToggleActiveView(LoginRequiredMixin, SuperuserOrSystemAdminRequiredMix
         config.is_active = not config.is_active
         config.save()
         messages.success(request, f"Successfully changed activation status of '{config.name}'!")
+        return redirect('system_settings')
+
+
+class SMTPImportEmailView(LoginRequiredMixin, SuperuserOrSystemAdminRequiredMixin, View):
+    def post(self, request, pk, *args, **kwargs):
+        config = get_object_or_404(SMTPConfiguration, pk=pk)
+        result = import_email_to_tickets(config)
+        summary = (
+            f"Found {result['found']}, imported {result['imported']}, "
+            f"skipped {result['skipped']}, duplicate {result['duplicates']}, "
+            f"failed {result['failed']}."
+        )
+        if result['success']:
+            messages.success(request, f"Email to Ticket completed. {summary}")
+        else:
+            messages.error(
+                request,
+                f"Email to Ticket failed. {summary} {result.get('error', '')}".strip(),
+            )
         return redirect('system_settings')
 
 

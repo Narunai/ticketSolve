@@ -1,6 +1,13 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import Company, CustomUser, Ticket, MonthlyReportSchedule, TicketAutomationConfig
+from .models import (
+    Company,
+    CustomUser,
+    InboundEmailReceipt,
+    MonthlyReportSchedule,
+    Ticket,
+    TicketAutomationConfig,
+)
 
 class CompanyAdmin(admin.ModelAdmin):
     list_display = ('name', 'created_at')
@@ -129,6 +136,29 @@ class MonthlyReportScheduleAdmin(admin.ModelAdmin):
 class TicketAutomationConfigAdmin(admin.ModelAdmin):
     list_display = ('company', 'open_age_value', 'open_age_unit', 'is_active', 'apply_to_subsidiaries', 'last_applied_at')
     list_filter = ('is_active', 'open_age_unit', 'apply_to_subsidiaries')
+
+
+@admin.register(InboundEmailReceipt)
+class InboundEmailReceiptAdmin(admin.ModelAdmin):
+    list_display = ('subject', 'sender_email', 'status', 'smtp_configuration', 'ticket', 'processed_at')
+    list_filter = ('status', 'smtp_configuration')
+    search_fields = ('subject', 'sender_email', 'message_id')
+    readonly_fields = (
+        'smtp_configuration',
+        'message_id',
+        'sender_name',
+        'sender_email',
+        'subject',
+        'status',
+        'details',
+        'ticket',
+        'processed_at',
+        'created_at',
+    )
+
+    def has_add_permission(self, request):
+        return False
+
 
 admin.site.register(Company, CompanyAdmin)
 admin.site.register(CustomUser, CustomUserAdmin)

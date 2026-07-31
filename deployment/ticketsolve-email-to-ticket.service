@@ -1,0 +1,15 @@
+[Unit]
+Description=Import TicketSolve tickets from unread email
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+Group=www-data
+WorkingDirectory=/var/www/ticketSolve
+EnvironmentFile=/etc/ticketsolve/ticketsolve.env
+UMask=0027
+ExecStart=/var/www/ticketSolve/venv/bin/python manage.py process_email_to_tickets
+PrivateTmp=true
+NoNewPrivileges=true

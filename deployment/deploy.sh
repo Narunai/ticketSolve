@@ -70,10 +70,13 @@ run_manage "collectstatic --noinput"
 sudo cp deployment/gunicorn.service /etc/systemd/system/gunicorn.service
 sudo cp deployment/ticketsolve-scheduler.service /etc/systemd/system/ticketsolve-scheduler.service
 sudo cp deployment/ticketsolve-scheduler.timer /etc/systemd/system/ticketsolve-scheduler.timer
+sudo cp deployment/ticketsolve-email-to-ticket.service /etc/systemd/system/ticketsolve-email-to-ticket.service
+sudo cp deployment/ticketsolve-email-to-ticket.timer /etc/systemd/system/ticketsolve-email-to-ticket.timer
 sudo systemctl daemon-reload
 sudo systemctl restart gunicorn
 sudo systemctl enable gunicorn
 sudo systemctl enable --now ticketsolve-scheduler.timer
+sudo systemctl enable --now ticketsolve-email-to-ticket.timer
 
 sudo cp deployment/nginx.conf /etc/nginx/sites-available/ticketsolve
 if [ ! -L "/etc/nginx/sites-enabled/ticketsolve" ]; then

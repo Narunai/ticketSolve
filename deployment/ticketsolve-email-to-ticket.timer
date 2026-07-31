@@ -1,0 +1,11 @@
+[Unit]
+Description=Scan TicketSolve inbound mailboxes every 10 minutes
+
+[Timer]
+OnCalendar=*-*-* *:0/10:00
+Persistent=true
+AccuracySec=1s
+Unit=ticketsolve-email-to-ticket.service
+
+[Install]
+WantedBy=timers.target

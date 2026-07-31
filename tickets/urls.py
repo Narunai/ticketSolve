@@ -77,6 +77,7 @@ urlpatterns = [
     # System settings (SMTP configurations) URLs
     path('settings/', views.SystemSettingsView.as_view(), name='system_settings'),
     path('settings/smtp/<int:pk>/toggle/', views.SMTPToggleActiveView.as_view(), name='smtp_toggle_active'),
+    path('settings/smtp/<int:pk>/import-email/', views.SMTPImportEmailView.as_view(), name='smtp_import_email'),
     path('settings/smtp/<int:pk>/delete/', views.SMTPDeleteView.as_view(), name='smtp_delete'),
 
     # Backup Management URLs

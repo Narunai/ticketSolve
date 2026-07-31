@@ -2,12 +2,16 @@
 
 เอกสารฉบับนี้อธิบายฟีเจอร์การทำงานทั้งหมดของระบบ **TicketSolve** รวมถึงโครงสร้างสิทธิ์การใช้งานของแต่ละบทบาทผู้ใช้
 
+**อัปเดตล่าสุด**: 31 กรกฎาคม 2026
+
 ---
 
 ## 📋 1. ฟีเจอร์หลักของระบบ (Core Features)
 
 ### 🎫 1.1 การบริหารจัดการ Ticket (Ticket Lifecycle Management)
 * **Ticket Creation**: กรอกข้อมูลหัวข้อ, รายละเอียด, ความสำคัญ (Low, Medium, High, Urgent), หมวดหมู่ปัญหา, และอัปโหลดไฟล์แนบ
+* **Protected Attachments**: ดาวน์โหลดไฟล์แนบได้หลัง login และผ่านการตรวจสิทธิ์ Ticket เท่านั้น; URL `/media/` โดยตรงไม่เปิดให้เข้าถึง
+* **Upload Limits**: สูงสุด 10 MB ต่อไฟล์, 10 ไฟล์ต่อ request และรวมไม่เกิน 50 MB
 * **Custom Fields**: รองรับฟิลด์ข้อมูลเพิ่มเติมตามบริษัท ( Text, Textarea, Number, Select, Date, Checkbox)
 * **Ticket Prefix & Code**: สร้างรหัส Ticket อัตโนมัติ เช่น `ACME-0001`, `SEC-0002` ตาม Prefix ของแต่ละบริษัท
 * **Ticket Status Workflow**:
@@ -38,19 +42,30 @@
 * **Email Delivery Logs & Resend**:
   * บันทึกประวัติการส่งอีเมลทุกฉบับ (To, CC, Subject, Event Type, Timestamp, Status)
   * หากส่งไม่สำเร็จ สามารถกดปุ่ม **🔄 Resend** เพื่อส่งใหม่อีกครั้งได้จากหน้า Log
+* **Feature Scope**: บัญชีแต่ละรายการเลือกใช้สำหรับส่งอีเมล, Email → Ticket หรือทั้งสองฟังก์ชันได้
+
+### 📥 1.5 Email → Ticket
+* อ่านอีเมลที่ยังไม่อ่านผ่าน IMAP SSL แล้วสร้าง Ticket ใน company ที่กำหนด
+* เลือก ticket creator/default assignee และกรอง subject ด้วย keyword ไทย/อังกฤษ
+* ป้องกันการสร้างซ้ำด้วย Message-ID และมี import receipts สำหรับ Imported/Skipped/Failed
+* รองรับไฟล์แนบภายใต้ขีดจำกัด 10 MB ต่อไฟล์, 10 ไฟล์ และรวม 50 MB
+* สแกนอัตโนมัติด้วย timer แยกทุก 10 นาที หรือกด **Import Now** ใน SMTP Settings
+* รองรับ Gmail และ Outlook ที่เปิด IMAP; Microsoft Graph/OAuth ยังไม่รวมใน integration นี้
 
 ---
 
-### 📊 1.5 ระบบรายงานประจำเดือน PDF (Monthly PDF Reports)
+### 📊 1.6 ระบบรายงานประจำเดือน PDF (Monthly PDF Reports)
 * **PDF Generation**: ออกรายงานสรุปสถิติ Ticket ประจำเดือนในรูปแบบ PDF สวยงาม (ภาพรวม Ticket, อัตราการแก้ไขสำเร็จ, กราฟสถิติ, และตารางสรุป)
 * **Automated Monthly Schedule**: ตั้งเวลาส่งรายงานสรุปเข้าอีเมลผู้บริหาร/ผู้ดูแลระบบอัตโนมัติในวันและเวลาที่กำหนด
 
 ---
 
-### 💾 1.6 ระบบสำรองข้อมูล (AWS VPS Backup)
+### 💾 1.7 ระบบสำรองข้อมูล (AWS VPS Backup)
 * **2-Hour Incremental Backup**: บันทึก Ticket ที่ถูกสร้าง/แก้ไข หรือมี Comments/ไฟล์แนบใหม่ใน 2 ชั่วโมงย้อนหลังเป็น `.zip` ไว้ที่ `/var/backups/ticketsolve`
-* **Full Backup**: บีบอัดฐานข้อมูล `db.sqlite3` + โฟลเดอร์ `media/` + `.env` เป็น `.tar.gz` แล้วส่งขึ้น Cloud
-* **Backup Management UI (`/backups/`)**: หน้าจอสำหรับกดสำรองข้อมูลทันที, ดูสถิติการสำรองข้อมูล, และลบประวัติ Backup
+* **Full Backup**: ใช้ SQLite Online Backup API สำรองฐานข้อมูลและบีบอัดร่วมกับ `media/` เป็น `.tar.gz` บน AWS VPS โดยไม่รวม secrets
+* **Retention**: ลบ archive ที่เก่ากว่า `BACKUP_RETENTION_DAYS` ซึ่งมีค่าเริ่มต้น 30 วัน
+* **Backup Management UI (`/backups/`)**: กดสำรองข้อมูล, ดาวน์โหลด archive, ดูสถิติ และลบทั้ง archive/log; รายการไม่มีข้อมูลหรือไฟล์หายมีปุ่ม **Delete empty record**
+* **Access Control**: เฉพาะ `SYSTEM_ADMIN`, `SYSTEM_SUB_ADMIN` และ Django superuser เท่านั้น
 
 ---
 
@@ -70,3 +85,10 @@
 | ตั้งค่าและลบข้อมูล Backup | ✅ | ✅ | ❌ | ❌ | ❌ |
 | จัดการตั้งค่า SMTP Server | ✅ | ❌ | ❌ | ❌ | ❌ |
 | ลบ Ticket ออกจากระบบ (Delete Ticket) | ✅ | ✅ | ❌ | ❌ | ❌ |
+
+### หลักการสำคัญของสิทธิ์
+
+* `CLIENT_USER` อ่านได้เฉพาะ Ticket ที่ตนสร้าง แม้อยู่บริษัทเดียวกัน และไม่สามารถแก้ไข/เปลี่ยนสถานะ Ticket
+* `CLIENT_ADMIN` และ `CLIENT_STAFF` อ่านและจัดการ Ticket ภายใน company tree ของตน
+* System roles อ่าน Ticket ได้ทุก tenant แต่บัญชีที่เป็น Django superuser จะแก้ไขได้เฉพาะ Django superuser ด้วยกัน
+* การยืนยัน deployment เป็นคำสั่ง `POST` และจำกัดเฉพาะ Ticket Staff

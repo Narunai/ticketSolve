@@ -1,6 +1,7 @@
 # 🧠 รายงานวิเคราะห์และเหตุผลเชิงเทคนิคในการเลือกใช้ Python & SQLite (Tech Stack Rationale Report)
 
 **วันที่จัดทำ**: 14 กรกฎาคม 2026 (14 July 2026)  
+**ปรับปรุงข้อมูลระบบล่าสุด**: 31 กรกฎาคม 2026
 **ชื่อโปรเจกต์**: TicketSolve - Multi-tenant Helpdesk Ticket System  
 **ไฟล์เอกสารประกอบ**: `report/tech_stack_rationale.md`  
 
@@ -20,7 +21,8 @@
 
 ### 2.1 ความปลอดภัยและการกั้นขอบเขตข้อมูลรายบริษัท (Multi-tenant Security)
 * **Built-in Security Architecture**: Django มีระบบจัดการสิทธิ์ผู้ใช้งาน (Authentication/Authorization) และ Middleware ป้องกันการโจมตีระดับสากล เช่น **SQL Injection**, **Cross-Site Scripting (XSS)**, **Cross-Site Request Forgery (CSRF)**, และ **Clickjacking** ในระดับแกนกลาง
-* **Data Isolation Enforcement**: ด้วยการออกแบบผ่าน Django ORM ช่วยให้การเขียนลอจิกตรวจสอบสิทธิ์ใน View (`tickets/views.py`) ทำได้อย่างเด็ดขาด ผู้ใช้จากบริษัทหนึ่งจะไม่สามารถมองเห็น หรือแก้ไขข้อมูล Ticket ของอีกบริษัทหนึ่งได้โดยสิ้นเชิง (หากยิง URL ข้ามบริษัท ระบบจะส่งตอบกลับ `403 Forbidden` ทันที)
+* **Data Isolation Enforcement**: ขอบเขตการอ่านและแก้ไข Ticket รวมไว้ใน `tickets/permissions.py` แล้วให้ View, Dashboard และ attachment endpoints ใช้กติกาเดียวกัน System Staff เห็นทุก tenant, Client Admin/Staff เห็น company tree ของตน และ Client User เห็นเฉพาะ Ticket ที่ตนสร้าง
+* **Defense in Depth**: ไฟล์แนบไม่ถูกเสิร์ฟจาก `/media/` โดยตรง แต่ผ่าน authenticated Django views ซึ่งตรวจ Ticket visibility ก่อนส่งไฟล์
 
 ### 2.2 โครงสร้างแบบ Batteries-Included เพิ่มความเร็วในการพัฒนา
 * Django มาพร้อมเครื่องมือสำเร็จรูปครบครัน ได้แก่ ระบบ Admin Panel หลังบ้าน, Form Validation & Cleaners, Message Framework, และ Context Processors (ที่ใช้สำหรับระบบสลับภาษา TH/EN)
@@ -29,6 +31,7 @@
 ### 2.3 ความเสถียรในการออกรายงาน PDF ภาษาไทย และส่งอีเมล
 * **Ecosystem ภาษาไทยสมบูรณ์**: Python มีไลบรารีแปลงโครงสร้าง HTML เป็น PDF (`xhtml2pdf`) ที่รองรับการประมวลผลฟอนต์ภาษาไทย (Sarabun / Tahoma) ได้อย่างคมชัด แม่นยำ ไม่เจอปัญหาตัวอักษรสี่เหลี่ยมหรืออักขระเพี้ยน
 * **SMTP Delivery Integration**: สามารถสร้างระบบยิงส่งอีเมลแจ้งเตือนรายงานประจำเดือน และการตั้งค่า SMTP Dynamic แบบเปลี่ยนผ่านหน้าเว็บได้อย่างราบรื่น
+* **Email Ingestion**: ใช้ IMAP SSL จาก Python standard library และ `BeautifulSoup` ล้าง HTML ก่อนสร้าง Ticket พร้อม Message-ID deduplication; Microsoft 365 ที่ปิด IMAP ต้องเพิ่ม Graph/OAuth แยกต่างหาก
 
 ---
 
@@ -41,7 +44,8 @@
 
 ### 3.2 การติดตั้งแบบ Zero Configuration และความง่ายในการสำรองข้อมูล (Backup)
 * **Zero Config**: ไม่ต้องตั้งค่า Database User, Password, Port, หรือ Network Socket ที่ซับซ้อน เพียงสั่งคำสั่ง `python manage.py migrate` ฐานข้อมูลก็พร้อมใช้งานทันที
-* **Single-File Backup**: ข้อมูลทั้งหมดของระบบถูกจัดเก็บอยู่ในไฟล์เดียวคือ `db.sqlite3` การสำรองข้อมูล (Disaster Recovery) ทำได้ง่ายๆ เพียงคัดลอกไฟล์ `db.sqlite3` เก็บไว้ โดยไม่ต้องเสี่ยงกับสคริปต์ Dump SQL ที่ซับซ้อน
+* **Consistent Database Backup**: ระบบใช้ SQLite Online Backup API เพื่อสร้าง snapshot ที่สอดคล้องระหว่างที่แอปยังทำงาน แล้วจึงบีบอัดร่วมกับ `media/` เก็บที่ `/var/backups/ticketsolve`
+* **Operational Limitation**: SQLite เหมาะกับ workload ขนาดเล็กถึงกลาง แต่มีข้อจำกัดเรื่อง concurrent writes จึงต้องวัดผลและวางแผนย้ายฐานข้อมูลเมื่อปริมาณการเขียนเติบโต
 
 ---
 
@@ -51,11 +55,11 @@ Django ORM (Object-Relational Mapper) ทำหน้าที่เป็นต
 
 1. **Model Definition (`tickets/models.py`)**:
    กำหนดโครงสร้างตารางและความสัมพันธ์แบบ OOP แทนการเขียน `CREATE TABLE` ใน SQL เช่น ตาราง `Company`, `CustomUser`, `Ticket`, `TicketComment`, `TicketAuditLog`, `SMTPConfiguration`
-2. **Data Querying & Multi-tenant Isolation (`tickets/views.py`)**:
+2. **Data Querying & Multi-tenant Isolation (`tickets/permissions.py`, `tickets/views.py`)**:
    ใช้ดึง คัดกรอง และคำนวณสถิติข้อมูล เช่น:
    ```python
-   # กั้นเขตข้อมูลเฉพาะบริษัทสังกัดผู้ใช้
-   tickets = Ticket.objects.filter(company=user.company)
+   # ใช้กติกากลาง: Client User เห็นเฉพาะ Ticket ที่ตนสร้าง
+   tickets = visible_tickets_for(request.user)
    # นับจำนวนสถิติตามสถานะ
    open_count = tickets.filter(status='OPEN').count()
    ```
@@ -71,10 +75,11 @@ Django ORM (Object-Relational Mapper) ทำหน้าที่เป็นต
 เนื่องจากโปรเจกต์ TicketSolve พัฒนาและเข้าถึงฐานข้อมูลผ่านชั้นกลาง **Django ORM** ทั้งหมด (ไม่ใช้วิธีเขียน Raw SQL คำสั่งตรง) ทำให้ระบบมีคุณสมบัติ **Decoupled Architecture**:
 
 * **รองรับการขยายตัวในอนาคต**: หากในอนาคตองค์กรเติบโตขึ้นจนมีผู้ใช้งานพร้อมกันหลักหมื่นคน และจำเป็นต้องขยายไปใช้ Enterprise Database เช่น PostgreSQL หรือ MySQL
-* **ขั้นตอนการเปลี่ยนทำได้ใน 1 บรรทัด**: เพียงเปลี่ยนค่า `DATABASE_URL` ในไฟล์ `.env` บนเซิร์ฟเวอร์เป็นสตรีม PostgreSQL
-* **ไม่ต้องแก้โค้ดลอจิกแม้แต่บรรทัดเดียว**: โค้ดระบบทั้งหมดจะสลับไปดึงข้อมูลจาก PostgreSQL ได้ทันทีโดยไม่ต้องแก้ไขหรือรันใหม่
+* **ORM ลดขอบเขตการแก้โค้ด**: Business queries ส่วนใหญ่ใช้ Django ORM จึงนำไปปรับใช้กับ PostgreSQL ได้ง่ายกว่าการผูกกับ Raw SQL
+* **ไม่ใช่การเปลี่ยนเพียงหนึ่งบรรทัดในระบบปัจจุบัน**: `ticket_system/settings.py` ยังตั้งค่า SQLite โดยตรง การย้ายต้องเพิ่ม database configuration, ย้ายและตรวจความครบถ้วนของข้อมูล, ทดสอบ transaction/concurrency, ปรับ backup/restore และทำ rollback plan
+* **จุดตัดสินใจ**: ควรพิจารณา PostgreSQL เมื่อพบ write contention, lock timeout, จำนวน concurrent writes เพิ่มต่อเนื่อง หรือต้องทำ high availability
 
 ---
 
 ### 📌 สรุป
-> **การเลือกใช้ Python (Django) ร่วมกับ SQLite เป็นการตัดสินใจเชิงสถาปัตยกรรมที่คำนึงถึงความปลอดภัย ความเสถียร ประสิทธิภาพ ความคุ้มค่าทางงบประมาณ และความสะดวกในการดูแลรักษาขององค์กรได้อย่างสมบูรณ์แบบ**
+> **Python (Django) ร่วมกับ SQLite เหมาะกับขนาดระบบปัจจุบันเพราะดูแลง่ายและใช้ทรัพยากรต่ำ โดยต้องคง authorization tests, backup/restore verification และติดตามข้อจำกัด concurrent writes เพื่อกำหนดเวลาย้ายไป PostgreSQL อย่างมีข้อมูลรองรับ**

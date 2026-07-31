@@ -1,5 +1,5 @@
 [Unit]
-Description=Run TicketSolve email schedule processor every minute
+Description=Run TicketSolve automatic task processors every minute
 
 [Timer]
 OnCalendar=*-*-* *:*:00

@@ -38,6 +38,18 @@
 
             <form method="POST" action="" class="space-y-3">
                 {% csrf_token %}
+                {% if form.errors %}
+                <div class="rounded-lg border border-rose-500/30 bg-rose-500/10 p-2 text-[11px] text-rose-300">
+                    {% for field in form %}
+                        {% for error in field.errors %}
+                        <div>{{ field.label }}: {{ error }}</div>
+                        {% endfor %}
+                    {% endfor %}
+                    {% for error in form.non_field_errors %}
+                    <div>{{ error }}</div>
+                    {% endfor %}
+                </div>
+                {% endif %}
                 
                 <div>
                     <label class="block text-[10px] text-slate-400 font-semibold mb-1 uppercase tracking-wider">Server Name:</label>
@@ -45,33 +57,40 @@
                 </div>
 
                 <div>
+                    <label class="block text-[10px] text-slate-400 font-semibold mb-1 uppercase tracking-wider">Use this account for:</label>
+                    {{ form.feature_scope }}
+                </div>
+
+                <div>
                     <label class="block text-[10px] text-slate-400 font-semibold mb-1 uppercase tracking-wider">Provider Preset:</label>
                     {{ form.provider }}
                 </div>
 
-                <div class="grid grid-cols-2 gap-2">
-                    <div>
-                        <label class="block text-[10px] text-slate-400 font-semibold mb-1 uppercase tracking-wider">{{ t.host }}:</label>
-                        {{ form.host }}
+                <div id="outbound-settings" class="space-y-2 rounded-lg border border-slate-800/80 bg-slate-950/30 p-2.5">
+                    <div class="text-[10px] font-bold uppercase tracking-wider text-sky-300">Outbound email (SMTP)</div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-[10px] text-slate-400 font-semibold mb-1 uppercase tracking-wider">{{ t.host }}:</label>
+                            {{ form.host }}
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-slate-400 font-semibold mb-1 uppercase tracking-wider">{{ t.port }}:</label>
+                            {{ form.port }}
+                        </div>
                     </div>
-                    <div>
-                        <label class="block text-[10px] text-slate-400 font-semibold mb-1 uppercase tracking-wider">{{ t.port }}:</label>
-                        {{ form.port }}
+                    <div class="flex items-center gap-2">
+                        {{ form.use_tls }}
+                        <label for="id_use_tls" class="text-xs text-slate-300 font-medium cursor-pointer">{{ t.use_tls }}</label>
                     </div>
-                </div>
-
-                <div class="flex items-center gap-2">
-                    {{ form.use_tls }}
-                    <label for="id_use_tls" class="text-xs text-slate-300 font-medium cursor-pointer">{{ t.use_tls }}</label>
                 </div>
 
                 <div>
-                    <label class="block text-[10px] text-slate-400 font-semibold mb-1 uppercase tracking-wider">Username / Email:</label>
+                    <label class="block text-[10px] text-slate-400 font-semibold mb-1 uppercase tracking-wider">Username / Mailbox Email:</label>
                     {{ form.username }}
                 </div>
 
                 <div>
-                    <label class="block text-[10px] text-slate-400 font-semibold mb-1 uppercase tracking-wider">App Password:</label>
+                    <label class="block text-[10px] text-slate-400 font-semibold mb-1 uppercase tracking-wider">Password / App Password:</label>
                     <div class="relative">
                         {{ form.password }}
                         <button type="button" onclick="togglePasswordVisibility('{{ form.password.id_for_label }}')" class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-500 hover:text-white cursor-pointer" title="Show/Hide Password">
@@ -80,9 +99,65 @@
                     </div>
                 </div>
 
+                <div id="inbound-settings" class="space-y-2 rounded-lg border border-amber-500/20 bg-amber-500/5 p-2.5">
+                    <div>
+                        <div class="text-[10px] font-bold uppercase tracking-wider text-amber-300">Email → Ticket (IMAP SSL)</div>
+                        <p class="mt-1 text-[10px] leading-relaxed text-slate-500">Unread matching messages become tickets. A processed Message-ID is never imported twice.</p>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-[10px] text-slate-400 font-semibold mb-1 uppercase tracking-wider">IMAP Host:</label>
+                            {{ form.incoming_host }}
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-slate-400 font-semibold mb-1 uppercase tracking-wider">IMAP Port:</label>
+                            {{ form.incoming_port }}
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] text-slate-400 font-semibold mb-1 uppercase tracking-wider">Mailbox Folder:</label>
+                        {{ form.incoming_folder }}
+                    </div>
+                    <div>
+                        <label class="block text-[10px] text-slate-400 font-semibold mb-1 uppercase tracking-wider">Target Company:</label>
+                        {{ form.email_to_ticket_company }}
+                    </div>
+                    <div>
+                        <label class="block text-[10px] text-slate-400 font-semibold mb-1 uppercase tracking-wider">Ticket Creator:</label>
+                        {{ form.email_to_ticket_creator }}
+                    </div>
+                    <div>
+                        <label class="block text-[10px] text-slate-400 font-semibold mb-1 uppercase tracking-wider">Default Assignee (optional):</label>
+                        {{ form.email_to_ticket_assignee }}
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-[10px] text-slate-400 font-semibold mb-1 uppercase tracking-wider">Max per run:</label>
+                            {{ form.max_emails_per_fetch }}
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-slate-400 font-semibold mb-1 uppercase tracking-wider">Days back:</label>
+                            {{ form.fetch_days_back }}
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        {{ form.filter_issue_only }}
+                        <label for="{{ form.filter_issue_only.id_for_label }}" class="text-xs text-slate-300">Import only issue subjects</label>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] text-slate-400 font-semibold mb-1 uppercase tracking-wider">Custom subject keywords:</label>
+                        {{ form.issue_keywords }}
+                        <p class="mt-1 text-[10px] text-slate-500">Comma-separated. Leave blank to use the built-in Thai/English issue keywords.</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        {{ form.mark_processed_as_read }}
+                        <label for="{{ form.mark_processed_as_read.id_for_label }}" class="text-xs text-slate-300">Mark imported/skipped messages as read</label>
+                    </div>
+                </div>
+
                 <div class="flex items-center gap-2 border-t border-slate-800/80 pt-3">
                     {{ form.is_active }}
-                    <label for="id_is_active" class="text-xs text-theme-accent font-semibold cursor-pointer">Set Active Server</label>
+                    <label for="id_is_active" class="text-xs text-theme-accent font-semibold cursor-pointer">Active for selected feature</label>
                 </div>
 
                 <div class="flex items-center justify-between pt-1">
@@ -113,6 +188,9 @@
                     <div class="space-y-1">
                         <div class="flex items-center gap-2">
                             <span class="font-semibold text-white text-xs">{{ c.name }}</span>
+                            <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-sky-500/10 text-sky-300 border border-sky-500/20">
+                                {{ c.get_feature_scope_display }}
+                            </span>
                             {% if c.is_active %}
                             <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
                                 ✓ Active
@@ -127,9 +205,26 @@
                             <span>Host: {{ c.host }}:{{ c.port }}</span>
                             <span>| User: {{ c.username }}</span>
                         </div>
+                        {% if c.uses_email_to_ticket %}
+                        <div class="text-[10px] text-slate-500">
+                            IMAP {{ c.incoming_host }}:{{ c.incoming_port }} → {{ c.email_to_ticket_company|default:"No company" }}
+                            {% if c.last_inbound_check_at %}| Checked {{ c.last_inbound_check_at|date:"Y-m-d H:i:s" }}{% endif %}
+                        </div>
+                        {% if c.last_inbound_error %}
+                        <div class="text-[10px] text-rose-400">{{ c.last_inbound_error|truncatechars:160 }}</div>
+                        {% endif %}
+                        {% endif %}
                     </div>
 
                     <div class="flex items-center gap-1.5 shrink-0">
+                        {% if c.uses_email_to_ticket and c.is_active %}
+                        <form method="POST" action="{% url 'smtp_import_email' c.id %}">
+                            {% csrf_token %}
+                            <button type="submit" class="px-2.5 py-1 rounded text-xs font-semibold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 transition-all">
+                                Import Now
+                            </button>
+                        </form>
+                        {% endif %}
                         <a href="{% url 'system_settings' %}?edit={{ c.id }}" class="px-2.5 py-1 rounded text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700/60 transition-all">
                             {{ t.edit_ticket_title }}
                         </a>
@@ -146,6 +241,45 @@
                     No SMTP server configurations found.
                 </div>
                 {% endfor %}
+            </div>
+        </div>
+
+        <div class="rounded-xl border border-slate-800/80 bg-slate-900/40 lg:col-span-3 overflow-hidden">
+            <div class="px-4 py-2.5 border-b border-slate-800/80 bg-slate-900/60">
+                <h3 class="text-xs font-bold text-white uppercase tracking-wider">Recent Email → Ticket imports</h3>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-[11px]">
+                    <thead class="text-slate-500 border-b border-slate-800/60">
+                        <tr>
+                            <th class="px-3 py-2">Processed</th>
+                            <th class="px-3 py-2">Mailbox</th>
+                            <th class="px-3 py-2">Subject / Sender</th>
+                            <th class="px-3 py-2">Status</th>
+                            <th class="px-3 py-2">Ticket</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-800/40 text-slate-300">
+                        {% for receipt in inbound_receipts %}
+                        <tr>
+                            <td class="px-3 py-2 whitespace-nowrap">{{ receipt.processed_at|date:"Y-m-d H:i:s" }}</td>
+                            <td class="px-3 py-2">{{ receipt.smtp_configuration.name|default:"Deleted config" }}</td>
+                            <td class="px-3 py-2">
+                                <div class="text-white">{{ receipt.subject|default:"-"|truncatechars:80 }}</div>
+                                <div class="text-slate-500">{{ receipt.sender_email|default:"-" }}</div>
+                            </td>
+                            <td class="px-3 py-2">{{ receipt.get_status_display }}</td>
+                            <td class="px-3 py-2">
+                                {% if receipt.ticket %}
+                                <a class="text-theme-accent hover:underline" href="{% url 'ticket_detail' receipt.ticket.id %}">#{{ receipt.ticket.id }}</a>
+                                {% else %}-{% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="5" class="px-3 py-6 text-center text-slate-500">No inbound email has been processed.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
         </div>
 
@@ -221,9 +355,14 @@ function switchGuideTab(tabId) {
 // Autofill settings based on provider presets
 document.addEventListener('DOMContentLoaded', function() {
     const providerSelect = document.getElementById('id_provider');
+    const featureScopeSelect = document.getElementById('id_feature_scope');
     const hostInput = document.getElementById('id_host');
     const portInput = document.getElementById('id_port');
     const tlsCheckbox = document.getElementById('id_use_tls');
+    const incomingHostInput = document.getElementById('id_incoming_host');
+    const incomingPortInput = document.getElementById('id_incoming_port');
+    const outboundSettings = document.getElementById('outbound-settings');
+    const inboundSettings = document.getElementById('inbound-settings');
 
     function updateSMTPFields() {
         const provider = providerSelect.value;
@@ -231,10 +370,14 @@ document.addEventListener('DOMContentLoaded', function() {
             hostInput.value = 'smtp.gmail.com';
             portInput.value = '587';
             tlsCheckbox.checked = true;
+            incomingHostInput.value = 'imap.gmail.com';
+            incomingPortInput.value = '993';
         } else if (provider === 'MICROSOFT') {
             hostInput.value = 'smtp.office365.com';
             portInput.value = '587';
             tlsCheckbox.checked = true;
+            incomingHostInput.value = 'outlook.office365.com';
+            incomingPortInput.value = '993';
         } else if (provider === 'SIMULATION') {
             hostInput.value = 'localhost';
             portInput.value = '1025';
@@ -242,8 +385,18 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    function updateFeatureSections() {
+        const scope = featureScopeSelect ? featureScopeSelect.value : 'OUTBOUND_EMAIL';
+        outboundSettings.classList.toggle('hidden', scope === 'EMAIL_TO_TICKET');
+        inboundSettings.classList.toggle('hidden', scope === 'OUTBOUND_EMAIL');
+    }
+
     if (providerSelect) {
         providerSelect.addEventListener('change', updateSMTPFields);
+    }
+    if (featureScopeSelect) {
+        featureScopeSelect.addEventListener('change', updateFeatureSections);
+        updateFeatureSections();
     }
 });
 </script>

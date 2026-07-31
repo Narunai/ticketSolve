@@ -1,6 +1,8 @@
 # 🎟️ TicketSolve - Multi-Tenant IT Support Ticket & Service Desk System
 
-**TicketSolve** คือระบบบริหารจัดการตั๋วแจ้งซ่อมและสนับสนุนงานบริการ IT (IT Service Desk & Support Ticket Management System) ในรูปแบบ Multi-Tenant รองรับการทำงานหลายบริษัทในระบบเดียว มีระบบสิทธิ์การใช้งาน 5 ระดับ, ระบบปรับแต่งฟิลด์และหน้าตาตามบริษัท, ระบบแจ้งเตือนทางอีเมลพร้อมสถิติการส่ง, ระบบย้ายสถานะอัตโนมัติ (Status Automation), ระบบรายงานประจำเดือน PDF, และระบบสำรองข้อมูลอัตโนมัติบน AWS VPS ทุก 2 ชั่วโมง
+**TicketSolve** คือระบบบริหารจัดการตั๋วแจ้งซ่อมและสนับสนุนงานบริการ IT (IT Service Desk & Support Ticket Management System) ในรูปแบบ Multi-Tenant รองรับการทำงานหลายบริษัทในระบบเดียว มีระบบสิทธิ์การใช้งาน 5 ระดับ, ระบบปรับแต่งฟิลด์และหน้าตาตามบริษัท, ระบบแจ้งเตือนทางอีเมลพร้อมสถิติการส่ง, ระบบนำอีเมลเข้าเป็น Ticket, ระบบย้ายสถานะอัตโนมัติ (Status Automation), ระบบรายงานประจำเดือน PDF, และระบบสำรองข้อมูลอัตโนมัติบน AWS VPS ทุก 2 ชั่วโมง
+
+**อัปเดตล่าสุด**: 31 กรกฎาคม 2026
 
 ---
 
@@ -29,6 +31,7 @@
 | **`TicketAutomationConfig`** | การตั้งค่าระยะเวลาย้ายสถานะ Ticket จาก Open ➔ In Progress อัตโนมัติ |
 | **`MonthlyReportSchedule`** | การตั้งค่าการส่งรายงานสรุป Ticket ประจำเดือนแบบ PDF |
 | **`SMTPConfiguration`** | ตั้งค่าการเชื่อมต่อเมลเซิร์ฟเวอร์ SMTP |
+| **`InboundEmailReceipt`** | บันทึก Message-ID และผลการนำอีเมลเข้าเป็น Ticket เพื่อป้องกันการสร้างซ้ำ |
 | **`EmailLog`** | บันทึกประวัติการส่งอีเมล, ผู้รับ To/CC, สถานะ, เหตุผลข้อผิดพลาด, ปุ่ม Resend |
 | **`BackupLog`** | บันทึกประวัติการสำรองข้อมูล (FULL / INCREMENTAL 2-HR), ขนาดไฟล์, สถานะ |
 | **`TicketAuditLog`** | บันทึกการเปลี่ยนแปลงสถานะและผู้ดำเนินการสำหรับตรวจสอบย้อนหลัง |
@@ -43,11 +46,20 @@
 4. **`CLIENT_STAFF` (เจ้าหน้าที่ไอทีประจำบริษัท)**: รับผิดชอบการแก้ไข Ticket, เปลี่ยนสถานะ, ตอบกลับความคิดเห็น, และปิดงาน
 5. **`CLIENT_USER` (พนักงานทั่วไป)**: แจ้ง Ticket ใหม่, ติดตามสถานะ Ticket ของตนเอง, และเพิ่มความคิดเห็น
 
+ขอบเขต Ticket ถูกบังคับใช้จากศูนย์กลาง:
+
+* System Staff อ่านและจัดการ Ticket ได้ทุกบริษัท
+* `CLIENT_ADMIN` และ `CLIENT_STAFF` อ่าน Ticket ในบริษัทของตนและบริษัทลูก พร้อมแก้ไขตามสิทธิ์
+* `CLIENT_USER` อ่านได้เฉพาะ Ticket ที่ตนเป็นผู้สร้างและไม่มีสิทธิ์แก้ไข Ticket
+* ผู้ดูแลระดับแอปที่ไม่ใช่ Django superuser ไม่สามารถเปิด แก้ไข หรือรีเซ็ตรหัสผ่านบัญชี superuser ได้
+
 ---
 
 ## ⚡ 4. ระบบเบื้องหลังอัตโนมัติ (Background Services & Schedulers)
 
-ระบบทำงานอัตโนมัติผ่าน Systemd Timer (`ticketsolve-scheduler.timer`) รันทุกๆ 1 นาที:
+งานรายงาน, Ticket automation และ backup ตรวจทุก 1 นาทีผ่าน
+`ticketsolve-scheduler.timer` ส่วน Email → Ticket แยกเป็น
+`ticketsolve-email-to-ticket.timer` และสแกน mailbox ทุก 10 นาที:
 
 ```bash
 # คำสั่งที่รันอัตโนมัติใน scheduler service:
@@ -55,11 +67,39 @@ python manage.py process_report_schedules   # ตรวจสอบและส�
 python manage.py process_ticket_automations # ย้ายสถานะ Ticket Open ➔ In Progress ตามเวลาที่ตั้งไว้
 python manage.py run_2hr_backup             # สั่งทำ Backup 2 ชั่วโมงย้อนหลัง (มี Throttling ป้องกันรันซ้ำ)
 python manage.py run_2hr_backup --full      # Full backup รายวัน (มี Throttling ป้องกันรันซ้ำ)
+
+# รันแยกทุก 10 นาที:
+python manage.py process_email_to_tickets   # อ่านอีเมล IMAP ที่ยังไม่อ่านและสร้าง Ticket
 ```
+
+Backup archive เก็บที่ `/var/backups/ticketsolve` บน AWS VPS และลบไฟล์ที่เก่ากว่า 30 วันโดยอัตโนมัติ ค่า production secrets เก็บแยกที่ `/etc/ticketsolve/ticketsolve.env` และไม่รวมอยู่ใน archive
 
 ---
 
-## 💻 5. การติดตั้งและรันในเครื่องพัฒนา (Local Development)
+## 🔐 5. Security Controls
+
+* ไฟล์แนบดาวน์โหลดผ่าน Django view ที่ตรวจ login และขอบเขต Ticket เท่านั้น; Nginx ตอบ `404` สำหรับ `/media/` โดยตรง
+* จำกัดไฟล์แนบสูงสุด 10 MB ต่อไฟล์, 10 ไฟล์ต่อ request และรวมไม่เกิน 50 MB
+* Production เปิด HTTPS redirect, secure cookies, HSTS, `nosniff` และ referrer policy
+* `SECRET_KEY`, allowed hosts, CSRF origins, SMTP credentials และตำแหน่ง backup กำหนดผ่าน environment file นอก Git checkout
+* หน้า Backup Management แสดง Download เฉพาะ archive ที่มีข้อมูล; รายการขนาด 0 หรือไฟล์หายสามารถลบด้วย **Delete empty record**
+* SMTP Configuration แยกขอบเขตการใช้งานเป็นส่งอีเมล, Email → Ticket หรือทั้งสองฟังก์ชัน โดยมี active configuration แยกตาม feature
+
+## 📥 Email → Ticket
+
+* รองรับ Gmail/Google Workspace และ Outlook ที่เปิด IMAP SSL
+* สแกน mailbox อัตโนมัติทุก 10 นาที หรือกด **Import Now** เพื่อสแกนทันที
+* อ่านเฉพาะข้อความ `UNSEEN` ย้อนหลังตามจำนวนวันที่กำหนด และจำกัดจำนวนต่อรอบ
+* กรอง subject ด้วย keyword ไทย/อังกฤษก่อนสร้าง Ticket ได้
+* กำหนด target company, ticket creator และ default assignee ต่อ mailbox
+* เก็บ Message-ID ป้องกัน import ซ้ำ และ mark as read หลังประมวลผลสำเร็จ/ข้ามแล้ว
+* ไฟล์แนบใช้ข้อจำกัดเดียวกับหน้าเว็บ: 10 MB ต่อไฟล์, 10 ไฟล์ และรวม 50 MB
+* ข้ามอีเมลระบบที่ขึ้นต้น `[TicketSolve]` เพื่อป้องกันวงจรส่งแล้วนำกลับเข้า และจำกัด raw email ที่ 55 MB/เนื้อหา 100,000 ตัวอักษร
+* Microsoft 365 ที่ปิด IMAP ต้องใช้ Graph/OAuth integration เพิ่มเติม; รุ่นนี้ยังไม่ใช้ Basic Auth เพื่อหลีกเลี่ยงการอ้างว่ารองรับบัญชีที่ปิด IMAP
+
+---
+
+## 💻 6. การติดตั้งและรันในเครื่องพัฒนา (Local Development)
 
 ```bash
 # 1. Clone repository & ติดตั้ง dependencies

@@ -803,6 +803,15 @@ class MonthlyReportSchedule(models.Model):
 
 
 class SMTPConfiguration(models.Model):
+    FEATURE_OUTBOUND_EMAIL = 'OUTBOUND_EMAIL'
+    FEATURE_EMAIL_TO_TICKET = 'EMAIL_TO_TICKET'
+    FEATURE_BOTH = 'BOTH'
+    FEATURE_SCOPE_CHOICES = [
+        (FEATURE_OUTBOUND_EMAIL, 'Send system email'),
+        (FEATURE_EMAIL_TO_TICKET, 'Email to Ticket import'),
+        (FEATURE_BOTH, 'Send email and Email to Ticket'),
+    ]
+
     PROVIDER_CHOICES = [
         ('GMAIL', 'Gmail SMTP'),
         ('MICROSOFT', 'Microsoft Outlook SMTP'),
@@ -816,20 +825,144 @@ class SMTPConfiguration(models.Model):
     use_tls = models.BooleanField(default=True)
     username = models.CharField(max_length=255, blank=True)
     password = models.CharField(max_length=255, blank=True)
+    feature_scope = models.CharField(
+        max_length=20,
+        choices=FEATURE_SCOPE_CHOICES,
+        default=FEATURE_OUTBOUND_EMAIL,
+    )
+    incoming_host = models.CharField(
+        max_length=255,
+        blank=True,
+        default='',
+        help_text='IMAP host, for example imap.gmail.com',
+    )
+    incoming_port = models.PositiveIntegerField(default=993)
+    incoming_folder = models.CharField(max_length=255, default='INBOX')
+    email_to_ticket_company = models.ForeignKey(
+        Company,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='email_to_ticket_smtp_configurations',
+    )
+    email_to_ticket_creator = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='email_to_ticket_creator_configurations',
+    )
+    email_to_ticket_assignee = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='email_to_ticket_assignee_configurations',
+    )
+    filter_issue_only = models.BooleanField(default=True)
+    issue_keywords = models.TextField(
+        blank=True,
+        default='',
+        help_text='Optional comma-separated subject keywords',
+    )
+    mark_processed_as_read = models.BooleanField(default=True)
+    max_emails_per_fetch = models.PositiveSmallIntegerField(default=30)
+    fetch_days_back = models.PositiveSmallIntegerField(default=7)
+    last_inbound_check_at = models.DateTimeField(null=True, blank=True)
+    last_inbound_error = models.TextField(blank=True, default='')
     is_active = models.BooleanField(default=False)
+
+    @property
+    def uses_outbound_email(self):
+        return self.feature_scope in {
+            self.FEATURE_OUTBOUND_EMAIL,
+            self.FEATURE_BOTH,
+        }
+
+    @property
+    def uses_email_to_ticket(self):
+        return self.feature_scope in {
+            self.FEATURE_EMAIL_TO_TICKET,
+            self.FEATURE_BOTH,
+        }
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+
+        errors = {}
+        if self.uses_email_to_ticket:
+            if self.provider == 'SIMULATION':
+                errors['provider'] = 'Simulation provider cannot import email into tickets.'
+            if not self.username:
+                errors['username'] = 'Mailbox username is required for Email to Ticket.'
+            if not self.password:
+                errors['password'] = 'Mailbox password or app password is required for Email to Ticket.'
+            if not self.incoming_host:
+                errors['incoming_host'] = 'IMAP host is required for Email to Ticket.'
+            if not self.email_to_ticket_company:
+                errors['email_to_ticket_company'] = 'Target company is required for Email to Ticket.'
+            if not self.email_to_ticket_creator:
+                errors['email_to_ticket_creator'] = 'Ticket creator is required for Email to Ticket.'
+            elif (
+                self.email_to_ticket_company_id
+                and self.email_to_ticket_creator.company_id != self.email_to_ticket_company_id
+            ):
+                errors['email_to_ticket_creator'] = 'Ticket creator must belong to the target company.'
+            if (
+                self.email_to_ticket_assignee_id
+                and self.email_to_ticket_company_id
+                and self.email_to_ticket_assignee.company_id != self.email_to_ticket_company_id
+            ):
+                errors['email_to_ticket_assignee'] = 'Assignee must belong to the target company.'
+            if self.max_emails_per_fetch < 1 or self.max_emails_per_fetch > 100:
+                errors['max_emails_per_fetch'] = 'Maximum emails per fetch must be between 1 and 100.'
+            if self.fetch_days_back < 1 or self.fetch_days_back > 90:
+                errors['fetch_days_back'] = 'Fetch days back must be between 1 and 90.'
+        if errors:
+            raise ValidationError(errors)
 
     def save(self, *args, **kwargs):
         if self.is_active:
-            SMTPConfiguration.objects.exclude(pk=self.pk).update(is_active=False)
+            from django.db.models import Q
+
+            overlapping_scope = Q()
+            if self.uses_outbound_email:
+                overlapping_scope |= Q(
+                    feature_scope__in=[
+                        self.FEATURE_OUTBOUND_EMAIL,
+                        self.FEATURE_BOTH,
+                    ]
+                )
+            if self.uses_email_to_ticket:
+                overlapping_scope |= Q(
+                    feature_scope__in=[
+                        self.FEATURE_EMAIL_TO_TICKET,
+                        self.FEATURE_BOTH,
+                    ]
+                )
+            if overlapping_scope:
+                SMTPConfiguration.objects.filter(
+                    overlapping_scope,
+                ).exclude(pk=self.pk).update(is_active=False)
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"{self.name} ({self.get_provider_display()} - {self.username}) - Active: {self.is_active}"
+        return (
+            f"{self.name} ({self.get_provider_display()} - "
+            f"{self.get_feature_scope_display()} - {self.username}) "
+            f"- Active: {self.is_active}"
+        )
 
 
 def get_smtp_connection():
     from django.core.mail.backends.smtp import EmailBackend
-    config = SMTPConfiguration.objects.filter(is_active=True).first()
+    config = SMTPConfiguration.objects.filter(
+        is_active=True,
+        feature_scope__in=[
+            SMTPConfiguration.FEATURE_OUTBOUND_EMAIL,
+            SMTPConfiguration.FEATURE_BOTH,
+        ],
+    ).first()
     if config and config.provider != 'SIMULATION':
         return EmailBackend(
             host=config.host,
@@ -846,10 +979,62 @@ def get_smtp_connection():
 
 
 def get_smtp_from_email(default_from_email):
-    config = SMTPConfiguration.objects.filter(is_active=True).first()
+    config = SMTPConfiguration.objects.filter(
+        is_active=True,
+        feature_scope__in=[
+            SMTPConfiguration.FEATURE_OUTBOUND_EMAIL,
+            SMTPConfiguration.FEATURE_BOTH,
+        ],
+    ).first()
     if config and config.username:
         return config.username
     return default_from_email
+
+
+class InboundEmailReceipt(models.Model):
+    STATUS_IMPORTED = 'IMPORTED'
+    STATUS_SKIPPED = 'SKIPPED'
+    STATUS_FAILED = 'FAILED'
+    STATUS_CHOICES = [
+        (STATUS_IMPORTED, 'Imported'),
+        (STATUS_SKIPPED, 'Skipped'),
+        (STATUS_FAILED, 'Failed'),
+    ]
+
+    smtp_configuration = models.ForeignKey(
+        SMTPConfiguration,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='inbound_email_receipts',
+    )
+    message_id = models.CharField(max_length=512)
+    sender_name = models.CharField(max_length=255, blank=True, default='')
+    sender_email = models.EmailField(blank=True, default='')
+    subject = models.CharField(max_length=255, blank=True, default='')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES)
+    details = models.TextField(blank=True, default='')
+    ticket = models.ForeignKey(
+        Ticket,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='inbound_email_receipts',
+    )
+    processed_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-processed_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['smtp_configuration', 'message_id'],
+                name='unique_inbound_message_per_smtp_config',
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.subject or self.message_id} ({self.status})"
 
 
 class NotificationConfig(models.Model):
