@@ -1,12 +1,17 @@
 [Unit]
 Description=Process TicketSolve automatic schedules
-After=network.target postgresql.service
+After=network.target
 
 [Service]
 Type=oneshot
 User=ubuntu
 Group=www-data
 WorkingDirectory=/var/www/ticketSolve
-Environment=TIME_ZONE=Asia/Bangkok
-ExecStart=/var/www/ticketSolve/venv/bin/python manage.py process_report_schedules
-ExecStart=/var/www/ticketSolve/venv/bin/python manage.py process_ticket_automations
+EnvironmentFile=/etc/ticketsolve/ticketsolve.env
+UMask=0027
+ExecStart=-/var/www/ticketSolve/venv/bin/python manage.py process_report_schedules
+ExecStart=-/var/www/ticketSolve/venv/bin/python manage.py process_ticket_automations
+ExecStart=-/var/www/ticketSolve/venv/bin/python manage.py run_2hr_backup
+ExecStart=/var/www/ticketSolve/venv/bin/python manage.py run_2hr_backup --full
+PrivateTmp=true
+NoNewPrivileges=true

@@ -1,0 +1,15 @@
+.git
+.gitignore
+.env
+*.pem
+*.sqlite3
+*.zip
+*.tar.gz
+backups/
+media/
+tmp_backup/
+report/
+__pycache__/
+*.py[cod]
+.idea/
+.vscode/

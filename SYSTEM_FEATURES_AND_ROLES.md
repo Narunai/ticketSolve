@@ -47,8 +47,8 @@
 
 ---
 
-### 💾 1.6 ระบบสำรองข้อมูล (Backup System & Cloud Sync)
-* **2-Hour Incremental Backup**: บันทึกเฉพาะ Ticket, Comments และไฟล์แนบที่เกิดขึ้นใหม่ใน 2 ชั่วโมงย้อนหลัง บีบอัดเป็น `.zip` แล้วส่งขึ้น Google Drive
+### 💾 1.6 ระบบสำรองข้อมูล (AWS VPS Backup)
+* **2-Hour Incremental Backup**: บันทึก Ticket ที่ถูกสร้าง/แก้ไข หรือมี Comments/ไฟล์แนบใหม่ใน 2 ชั่วโมงย้อนหลังเป็น `.zip` ไว้ที่ `/var/backups/ticketsolve`
 * **Full Backup**: บีบอัดฐานข้อมูล `db.sqlite3` + โฟลเดอร์ `media/` + `.env` เป็น `.tar.gz` แล้วส่งขึ้น Cloud
 * **Backup Management UI (`/backups/`)**: หน้าจอสำหรับกดสำรองข้อมูลทันที, ดูสถิติการสำรองข้อมูล, และลบประวัติ Backup
 

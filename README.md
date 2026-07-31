@@ -1,18 +1,18 @@
 # 🎟️ TicketSolve - Multi-Tenant IT Support Ticket & Service Desk System
 
-**TicketSolve** คือระบบบริหารจัดการตั๋วแจ้งซ่อมและสนับสนุนงานบริการ IT (IT Service Desk & Support Ticket Management System) ในรูปแบบ Multi-Tenant รองรับการทำงานหลายบริษัทในระบบเดียว มีระบบสิทธิ์การใช้งาน 5 ระดับ, ระบบปรับแต่งฟิลด์และหน้าตาตามบริษัท, ระบบแจ้งเตือนทางอีเมลพร้อมสถิติการส่ง, ระบบย้ายสถานะอัตโนมัติ (Status Automation), ระบบรายงานประจำเดือน PDF, และระบบสำรองข้อมูลอัตโนมัติ 2 ชั่วโมง (2-Hour Incremental Backup & Cloud Sync)
+**TicketSolve** คือระบบบริหารจัดการตั๋วแจ้งซ่อมและสนับสนุนงานบริการ IT (IT Service Desk & Support Ticket Management System) ในรูปแบบ Multi-Tenant รองรับการทำงานหลายบริษัทในระบบเดียว มีระบบสิทธิ์การใช้งาน 5 ระดับ, ระบบปรับแต่งฟิลด์และหน้าตาตามบริษัท, ระบบแจ้งเตือนทางอีเมลพร้อมสถิติการส่ง, ระบบย้ายสถานะอัตโนมัติ (Status Automation), ระบบรายงานประจำเดือน PDF, และระบบสำรองข้อมูลอัตโนมัติบน AWS VPS ทุก 2 ชั่วโมง
 
 ---
 
 ## 🏗️ 1. เทคโนโลยีและสถาปัตยกรรมระบบ (Tech Stack & Architecture)
 
 * **Backend**: Python 3.12+, Django 5.x
-* **Database**: PostgreSQL (Production) / SQLite3 (Development)
+* **Database**: SQLite3 พร้อม SQLite Online Backup API
 * **Frontend**: HTML5, Vanilla CSS + Tailwind CSS (Glassmorphism Dark & Light Theme UI)
 * **Web Server & WSGI**: Nginx + Gunicorn
 * **PDF Engine**: xhtml2pdf (HTML/CSS to PDF Engine)
 * **Background Scheduler**: Systemd Service & Timer (`ticketsolve-scheduler`)
-* **Cloud Storage & Backup**: Google Drive API v3 (Service Account / OAuth2)
+* **Backup Storage**: AWS VPS filesystem (`/var/backups/ticketsolve`)
 
 ---
 
@@ -54,6 +54,7 @@
 python manage.py process_report_schedules   # ตรวจสอบและส่งรายงาน PDF ประจำเดือน
 python manage.py process_ticket_automations # ย้ายสถานะ Ticket Open ➔ In Progress ตามเวลาที่ตั้งไว้
 python manage.py run_2hr_backup             # สั่งทำ Backup 2 ชั่วโมงย้อนหลัง (มี Throttling ป้องกันรันซ้ำ)
+python manage.py run_2hr_backup --full      # Full backup รายวัน (มี Throttling ป้องกันรันซ้ำ)
 ```
 
 ---
@@ -68,16 +69,18 @@ python -m venv venv
 venv\Scripts\activate
 pip install -r requirements.txt
 
-# 2. Run migrations
-python manage.py makemigrations
+# 2. Create local environment settings, then set DEBUG=True and a local SECRET_KEY
+copy .env.example .env
+
+# 3. Run migrations
 python manage.py migrate
 
-# 3. Seed data (สร้างผู้ใช้และข้อมูลตัวอย่าง)
+# 4. Seed data (สร้างผู้ใช้และข้อมูลตัวอย่าง)
 python manage.py seed_data
 
-# 4. Start local dev server
+# 5. Start local dev server
 python manage.py runserver 0.0.0.0:8000
 
-# 5. Run test suite
+# 6. Run test suite
 python manage.py test
 ```

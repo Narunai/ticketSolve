@@ -11,7 +11,9 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 import os
+import sys
 from pathlib import Path
+from django.core.exceptions import ImproperlyConfigured
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -24,18 +26,47 @@ if env_path.exists():
             line = line.strip()
             if line and not line.startswith('#') and '=' in line:
                 key, val = line.split('=', 1)
-                os.environ[key.strip()] = val.strip()
+                # Values injected by systemd/Docker take precedence over the
+                # developer-only project .env file.
+                os.environ.setdefault(key.strip(), val.strip())
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-pfs*05q9_&(#z2pq&pue5$p3^&a21^6xfp)9k#_3^bhb)c)&$7')
+def env_bool(name, default=False):
+    return os.environ.get(name, str(default)).strip().lower() in ('true', '1', 't', 'yes', 'on')
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get('DEBUG', 'False').lower() in ('true', '1', 't')
 
-ALLOWED_HOSTS = [h.strip() for h in os.environ.get('ALLOWED_HOSTS', '*').split(',') if h.strip()]
+def env_list(name):
+    return [
+        value.strip()
+        for value in os.environ.get(name, '').split(',')
+        if value.strip()
+    ]
+
+
+DEBUG = env_bool('DEBUG', False)
+IS_TESTING = 'test' in sys.argv
+IS_PRODUCTION = not DEBUG and not IS_TESTING
+
+SECRET_KEY = os.environ.get('SECRET_KEY', '').strip()
+if not SECRET_KEY:
+    if DEBUG or IS_TESTING:
+        SECRET_KEY = 'django-insecure-local-development-only'
+    else:
+        raise ImproperlyConfigured(
+            'SECRET_KEY must be provided through the VPS environment file.'
+        )
+
+ALLOWED_HOSTS = env_list('ALLOWED_HOSTS')
+if not ALLOWED_HOSTS:
+    if IS_PRODUCTION:
+        raise ImproperlyConfigured(
+            'ALLOWED_HOSTS must be configured for production.'
+        )
+    ALLOWED_HOSTS = ['localhost', '127.0.0.1', '[::1]', 'testserver']
+
+CSRF_TRUSTED_ORIGINS = env_list('CSRF_TRUSTED_ORIGINS')
 
 
 # Application definition
@@ -147,6 +178,25 @@ LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'dashboard'
 LOGOUT_REDIRECT_URL = 'login'
 
+# Production transport and cookie security. Nginx terminates TLS and supplies
+# X-Forwarded-Proto through proxy_params.
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SECURE_SSL_REDIRECT = env_bool('SECURE_SSL_REDIRECT', IS_PRODUCTION)
+SESSION_COOKIE_SECURE = IS_PRODUCTION
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_SECURE = IS_PRODUCTION
+CSRF_COOKIE_HTTPONLY = True
+CSRF_COOKIE_SAMESITE = 'Lax'
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_REFERRER_POLICY = 'same-origin'
+SECURE_HSTS_SECONDS = int(os.environ.get(
+    'SECURE_HSTS_SECONDS',
+    31536000 if IS_PRODUCTION else 0,
+))
+SECURE_HSTS_INCLUDE_SUBDOMAINS = IS_PRODUCTION
+SECURE_HSTS_PRELOAD = env_bool('SECURE_HSTS_PRELOAD', False)
+
 # Email Configuration (Supports Console and Real Gmail SMTP Delivery)
 
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'narunaithaisenee@gmail.com').strip()
@@ -167,6 +217,7 @@ else:
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
-# File Upload Size Limit (Unlimited request payload size, each file limited to 10MB by validation)
-DATA_UPLOAD_MAX_MEMORY_SIZE = None
-FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10 MB in-memory buffer limit
+# Bound the entire request as well as each file. Files above the memory
+# threshold are streamed to a temporary file by Django.
+DATA_UPLOAD_MAX_MEMORY_SIZE = 110 * 1024 * 1024
+FILE_UPLOAD_MAX_MEMORY_SIZE = 2_621_440

@@ -17,7 +17,7 @@ class Command(BaseCommand):
             '--hours',
             type=int,
             default=2,
-            help='Number of hours to look back for new tickets (default: 2).'
+            help='Number of hours to look back for changed tickets (default: 2).'
         )
         parser.add_argument(
             '--force',
@@ -27,6 +27,18 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         if options.get('full'):
+            if not options.get('force'):
+                recent_full_backup = BackupLog.objects.filter(
+                    backup_type=BackupLog.TYPE_FULL,
+                    status=BackupLog.STATUS_SUCCESS,
+                    created_at__gte=timezone.now() - timedelta(hours=23, minutes=55),
+                ).first()
+                if recent_full_backup:
+                    self.stdout.write(
+                        f"Skipping: Full backup already completed at "
+                        f"{recent_full_backup.created_at.strftime('%Y-%m-%d %H:%M:%S')}"
+                    )
+                    return
             self.stdout.write("Starting Full System Backup...")
             result = perform_full_backup()
         else:
@@ -35,6 +47,7 @@ class Command(BaseCommand):
             if not options.get('force'):
                 recent_backup = BackupLog.objects.filter(
                     backup_type=BackupLog.TYPE_INCREMENTAL,
+                    status=BackupLog.STATUS_SUCCESS,
                     created_at__gte=timezone.now() - timedelta(minutes=hours * 60 - 5)
                 ).first()
                 if recent_backup:

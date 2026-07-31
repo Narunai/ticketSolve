@@ -21,8 +21,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy project files
 COPY . /app/
 
-# Collect static files for production
-RUN python manage.py collectstatic --noinput
+# Collect static files with a build-only development key. Runtime always
+# requires secrets to be injected by the environment.
+RUN SECRET_KEY=container-build-only DEBUG=True python manage.py collectstatic --noinput
 
 # Expose the default Gunicorn port
 EXPOSE 8000

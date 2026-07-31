@@ -700,6 +700,7 @@ class MultiTenantTicketTests(TestCase):
         form = CustomUserForm(user=sub_admin)
         role_choices = [c[0] for c in form.fields['role'].choices]
         self.assertIn(CustomUser.CLIENT_ADMIN, role_choices)
+        self.assertIn(CustomUser.CLIENT_STAFF, role_choices)
         self.assertIn(CustomUser.CLIENT_USER, role_choices)
         self.assertNotIn(CustomUser.SYSTEM_ADMIN, role_choices)
         self.assertNotIn(CustomUser.SYSTEM_SUB_ADMIN, role_choices)
@@ -1516,6 +1517,242 @@ class MultiTenantTicketTests(TestCase):
         post_del = self.client.post(reverse('backup_delete', args=[log_id]))
         self.assertRedirects(post_del, reverse('backup_list'))
         self.assertFalse(BackupLog.objects.filter(pk=log_id).exists())
+
+    def test_empty_backup_record_has_delete_button_and_can_be_deleted(self):
+        from tickets.models import BackupLog
+
+        empty_log = BackupLog.objects.create(
+            filename="incremental_no_changes.tar.gz",
+            file_size_bytes=0,
+            backup_type=BackupLog.TYPE_INCREMENTAL,
+            status=BackupLog.STATUS_SUCCESS,
+            details="No tickets changed during this backup window.",
+        )
+        self.client.login(username="system_admin", password="password123")
+
+        response = self.client.get(reverse('backup_list'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "No data file")
+        self.assertContains(response, "Delete empty record")
+        self.assertContains(
+            response,
+            reverse('backup_delete', args=[empty_log.pk]),
+        )
+        self.assertNotContains(
+            response,
+            reverse('backup_download', args=[empty_log.pk]),
+        )
+
+        delete_response = self.client.post(
+            reverse('backup_delete', args=[empty_log.pk]),
+        )
+        self.assertRedirects(delete_response, reverse('backup_list'))
+        self.assertFalse(BackupLog.objects.filter(pk=empty_log.pk).exists())
+
+    def test_client_user_can_only_read_own_tickets_and_cannot_update(self):
+        coworker_ticket = Ticket.objects.create(
+            title="Private coworker ticket",
+            description="Must not be exposed to another regular user",
+            company=self.company_a,
+            created_by=self.admin_a,
+        )
+        self.client.login(username="user_a", password="password123")
+
+        dashboard = self.client.get(reverse('dashboard'))
+        self.assertEqual(dashboard.status_code, 200)
+        self.assertNotContains(dashboard, coworker_ticket.title)
+        self.assertEqual(
+            self.client.get(reverse('ticket_detail', args=[coworker_ticket.pk])).status_code,
+            403,
+        )
+        self.assertEqual(
+            self.client.get(reverse('ticket_update', args=[self.ticket_a.pk])).status_code,
+            403,
+        )
+        self.assertEqual(
+            self.client.post(
+                reverse('ticket_update', args=[self.ticket_a.pk]),
+                {'status': Ticket.STATUS_CLOSED},
+            ).status_code,
+            403,
+        )
+
+    def test_client_staff_can_view_and_update_company_ticket(self):
+        staff = User.objects.create_user(
+            username="company_staff",
+            email="staff@company-a.com",
+            password="password123",
+            role=User.CLIENT_STAFF,
+            company=self.company_a,
+        )
+        self.client.login(username=staff.username, password="password123")
+        self.assertEqual(
+            self.client.get(reverse('ticket_detail', args=[self.ticket_a.pk])).status_code,
+            200,
+        )
+        response = self.client.post(
+            reverse('ticket_update', args=[self.ticket_a.pk]),
+            {
+                'title': self.ticket_a.title,
+                'description': self.ticket_a.description,
+                'priority': self.ticket_a.priority,
+                'status': Ticket.STATUS_IN_PROGRESS,
+                'category': self.ticket_a.category,
+                'assigned_to': staff.pk,
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.ticket_a.refresh_from_db()
+        self.assertEqual(self.ticket_a.status, Ticket.STATUS_IN_PROGRESS)
+
+    def test_client_user_cannot_manage_notification_configuration(self):
+        from .models import NotificationConfig
+
+        config = NotificationConfig.objects.create(
+            name="Admin only",
+            company=self.company_a,
+        )
+        self.client.login(username="user_a", password="password123")
+
+        self.assertEqual(self.client.get(reverse('notification_config_list')).status_code, 403)
+        self.assertEqual(self.client.get(reverse('notification_config_create')).status_code, 403)
+        self.assertEqual(
+            self.client.get(reverse('notification_config_edit', args=[config.pk])).status_code,
+            403,
+        )
+        self.assertEqual(
+            self.client.post(reverse('notification_config_delete', args=[config.pk])).status_code,
+            403,
+        )
+        self.assertTrue(NotificationConfig.objects.filter(pk=config.pk).exists())
+
+    def test_deployment_confirmation_requires_ticket_staff_and_post(self):
+        self.ticket_a.status = Ticket.STATUS_DEPLOYMENT_REQUESTED
+        self.ticket_a.save(update_fields=['status'])
+
+        self.client.login(username="user_a", password="password123")
+        self.assertEqual(
+            self.client.post(reverse('confirm_deployment', args=[self.ticket_a.pk])).status_code,
+            403,
+        )
+        self.ticket_a.refresh_from_db()
+        self.assertEqual(self.ticket_a.status, Ticket.STATUS_DEPLOYMENT_REQUESTED)
+
+        self.client.login(username="admin_a", password="password123")
+        self.assertEqual(
+            self.client.get(reverse('confirm_deployment', args=[self.ticket_a.pk])).status_code,
+            405,
+        )
+        self.ticket_a.refresh_from_db()
+        self.assertEqual(self.ticket_a.status, Ticket.STATUS_DEPLOYMENT_REQUESTED)
+
+    def test_non_superuser_system_admin_cannot_edit_django_superuser(self):
+        app_admin = User.objects.create_user(
+            username="app_admin_only",
+            email="app-admin@example.com",
+            password="password123",
+            role=User.SYSTEM_ADMIN,
+            is_staff=True,
+            is_superuser=False,
+        )
+        root_user = User.objects.create_superuser(
+            username="root_account",
+            email="root@example.com",
+            password="Root-password-2026!",
+        )
+        self.client.login(username=app_admin.username, password="password123")
+
+        response = self.client.get(reverse('user_update', args=[root_user.pk]))
+        self.assertEqual(response.status_code, 404)
+        root_user.refresh_from_db()
+        self.assertTrue(root_user.check_password("Root-password-2026!"))
+
+    def test_attachment_download_requires_ticket_visibility(self):
+        import tempfile
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from django.test import override_settings
+        from .models import TicketAttachment
+
+        with tempfile.TemporaryDirectory() as media_root, override_settings(MEDIA_ROOT=media_root):
+            attachment = TicketAttachment.objects.create(
+                ticket=self.ticket_a,
+                file=SimpleUploadedFile("private.txt", b"private attachment"),
+                filename="private.txt",
+                file_size=18,
+            )
+            url = reverse('ticket_attachment_download', args=[attachment.pk])
+
+            self.assertEqual(self.client.get(url).status_code, 302)
+            self.client.login(username="user_b", password="password123")
+            self.assertEqual(self.client.get(url).status_code, 404)
+            self.client.login(username="user_a", password="password123")
+            response = self.client.get(url)
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response['Content-Type'], 'application/octet-stream')
+            self.assertIn('attachment;', response['Content-Disposition'])
+            self.assertEqual(self.client.get(attachment.file.url).status_code, 404)
+            response.close()
+
+    def test_ticket_automation_update_returns_redirect_and_saves(self):
+        config = TicketAutomationConfig.objects.create(
+            company=self.company_a,
+            open_age_value=2,
+            open_age_unit=TicketAutomationConfig.UNIT_HOURS,
+        )
+        self.client.login(username="system_admin", password="password123")
+        response = self.client.post(
+            reverse('ticket_automation_edit', args=[config.pk]),
+            {
+                'company': self.company_a.pk,
+                'open_age_value': 7,
+                'open_age_unit': TicketAutomationConfig.UNIT_HOURS,
+                'is_active': 'on',
+            },
+        )
+        self.assertRedirects(response, reverse('ticket_automation_list'))
+        config.refresh_from_db()
+        self.assertEqual(config.open_age_value, 7)
+
+    def test_incremental_backup_includes_new_comment_on_old_ticket(self):
+        import datetime
+        import json
+        import tempfile
+        import zipfile
+        from unittest import mock
+        from .backup_service import perform_incremental_backup
+        from .models import TicketComment
+
+        old_time = timezone.now() - datetime.timedelta(days=3)
+        Ticket.objects.filter(pk=self.ticket_a.pk).update(
+            created_at=old_time,
+            updated_at=old_time,
+        )
+        TicketComment.objects.create(
+            ticket=self.ticket_a,
+            author=self.admin_a,
+            content="A recent comment on an old ticket",
+        )
+
+        with tempfile.TemporaryDirectory() as backup_dir, mock.patch(
+            'tickets.backup_service.BACKUP_DIR',
+            backup_dir,
+        ):
+            result = perform_incremental_backup(hours=2)
+            self.assertTrue(result['success'])
+            with zipfile.ZipFile(result['file_path']) as archive:
+                payload = json.loads(archive.read('tickets.json').decode('utf-8'))
+            self.assertIn(self.ticket_a.pk, [item['id'] for item in payload])
+
+    def test_backup_path_rejects_parent_directory_traversal(self):
+        import tempfile
+        from unittest import mock
+        from .backup_service import get_backup_file_path
+
+        with tempfile.TemporaryDirectory() as backup_dir, mock.patch(
+            'tickets.backup_service.BACKUP_DIR',
+            backup_dir,
+        ):
+            self.assertIsNone(get_backup_file_path('../.env'))
 
 
 

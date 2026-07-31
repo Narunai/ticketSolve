@@ -1,6 +1,6 @@
 # 🚀 คู่มือการติดตั้งและสำรองข้อมูล (Deployment & Backup Guide)
 
-เอกสารฉบับนี้อธิบายขั้นตอนการติดตั้งระบบ **TicketSolve** บนเซิร์ฟเวอร์ Cloud VPS (AWS Lightsail / Google Cloud) รวมถึงการตั้งค่า Nginx, Gunicorn, Systemd Timer และระบบ Backup
+เอกสารฉบับนี้อธิบายขั้นตอนการติดตั้งระบบ **TicketSolve** บน AWS Lightsail รวมถึงการตั้งค่า Nginx, Gunicorn, Systemd Timer และ Local VPS Backup
 
 ---
 
@@ -32,9 +32,11 @@ pip install -r requirements.txt
 
 ### 2.2 รัน Database Migrations & Collect Static
 ```bash
-python manage.py migrate
-python manage.py collectstatic --noinput
+sudo bash deployment/deploy.sh
 ```
+
+Production secrets อยู่ที่ `/etc/ticketsolve/ticketsolve.env` (สิทธิ์ `0640`,
+เจ้าของ `root:www-data`) และต้องไม่เก็บไว้ใน Git checkout
 
 ### 2.3 รีสตาร์ทบริการ Nginx & Gunicorn
 ```bash
@@ -50,19 +52,19 @@ sudo systemctl restart nginx
 ระบบสำรองข้อมูลใน TicketSolve แบ่งออกเป็น 2 ประเภทหลัก:
 
 ### 3.1 ⏱️ 2-Hour Incremental Backup (สำรองข้อมูล 2 ชั่วโมงย้อนหลัง)
-* **การทำงาน**: ดึง Ticket, Comments, และไฟล์แนบที่สร้างขึ้นใน 2 ชั่วโมงย้อนหลัง
+* **การทำงาน**: ดึง Ticket ที่ถูกสร้าง/แก้ไข หรือมี Comments/ไฟล์แนบใหม่ใน 2 ชั่วโมงย้อนหลัง
 * **ไฟล์ที่สร้าง**: `incremental_backup_YYYY-MM-DD_HH-MM-SS.zip` (ประกอบด้วย `tickets.json` และโฟลเดอร์ `attachments/`)
-* **Google Drive Sync**: อัปโหลดไฟล์ ZIP เข้าไปยัง Google Drive Folder (ID: `1q_86246EXE63IItYtI2tklqwr8EuuNrM`)
-* **Disk Cleanup**: ลบไฟล์ ZIP บน VM ทันทีหลังอัปโหลดเสร็จสิ้นเพื่อประหยัดพื้นที่ดิสก์
+* **ที่จัดเก็บ**: `/var/backups/ticketsolve` บน AWS VPS
+* **Retention**: ลบ archive ที่เก่ากว่า `BACKUP_RETENTION_DAYS` (ค่าเริ่มต้น 30 วัน)
 
 ### 3.2 📦 Full System Backup (สำรองข้อมูลทั้งระบบ)
-* **การทำงาน**: บีบอัดฐานข้อมูล `db.sqlite3` + โฟลเดอร์ไฟล์แนบ `media/` + ไฟล์ `.env`
+* **การทำงาน**: สำรองฐานข้อมูลผ่าน SQLite Online Backup API แล้วบีบอัดร่วมกับ `media/`
 * **ไฟล์ที่สร้าง**: `full_backup_YYYY-MM-DD_HH-MM-SS.tar.gz`
-* **Google Drive Sync**: อัปโหลดไฟล์ TAR.GZ ไปยัง Google Drive และเก็บบันทึกประวัติ
+* **Secrets**: ไม่รวม `/etc/ticketsolve/ticketsolve.env` ใน archive ต้องสำรอง secrets แยกต่างหาก
 
 ### 3.3 📥 Backup Direct Download (ดาวน์โหลดไฟล์สำรองข้อมูล)
 * **การใช้งาน**: สามารถดาวน์โหลดไฟล์ Backup (`.zip` หรือ `.tar.gz`) มาตรวจสอบและดูข้อมูลบนเครื่องของคุณได้ทันทีผ่านปุ่ม **📥 Download** ในหน้าจอ Backup Management (`/backups/`)
-* **On-Demand Storage**: ไฟล์ Backup จะถูกเก็บไว้ในโฟลเดอร์ `backups/` ของระบบ และหากไฟล์บนดิสก์หายไป ระบบจะทำการสร้างไฟล์บีบอัดสำหรับดาวน์โหลดให้อัตโนมัติทันทีที่กดดาวน์โหลด
+* **On-Demand Storage**: ไฟล์ Backup ถูกเก็บใน `/var/backups/ticketsolve` และดาวน์โหลดได้เฉพาะ System Staff ที่ยืนยันตัวตนแล้ว
 
 ---
 
@@ -94,17 +96,18 @@ python manage.py run_2hr_backup --full
 ```ini
 [Unit]
 Description=Process TicketSolve automatic schedules
-After=network.target postgresql.service
+After=network.target
 
 [Service]
 Type=oneshot
 User=ubuntu
 Group=www-data
 WorkingDirectory=/var/www/ticketSolve
-Environment=TIME_ZONE=Asia/Bangkok
-ExecStart=/var/www/ticketSolve/venv/bin/python manage.py process_report_schedules
-ExecStart=/var/www/ticketSolve/venv/bin/python manage.py process_ticket_automations
-ExecStart=/var/www/ticketSolve/venv/bin/python manage.py run_2hr_backup
+EnvironmentFile=/etc/ticketsolve/ticketsolve.env
+ExecStart=-/var/www/ticketSolve/venv/bin/python manage.py process_report_schedules
+ExecStart=-/var/www/ticketSolve/venv/bin/python manage.py process_ticket_automations
+ExecStart=-/var/www/ticketSolve/venv/bin/python manage.py run_2hr_backup
+ExecStart=/var/www/ticketSolve/venv/bin/python manage.py run_2hr_backup --full
 ```
 
 ### ไฟล์ Timer: `/etc/systemd/system/ticketsolve-scheduler.timer`

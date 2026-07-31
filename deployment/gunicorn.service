@@ -6,7 +6,11 @@ After=network.target
 User=ubuntu
 Group=www-data
 WorkingDirectory=/var/www/ticketSolve
+EnvironmentFile=/etc/ticketsolve/ticketsolve.env
+UMask=0027
 ExecStart=/var/www/ticketSolve/venv/bin/gunicorn --workers 4 --bind unix:/var/www/ticketSolve/gunicorn.sock ticket_system.wsgi:application
+PrivateTmp=true
+NoNewPrivileges=true
 
 [Install]
 WantedBy=multi-user.target

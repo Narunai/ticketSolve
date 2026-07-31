@@ -217,13 +217,19 @@
                             {{ blog.details|default:"-" }}
                         </td>
                         <td class="px-6 py-4 text-right whitespace-nowrap space-x-2">
+                            {% if blog.has_data_file %}
                             <a href="{% url 'backup_download' blog.id %}" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold text-sky-300 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 transition-all active:scale-95">
                                 📥 Download
                             </a>
+                            {% else %}
+                            <span class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-amber-300 bg-amber-500/10 border border-amber-500/30">
+                                No data file
+                            </span>
+                            {% endif %}
                             <form method="POST" action="{% url 'backup_delete' blog.id %}" onsubmit="return confirm('Delete backup record {{ blog.filename }}?');" class="inline">
                                 {% csrf_token %}
                                 <button type="submit" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 transition-all cursor-pointer active:scale-95">
-                                    🗑️ Delete
+                                    {% if blog.has_data_file %}🗑️ Delete{% else %}🗑️ Delete empty record{% endif %}
                                 </button>
                             </form>
                         </td>

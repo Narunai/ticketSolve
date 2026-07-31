@@ -25,11 +25,23 @@ class CustomUserAdmin(UserAdmin):
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
-        if request.user.is_superuser or request.user.role == CustomUser.SYSTEM_ADMIN:
+        if request.user.is_superuser:
             return qs
+        if request.user.role == CustomUser.SYSTEM_ADMIN:
+            return qs.filter(is_superuser=False)
         if request.user.role == CustomUser.CLIENT_ADMIN:
-            return qs.filter(company=request.user.company)
+            return qs.filter(company=request.user.company, is_superuser=False)
         return qs.none()
+
+    def has_change_permission(self, request, obj=None):
+        if obj is not None and obj.is_superuser and not request.user.is_superuser:
+            return False
+        return super().has_change_permission(request, obj)
+
+    def has_delete_permission(self, request, obj=None):
+        if obj is not None and obj.is_superuser and not request.user.is_superuser:
+            return False
+        return super().has_delete_permission(request, obj)
 
     def get_form(self, request, obj=None, **kwargs):
         form = super().get_form(request, obj, **kwargs)
@@ -43,6 +55,7 @@ class CustomUserAdmin(UserAdmin):
             if 'role' in form.base_fields:
                 form.base_fields['role'].choices = [
                     (CustomUser.CLIENT_ADMIN, 'Client Administrator'),
+                    (CustomUser.CLIENT_STAFF, 'Client Staff'),
                     (CustomUser.CLIENT_USER, 'Client User'),
                 ]
             # Restrict list of user_permissions or groups editing if any, or hide them
@@ -61,9 +74,14 @@ class CustomUserAdmin(UserAdmin):
             # If CLIENT_ADMIN, they can make other users staff to login to admin
             if obj.role == CustomUser.CLIENT_ADMIN:
                 obj.is_staff = True
-        elif obj.role == CustomUser.SYSTEM_ADMIN:
-            obj.is_superuser = True
-            obj.is_staff = True
+        else:
+            obj.is_staff = obj.role in [
+                CustomUser.SYSTEM_ADMIN,
+                CustomUser.SYSTEM_SUB_ADMIN,
+                CustomUser.CLIENT_ADMIN,
+            ]
+            if not request.user.is_superuser:
+                obj.is_superuser = False
         super().save_model(request, obj, form, change)
 
 class TicketAdmin(admin.ModelAdmin):

@@ -2,13 +2,21 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.contrib.auth.views import LoginView
 from django.contrib.auth import logout
+from django.contrib.auth.password_validation import validate_password
 from django.views.generic import CreateView, UpdateView, DetailView, TemplateView, ListView
 from django.urls import reverse, reverse_lazy
 
 from django.core.exceptions import PermissionDenied
 from django.http import FileResponse
-from .models import Ticket, CustomUser, Company, EmailLog, TicketAuditLog, ReportViewLog, MonthlyReportSchedule, TicketAutomationConfig, SMTPConfiguration, get_smtp_connection, get_smtp_from_email, TicketComment, TicketCategory, ResolutionCategory, ModuleCategory, TicketStatusConfig, CompanyTicketConfig, CompanyTicketField, NotificationConfig, should_send_email_notification, BackupLog
+from .models import Ticket, CustomUser, Company, EmailLog, TicketAuditLog, ReportViewLog, MonthlyReportSchedule, TicketAutomationConfig, SMTPConfiguration, get_smtp_connection, get_smtp_from_email, TicketComment, TicketAttachment, CommentAttachment, TicketCategory, ResolutionCategory, ModuleCategory, TicketStatusConfig, CompanyTicketConfig, CompanyTicketField, NotificationConfig, should_send_email_notification, BackupLog
 from .backup_service import perform_full_backup, perform_incremental_backup, get_backup_file_path, FileLock
+from .permissions import (
+    is_system_staff,
+    is_tenant_admin,
+    is_ticket_staff,
+    manageable_tickets_for,
+    visible_tickets_for,
+)
 
 
 from django.db import models
@@ -211,6 +219,10 @@ class TicketForm(forms.ModelForm):
         if self.files:
             files = self.files.getlist('attachments') or self.files.getlist('attachment')
         max_size = 10 * 1024 * 1024
+        if len(files) > 10:
+            self.add_error('attachment', 'A maximum of 10 attachments is allowed per request.')
+        if sum(f.size for f in files) > 50 * 1024 * 1024:
+            self.add_error('attachment', 'Total attachment size must not exceed 50 MB.')
         for f in files:
             if f.size > max_size:
                 size_mb = f.size / (1024 * 1024)
@@ -305,7 +317,7 @@ class TicketUpdateForm(forms.ModelForm):
         if user and user.company:
             self.fields['assigned_to'].queryset = CustomUser.objects.filter(company_id__in=user.company.get_all_subsidiary_ids())
             if user.role == CustomUser.CLIENT_USER:
-                for field in ['title', 'description', 'priority', 'assigned_to', 'resolution_category', 'resolution_notes']:
+                for field in self.fields:
                     if field in self.fields:
                         self.fields[field].disabled = True
         elif user and (user.is_superuser or user.role in [CustomUser.SYSTEM_ADMIN, CustomUser.SYSTEM_SUB_ADMIN]):
@@ -466,11 +478,15 @@ class TicketUpdateForm(forms.ModelForm):
         files = []
         if self.files:
             files = self.files.getlist('attachments') or self.files.getlist('attachment')
-        max_size = 50 * 1024 * 1024
+        max_size = 10 * 1024 * 1024
+        if len(files) > 10:
+            self.add_error('attachment', 'A maximum of 10 attachments is allowed per request.')
+        if sum(f.size for f in files) > 50 * 1024 * 1024:
+            self.add_error('attachment', 'Total attachment size must not exceed 50 MB.')
         for f in files:
             if f.size > max_size:
                 size_mb = f.size / (1024 * 1024)
-                self.add_error('attachment', f"Attachment file size for '{f.name}' must not exceed 50 MB (your file is {size_mb:.1f} MB)")
+                self.add_error('attachment', f"Attachment file size for '{f.name}' must not exceed 10 MB (your file is {size_mb:.1f} MB)")
 
         return cleaned_data
 
@@ -610,12 +626,18 @@ class SMTPConfigurationForm(forms.ModelForm):
             }),
             'password': forms.PasswordInput(attrs={
                 'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg pl-4 pr-10 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all',
-                'placeholder': 'Enter 16-digit App Password or SMTP password'
-            }, render_value=True),
+                'placeholder': 'Leave blank to keep the existing password'
+            }, render_value=False),
             'is_active': forms.CheckboxInput(attrs={
                 'class': 'rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-slate-900 h-4 w-4'
             })
         }
+
+    def clean_password(self):
+        password = self.cleaned_data.get('password')
+        if not password and self.instance and self.instance.pk:
+            return self.instance.password
+        return password
 
 
 class MonthlyReportScheduleForm(forms.ModelForm):
@@ -840,6 +862,7 @@ class CustomUserForm(forms.ModelForm):
             if 'role' in self.fields:
                 self.fields['role'].choices = [
                     (CustomUser.CLIENT_ADMIN, 'Client Administrator'),
+                    (CustomUser.CLIENT_STAFF, 'Client Staff'),
                     (CustomUser.CLIENT_USER, 'Client User'),
                 ]
         elif user and not user.is_superuser and user.role == CustomUser.SYSTEM_SUB_ADMIN:
@@ -847,6 +870,7 @@ class CustomUserForm(forms.ModelForm):
             if 'role' in self.fields:
                 self.fields['role'].choices = [
                     (CustomUser.CLIENT_ADMIN, 'Client Administrator'),
+                    (CustomUser.CLIENT_STAFF, 'Client Staff'),
                     (CustomUser.CLIENT_USER, 'Client User'),
                 ]
         elif user and (user.is_superuser or user.role == CustomUser.SYSTEM_ADMIN):
@@ -863,6 +887,12 @@ class CustomUserForm(forms.ModelForm):
                 self.fields['company'].choices = choices
             else:
                 self.fields['company'].choices = get_company_tree_choices(allow_empty=True, empty_label='---------')
+
+    def clean_password(self):
+        password = self.cleaned_data.get('password')
+        if password:
+            validate_password(password, self.instance)
+        return password
 
 
     def save(self, commit=True):
@@ -889,13 +919,16 @@ class SuperuserOrSystemAdminRequiredMixin(UserPassesTestMixin):
 
 class SystemStaffRequiredMixin(UserPassesTestMixin):
     def test_func(self):
-        user = self.request.user
-        return user.is_authenticated and (user.is_superuser or user.role in [CustomUser.SYSTEM_ADMIN, CustomUser.SYSTEM_SUB_ADMIN])
+        return is_system_staff(self.request.user)
 
 class AdminRequiredMixin(UserPassesTestMixin):
     def test_func(self):
-        user = self.request.user
-        return user.is_authenticated and (user.is_superuser or user.role in [CustomUser.SYSTEM_ADMIN, CustomUser.SYSTEM_SUB_ADMIN, CustomUser.CLIENT_ADMIN])
+        return is_tenant_admin(self.request.user)
+
+
+class TicketStaffRequiredMixin(UserPassesTestMixin):
+    def test_func(self):
+        return is_ticket_staff(self.request.user)
 
 
 # Login & Authentication views
@@ -916,16 +949,19 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         user = self.request.user
         
+        tickets = visible_tickets_for(user)
         if user.is_superuser or user.role in [CustomUser.SYSTEM_ADMIN, CustomUser.SYSTEM_SUB_ADMIN]:
-            tickets = Ticket.objects.all()
             companies = Company.objects.all()
             users = CustomUser.objects.all()
         else:
             if user.company:
-                sub_ids = user.company.get_all_subsidiary_ids()
-                tickets = Ticket.objects.filter(company_id__in=sub_ids)
-                companies = Company.objects.filter(id__in=sub_ids)
-                users = CustomUser.objects.filter(company_id__in=sub_ids)
+                if user.role == CustomUser.CLIENT_USER:
+                    companies = Company.objects.filter(pk=user.company_id)
+                    users = CustomUser.objects.filter(pk=user.pk)
+                else:
+                    sub_ids = user.company.get_all_subsidiary_ids()
+                    companies = Company.objects.filter(id__in=sub_ids)
+                    users = CustomUser.objects.filter(company_id__in=sub_ids)
             else:
                 tickets = Ticket.objects.none()
                 companies = Company.objects.none()
@@ -1016,7 +1052,7 @@ class TicketCreateView(LoginRequiredMixin, CreateView):
         )
         return response
 
-class TicketUpdateView(LoginRequiredMixin, UpdateView):
+class TicketUpdateView(LoginRequiredMixin, TicketStaffRequiredMixin, UpdateView):
     model = Ticket
     form_class = TicketUpdateForm
     template_name = 'tickets/ticket_form.html'
@@ -1029,11 +1065,12 @@ class TicketUpdateView(LoginRequiredMixin, UpdateView):
         return kwargs
 
     def get_object(self, queryset=None):
-        obj = super().get_object(queryset)
-        user = self.request.user
-        if not user.is_superuser and user.role != CustomUser.SYSTEM_ADMIN:
-            if not user.company or obj.company_id not in user.company.get_all_subsidiary_ids():
-                raise PermissionDenied("You do not have permission to view or edit this ticket.")
+        obj = get_object_or_404(Ticket, pk=self.kwargs['pk'])
+        if not manageable_tickets_for(
+            self.request.user,
+            Ticket.objects.filter(pk=obj.pk),
+        ).exists():
+            raise PermissionDenied("You do not have permission to edit this ticket.")
         return obj
 
     def form_valid(self, form):
@@ -1073,11 +1110,12 @@ class TicketDetailView(LoginRequiredMixin, DetailView):
     context_object_name = 'ticket'
 
     def get_object(self, queryset=None):
-        obj = super().get_object(queryset)
-        user = self.request.user
-        if not user.is_superuser and user.role != CustomUser.SYSTEM_ADMIN:
-            if not user.company or obj.company_id not in user.company.get_all_subsidiary_ids():
-                raise PermissionDenied("You do not have permission to view this ticket.")
+        obj = get_object_or_404(Ticket, pk=self.kwargs['pk'])
+        if not visible_tickets_for(
+            self.request.user,
+            Ticket.objects.filter(pk=obj.pk),
+        ).exists():
+            raise PermissionDenied("You do not have permission to view this ticket.")
         return obj
 
     def get_context_data(self, **kwargs):
@@ -1097,6 +1135,12 @@ class TicketDetailView(LoginRequiredMixin, DetailView):
         files = request.FILES.getlist('attachments') or request.FILES.getlist('comment_attachments')
 
         max_size = 10 * 1024 * 1024  # 10 MB
+        if len(files) > 10:
+            messages.error(request, "Unable to post comment: a maximum of 10 attachments is allowed.")
+            return redirect('ticket_detail', pk=self.object.id)
+        if sum(f.size for f in files) > 50 * 1024 * 1024:
+            messages.error(request, "Unable to post comment: total attachment size exceeds 50 MB.")
+            return redirect('ticket_detail', pk=self.object.id)
         for f in files:
             if f.size > max_size:
                 size_mb = f.size / (1024 * 1024)
@@ -1209,6 +1253,72 @@ class TicketDetailView(LoginRequiredMixin, DetailView):
                 success=(sent_count > 0),
                 error_message=err_msg
             )
+
+
+def _protected_file_response(file_field, filename):
+    if not file_field:
+        raise Http404("Attachment not found.")
+    try:
+        file_handle = file_field.open('rb')
+    except (FileNotFoundError, OSError, ValueError):
+        raise Http404("Attachment file is not available.")
+
+    response = FileResponse(
+        file_handle,
+        as_attachment=True,
+        filename=os.path.basename(filename or file_field.name),
+        content_type='application/octet-stream',
+    )
+    response['X-Content-Type-Options'] = 'nosniff'
+    response['Cache-Control'] = 'private, no-store'
+    return response
+
+
+class TicketAttachmentDownloadView(LoginRequiredMixin, View):
+    def get(self, request, pk, *args, **kwargs):
+        attachment = get_object_or_404(
+            TicketAttachment.objects.select_related('ticket'),
+            pk=pk,
+        )
+        if not visible_tickets_for(
+            request.user,
+            Ticket.objects.filter(pk=attachment.ticket_id),
+        ).exists():
+            raise Http404("Attachment not found.")
+        return _protected_file_response(
+            attachment.file,
+            attachment.filename,
+        )
+
+
+class CommentAttachmentDownloadView(LoginRequiredMixin, View):
+    def get(self, request, pk, *args, **kwargs):
+        attachment = get_object_or_404(
+            CommentAttachment.objects.select_related('comment__ticket'),
+            pk=pk,
+        )
+        ticket_id = attachment.comment.ticket_id
+        if not visible_tickets_for(
+            request.user,
+            Ticket.objects.filter(pk=ticket_id),
+        ).exists():
+            raise Http404("Attachment not found.")
+        return _protected_file_response(
+            attachment.file,
+            attachment.filename,
+        )
+
+
+class LegacyTicketAttachmentDownloadView(LoginRequiredMixin, View):
+    def get(self, request, pk, *args, **kwargs):
+        ticket = get_object_or_404(
+            visible_tickets_for(request.user),
+            pk=pk,
+        )
+        return _protected_file_response(
+            ticket.attachment,
+            os.path.basename(ticket.attachment.name) if ticket.attachment else '',
+        )
 
 
 
@@ -1382,15 +1492,15 @@ class TicketDeleteManagementView(LoginRequiredMixin, SystemStaffRequiredMixin, V
             )
             count = tickets_to_delete.count()
             deleted_bytes = 0
+            with FileLock("system_backup.lock", timeout=30):
+                for t in tickets_to_delete:
+                    deleted_bytes += _delete_ticket_files(t)
 
-            for t in tickets_to_delete:
-                deleted_bytes += _delete_ticket_files(t)
+                id_summary = ", ".join([f"#{t.id}" for t in tickets_to_delete[:10]])
+                if count > 10:
+                    id_summary += f" and {count - 10} others"
 
-            id_summary = ", ".join([f"#{t.id}" for t in tickets_to_delete[:10]])
-            if count > 10:
-                id_summary += f" and {count - 10} others"
-
-            tickets_to_delete.delete()
+                tickets_to_delete.delete()
             deleted_mb = deleted_bytes / (1024 ** 2)
             messages.success(
                 request,
@@ -1411,11 +1521,12 @@ class TicketDeleteView(LoginRequiredMixin, SystemStaffRequiredMixin, View):
     def post(self, request, pk, *args, **kwargs):
         ticket = get_object_or_404(Ticket, pk=pk)
 
-        deleted_bytes = _delete_ticket_files(ticket)
+        with FileLock("system_backup.lock", timeout=30):
+            deleted_bytes = _delete_ticket_files(ticket)
 
-        ticket_id = ticket.id
-        ticket_title = ticket.title
-        ticket.delete()
+            ticket_id = ticket.id
+            ticket_title = ticket.title
+            ticket.delete()
 
         deleted_mb = deleted_bytes / (1024 ** 2)
         messages.success(
@@ -1427,20 +1538,16 @@ class TicketDeleteView(LoginRequiredMixin, SystemStaffRequiredMixin, View):
         return redirect(next_url)
 
 
-class ConfirmDeploymentView(LoginRequiredMixin, View):
-    def get(self, request, pk, *args, **kwargs):
-        return self._process_confirmation(request, pk)
-
+class ConfirmDeploymentView(LoginRequiredMixin, TicketStaffRequiredMixin, View):
     def post(self, request, pk, *args, **kwargs):
         return self._process_confirmation(request, pk)
 
     def _process_confirmation(self, request, pk):
-        ticket = get_object_or_404(Ticket, pk=pk)
+        ticket = get_object_or_404(
+            manageable_tickets_for(request.user),
+            pk=pk,
+        )
         user = request.user
-
-        if not user.is_superuser and user.role != CustomUser.SYSTEM_ADMIN:
-            if not user.company or ticket.company_id not in user.company.get_all_subsidiary_ids():
-                raise PermissionDenied("You do not have permission to deploy tickets for another company.")
 
         if ticket.status == Ticket.STATUS_DEPLOYMENT_REQUESTED:
             old_status = ticket.status
@@ -1539,11 +1646,16 @@ class UserListView(LoginRequiredMixin, AdminRequiredMixin, ListView):
 
     def get_queryset(self):
         user = self.request.user
-        if user.is_superuser or user.role in [CustomUser.SYSTEM_ADMIN, CustomUser.SYSTEM_SUB_ADMIN]:
+        if user.is_superuser:
             return CustomUser.objects.all().order_by('company', 'username')
+        if user.role in [CustomUser.SYSTEM_ADMIN, CustomUser.SYSTEM_SUB_ADMIN]:
+            return CustomUser.objects.filter(is_superuser=False).order_by('company', 'username')
         if user.company:
             sub_ids = user.company.get_all_subsidiary_ids()
-            return CustomUser.objects.filter(company_id__in=sub_ids).order_by('company', 'username')
+            return CustomUser.objects.filter(
+                company_id__in=sub_ids,
+                is_superuser=False,
+            ).order_by('company', 'username')
         return CustomUser.objects.none()
 
 
@@ -1565,10 +1677,12 @@ class UserCreateView(LoginRequiredMixin, AdminRequiredMixin, CreateView):
                 form.instance.company = user.company
             if form.instance.role in [CustomUser.SYSTEM_ADMIN, CustomUser.SYSTEM_SUB_ADMIN]:
                 form.instance.role = CustomUser.CLIENT_USER
-            if form.instance.role == CustomUser.CLIENT_ADMIN:
-                form.instance.is_staff = True
-        elif form.instance.role in [CustomUser.SYSTEM_ADMIN, CustomUser.SYSTEM_SUB_ADMIN, CustomUser.CLIENT_ADMIN]:
-            form.instance.is_staff = True
+        form.instance.is_staff = form.instance.role in [
+            CustomUser.SYSTEM_ADMIN,
+            CustomUser.SYSTEM_SUB_ADMIN,
+            CustomUser.CLIENT_ADMIN,
+        ]
+        form.instance.is_superuser = False
             
         return super().form_valid(form)
 
@@ -1583,20 +1697,29 @@ class UserUpdateView(LoginRequiredMixin, AdminRequiredMixin, UpdateView):
         kwargs['user'] = self.request.user
         return kwargs
 
-    def get_object(self, queryset=None):
-        obj = super().get_object(queryset)
+    def get_queryset(self):
         user = self.request.user
-        if not user.is_superuser:
-            if user.role == CustomUser.CLIENT_ADMIN:
-                sub_ids = user.company.get_all_subsidiary_ids() if user.company else []
-                if obj.company_id not in sub_ids:
-                    raise PermissionDenied("You do not have permission to manage accounts for other companies.")
-                if obj.role in [CustomUser.SYSTEM_ADMIN, CustomUser.SYSTEM_SUB_ADMIN]:
-                    raise PermissionDenied("You do not have permission to modify a central administrator account.")
-            elif user.role == CustomUser.SYSTEM_SUB_ADMIN:
-                if obj.role in [CustomUser.SYSTEM_ADMIN, CustomUser.SYSTEM_SUB_ADMIN]:
-                    raise PermissionDenied("You do not have permission to modify a central administrator account.")
-        return obj
+        queryset = super().get_queryset()
+        if user.is_superuser:
+            return queryset
+
+        # App-level administrators must never be able to reset or alter a
+        # Django superuser account.
+        queryset = queryset.filter(is_superuser=False)
+        if user.role == CustomUser.CLIENT_ADMIN:
+            sub_ids = user.company.get_all_subsidiary_ids() if user.company else []
+            return queryset.filter(
+                company_id__in=sub_ids,
+            ).exclude(
+                role__in=[CustomUser.SYSTEM_ADMIN, CustomUser.SYSTEM_SUB_ADMIN],
+            )
+        if user.role == CustomUser.SYSTEM_SUB_ADMIN:
+            return queryset.exclude(
+                role__in=[CustomUser.SYSTEM_ADMIN, CustomUser.SYSTEM_SUB_ADMIN],
+            )
+        if user.role == CustomUser.SYSTEM_ADMIN:
+            return queryset
+        return queryset.none()
 
     def form_valid(self, form):
         user = self.request.user
@@ -1605,10 +1728,13 @@ class UserUpdateView(LoginRequiredMixin, AdminRequiredMixin, UpdateView):
                 form.instance.company = user.company
             if form.instance.role in [CustomUser.SYSTEM_ADMIN, CustomUser.SYSTEM_SUB_ADMIN]:
                 form.instance.role = CustomUser.CLIENT_USER
-            if form.instance.role == CustomUser.CLIENT_ADMIN:
-                form.instance.is_staff = True
-        elif form.instance.role in [CustomUser.SYSTEM_ADMIN, CustomUser.SYSTEM_SUB_ADMIN, CustomUser.CLIENT_ADMIN]:
-            form.instance.is_staff = True
+        form.instance.is_staff = form.instance.role in [
+            CustomUser.SYSTEM_ADMIN,
+            CustomUser.SYSTEM_SUB_ADMIN,
+            CustomUser.CLIENT_ADMIN,
+        ]
+        if not user.is_superuser:
+            form.instance.is_superuser = False
             
         return super().form_valid(form)
 
@@ -2813,7 +2939,7 @@ class NotificationConfigForm(forms.ModelForm):
 
 
 
-class NotificationConfigListView(LoginRequiredMixin, ListView):
+class NotificationConfigListView(LoginRequiredMixin, AdminRequiredMixin, ListView):
     model = NotificationConfig
     template_name = 'tickets/notification_config_list.html'
     context_object_name = 'configs'
@@ -2828,7 +2954,7 @@ class NotificationConfigListView(LoginRequiredMixin, ListView):
         return NotificationConfig.objects.none()
 
 
-class NotificationConfigCreateView(LoginRequiredMixin, CreateView):
+class NotificationConfigCreateView(LoginRequiredMixin, AdminRequiredMixin, CreateView):
     model = NotificationConfig
     form_class = NotificationConfigForm
     template_name = 'tickets/notification_config_form.html'
@@ -2842,12 +2968,23 @@ class NotificationConfigCreateView(LoginRequiredMixin, CreateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         import json
+        user = self.request.user
+        if user.is_superuser or user.role in [CustomUser.SYSTEM_ADMIN, CustomUser.SYSTEM_SUB_ADMIN]:
+            companies = Company.objects.all()
+            users = CustomUser.objects.all()
+        elif user.company:
+            company_ids = user.company.get_all_subsidiary_ids()
+            companies = Company.objects.filter(id__in=company_ids)
+            users = CustomUser.objects.filter(company_id__in=company_ids)
+        else:
+            companies = Company.objects.none()
+            users = CustomUser.objects.none()
         company_hierarchy = {}
-        for comp in Company.objects.all():
+        for comp in companies:
             company_hierarchy[str(comp.id)] = comp.get_all_subsidiary_ids()
         
         user_company_map = {}
-        for u in CustomUser.objects.all():
+        for u in users:
             user_company_map[str(u.id)] = u.company_id if u.company_id else 0
 
         context['company_hierarchy_json'] = json.dumps(company_hierarchy)
@@ -2859,7 +2996,7 @@ class NotificationConfigCreateView(LoginRequiredMixin, CreateView):
         return super().form_valid(form)
 
 
-class NotificationConfigUpdateView(LoginRequiredMixin, UpdateView):
+class NotificationConfigUpdateView(LoginRequiredMixin, AdminRequiredMixin, UpdateView):
     model = NotificationConfig
     form_class = NotificationConfigForm
     template_name = 'tickets/notification_config_form.html'
@@ -2882,12 +3019,23 @@ class NotificationConfigUpdateView(LoginRequiredMixin, UpdateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         import json
+        user = self.request.user
+        if user.is_superuser or user.role in [CustomUser.SYSTEM_ADMIN, CustomUser.SYSTEM_SUB_ADMIN]:
+            companies = Company.objects.all()
+            users = CustomUser.objects.all()
+        elif user.company:
+            company_ids = user.company.get_all_subsidiary_ids()
+            companies = Company.objects.filter(id__in=company_ids)
+            users = CustomUser.objects.filter(company_id__in=company_ids)
+        else:
+            companies = Company.objects.none()
+            users = CustomUser.objects.none()
         company_hierarchy = {}
-        for comp in Company.objects.all():
+        for comp in companies:
             company_hierarchy[str(comp.id)] = comp.get_all_subsidiary_ids()
         
         user_company_map = {}
-        for u in CustomUser.objects.all():
+        for u in users:
             user_company_map[str(u.id)] = u.company_id if u.company_id else 0
 
         context['company_hierarchy_json'] = json.dumps(company_hierarchy)
@@ -2900,7 +3048,7 @@ class NotificationConfigUpdateView(LoginRequiredMixin, UpdateView):
 
 
 
-class NotificationConfigDeleteView(LoginRequiredMixin, View):
+class NotificationConfigDeleteView(LoginRequiredMixin, AdminRequiredMixin, View):
     def post(self, request, pk, *args, **kwargs):
         user = request.user
         qs = NotificationConfig.objects.all()
@@ -2996,6 +3144,9 @@ class TicketAutomationUpdateView(LoginRequiredMixin, SystemStaffRequiredMixin, U
 
     def form_valid(self, form):
         messages.success(self.request, 'Ticket Auto Schedule updated successfully.')
+        return super().form_valid(form)
+
+
 class TicketAutomationDeleteView(LoginRequiredMixin, SystemStaffRequiredMixin, View):
     def post(self, request, pk, *args, **kwargs):
         queryset = TicketAutomationListView.get_queryset(self)
@@ -3043,9 +3194,21 @@ class BackupManagementView(LoginRequiredMixin, SystemStaffRequiredMixin, Templat
             sort = '-created_at'
             logs = logs.order_by('-created_at')
 
-        context['backup_logs'] = logs
+        filtered_count = logs.count()
+        backup_logs = list(logs)
+        for backup_log in backup_logs:
+            file_path = get_backup_file_path(backup_log.filename)
+            backup_log.file_available = bool(file_path)
+            try:
+                backup_log.has_data_file = bool(
+                    file_path and os.path.getsize(file_path) > 0
+                )
+            except OSError:
+                backup_log.has_data_file = False
+
+        context['backup_logs'] = backup_logs
         context['total_count'] = all_logs.count()
-        context['filtered_count'] = logs.count()
+        context['filtered_count'] = filtered_count
         context['full_count'] = all_logs.filter(backup_type=BackupLog.TYPE_FULL).count()
         context['incremental_count'] = all_logs.filter(backup_type=BackupLog.TYPE_INCREMENTAL).count()
         context['large_count'] = all_logs.filter(file_size_bytes__gte=1024 * 1024).count()
@@ -3063,7 +3226,11 @@ class TriggerBackupView(LoginRequiredMixin, SystemStaffRequiredMixin, View):
     def post(self, request, *args, **kwargs):
         backup_type = request.POST.get('backup_type', 'full')
         if backup_type == 'incremental':
-            hours = int(request.POST.get('hours', 2))
+            try:
+                hours = int(request.POST.get('hours', 2))
+            except (TypeError, ValueError):
+                hours = 2
+            hours = min(max(hours, 1), 168)
             res = perform_incremental_backup(hours=hours)
             if res.get('success'):
                 messages.success(request, f"✅ 2-Hour Incremental Backup completed! {res.get('details', res.get('message'))}")
@@ -3085,17 +3252,6 @@ class DownloadBackupView(LoginRequiredMixin, SystemStaffRequiredMixin, View):
         file_path = get_backup_file_path(log.filename)
 
         if not file_path or not os.path.exists(file_path):
-            # Attempt on-demand generation if file is missing locally
-            if log.backup_type == BackupLog.TYPE_FULL:
-                res = perform_full_backup()
-                if res.get('success'):
-                    file_path = res.get('file_path')
-            else:
-                res = perform_incremental_backup(hours=24)
-                if res.get('success'):
-                    file_path = res.get('file_path')
-
-        if not file_path or not os.path.exists(file_path):
             messages.error(request, f"Backup file '{log.filename}' is not available on server for download.")
             return redirect('backup_list')
 
@@ -3108,13 +3264,26 @@ class DeleteBackupLogView(LoginRequiredMixin, SystemStaffRequiredMixin, View):
         log = get_object_or_404(BackupLog, pk=pk)
         filename = log.filename
         file_path = get_backup_file_path(filename)
-        if file_path and os.path.exists(file_path):
+        has_data_file = False
+        if file_path:
             try:
+                has_data_file = os.path.getsize(file_path) > 0
                 os.remove(file_path)
-            except Exception:
-                pass
+            except OSError as exc:
+                messages.error(
+                    request,
+                    f"Unable to delete backup file '{filename}': {exc}",
+                )
+                return redirect('backup_list')
+
         log.delete()
-        messages.success(request, f"🗑️ Deleted backup record and file '{filename}'.")
+        if has_data_file:
+            messages.success(request, f"Deleted backup record and file '{filename}'.")
+        else:
+            messages.success(
+                request,
+                f"Deleted empty backup record '{filename}'.",
+            )
         return redirect('backup_list')
 
 

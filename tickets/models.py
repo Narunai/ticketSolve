@@ -82,12 +82,14 @@ class CustomUser(AbstractUser):
     SYSTEM_ADMIN = 'SYSTEM_ADMIN'
     SYSTEM_SUB_ADMIN = 'SYSTEM_SUB_ADMIN'
     CLIENT_ADMIN = 'CLIENT_ADMIN'
+    CLIENT_STAFF = 'CLIENT_STAFF'
     CLIENT_USER = 'CLIENT_USER'
 
     ROLE_CHOICES = [
         (SYSTEM_ADMIN, 'System Administrator'),
         (SYSTEM_SUB_ADMIN, 'System Sub-Administrator'),
         (CLIENT_ADMIN, 'Client Administrator'),
+        (CLIENT_STAFF, 'Client Staff'),
         (CLIENT_USER, 'Client User'),
     ]
 

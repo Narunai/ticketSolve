@@ -271,9 +271,11 @@
 
                         <!-- Actions -->
                         <td class="px-4 py-2 text-center whitespace-nowrap">
+                            {% if user.is_superuser or user.role == 'SYSTEM_ADMIN' or user.role == 'SYSTEM_SUB_ADMIN' or user.role == 'CLIENT_ADMIN' or user.role == 'CLIENT_STAFF' %}
                             <a href="{% url 'ticket_update' ticket.id %}" class="inline-flex items-center px-2 py-1 rounded text-[10px] font-semibold text-slate-300 bg-slate-800 hover:bg-theme-bg hover:text-theme-accent border border-slate-700/60 hover:border-theme-border transition-all">
                                 {{ t.edit_ticket_title }}
                             </a>
+                            {% endif %}
                         </td>
                     </tr>
                     {% empty %}

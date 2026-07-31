@@ -100,14 +100,14 @@
                                         {% for att in object.attachments.all %}
                                             <p class="text-xs text-indigo-400 flex items-center gap-1">
                                                 <span>📎</span>
-                                                <a href="{{ att.file.url }}" class="hover:underline font-semibold" target="_blank">{{ att.filename|default:att.file.name }}</a>
+                                                <a href="{% url 'ticket_attachment_download' att.id %}" class="hover:underline font-semibold">{{ att.filename|default:att.file.name }}</a>
                                             </p>
                                         {% endfor %}
                                     </div>
                                 {% elif object and object.attachment %}
                                     <p class="text-xs text-indigo-400 mt-2 flex items-center gap-1">
                                         <span>Current File:</span>
-                                        <a href="{{ object.attachment.url }}" class="hover:underline font-semibold" target="_blank">{{ object.attachment.name }}</a>
+                                        <a href="{% url 'ticket_legacy_attachment_download' object.id %}" class="hover:underline font-semibold">{{ object.attachment.name }}</a>
                                     </p>
                                 {% endif %}
                             {% else %}

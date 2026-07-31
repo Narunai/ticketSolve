@@ -10,6 +10,9 @@ urlpatterns = [
     path('ticket/create/', views.TicketCreateView.as_view(), name='ticket_create'),
     path('ticket/<int:pk>/', views.TicketDetailView.as_view(), name='ticket_detail'),
     path('ticket/<int:pk>/edit/', views.TicketUpdateView.as_view(), name='ticket_update'),
+    path('ticket/<int:pk>/attachment/', views.LegacyTicketAttachmentDownloadView.as_view(), name='ticket_legacy_attachment_download'),
+    path('attachments/ticket/<int:pk>/download/', views.TicketAttachmentDownloadView.as_view(), name='ticket_attachment_download'),
+    path('attachments/comment/<int:pk>/download/', views.CommentAttachmentDownloadView.as_view(), name='comment_attachment_download'),
     path('ticket/<int:pk>/delete/', views.TicketDeleteView.as_view(), name='ticket_delete'),
     path('ticket/<int:pk>/confirm-deployment/', views.ConfirmDeploymentView.as_view(), name='confirm_deployment'),
     path('email-log/<int:pk>/resend/', views.ResendEmailView.as_view(), name='resend_email'),
@@ -82,4 +85,3 @@ urlpatterns = [
     path('backups/<int:pk>/download/', views.DownloadBackupView.as_view(), name='backup_download'),
     path('backups/<int:pk>/delete/', views.DeleteBackupLogView.as_view(), name='backup_delete'),
 ]
-
