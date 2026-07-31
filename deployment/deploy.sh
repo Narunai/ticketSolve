@@ -32,9 +32,15 @@ if [ ! -f "$ENV_FILE" ]; then
     fi
 fi
 
-if ! sudo grep -qE '^SECRET_KEY=.+$' "$ENV_FILE"; then
+EXISTING_SECRET="$(sudo sed -n 's/^SECRET_KEY=//p' "$ENV_FILE" | head -n 1)"
+if [ "${#EXISTING_SECRET}" -lt 50 ] || [[ "$EXISTING_SECRET" == django-insecure-* ]]; then
     GENERATED_SECRET="$(venv/bin/python -c 'import secrets; print(secrets.token_urlsafe(64))')"
-    echo "SECRET_KEY=${GENERATED_SECRET}" | sudo tee -a "$ENV_FILE" >/dev/null
+    if sudo grep -q '^SECRET_KEY=' "$ENV_FILE"; then
+        sudo sed -i "s|^SECRET_KEY=.*$|SECRET_KEY=${GENERATED_SECRET}|" "$ENV_FILE"
+    else
+        echo "SECRET_KEY=${GENERATED_SECRET}" | sudo tee -a "$ENV_FILE" >/dev/null
+    fi
+    echo "Generated a strong production SECRET_KEY."
 fi
 if ! sudo grep -qE '^ALLOWED_HOSTS=.+$' "$ENV_FILE"; then
     echo "ALLOWED_HOSTS=tikketsolve-systemoneit.uk,www.tikketsolve-systemoneit.uk" | sudo tee -a "$ENV_FILE" >/dev/null
