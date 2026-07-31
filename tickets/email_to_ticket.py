@@ -169,7 +169,8 @@ def _issue_keywords(config):
         for item in config.issue_keywords.split(',')
         if item.strip()
     ]
-    return configured or [item.casefold() for item in DEFAULT_ISSUE_KEYWORDS]
+    built_in = [item.casefold() for item in DEFAULT_ISSUE_KEYWORDS]
+    return list(dict.fromkeys(built_in + configured))
 
 
 def _is_issue_message(config, message):
@@ -207,12 +208,24 @@ def _create_ticket(config, message):
         accepted.append((filename, content))
         total_bytes += size
 
+    routing_rule = config.inbound_routing_rules.filter(
+        is_active=True,
+        sender_email__iexact=message.sender_email,
+        assignee__is_active=True,
+    ).select_related('assignee').first()
+    assignee = (
+        routing_rule.assignee
+        if routing_rule and routing_rule.assignee_id
+        else config.email_to_ticket_assignee
+    )
     source_metadata = {
         'source': 'EMAIL_TO_TICKET',
         'smtp_configuration_id': config.pk,
         'sender_name': message.sender_name,
         'sender_email': message.sender_email,
         'message_id': message.message_id,
+        'routing_rule_id': routing_rule.pk if routing_rule else None,
+        'assignment_source': 'SENDER_RULE' if routing_rule else 'SMTP_DEFAULT',
     }
     with transaction.atomic():
         ticket = Ticket.objects.create(
@@ -220,7 +233,7 @@ def _create_ticket(config, message):
             description=message.body,
             company=config.email_to_ticket_company,
             created_by=config.email_to_ticket_creator,
-            assigned_to=config.email_to_ticket_assignee,
+            assigned_to=assignee,
             category=Ticket.CATEGORY_OTHER,
             custom_fields_data={'email_to_ticket': source_metadata},
         )

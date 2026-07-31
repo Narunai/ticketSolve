@@ -8,7 +8,7 @@ from django.urls import reverse, reverse_lazy
 
 from django.core.exceptions import PermissionDenied
 from django.http import FileResponse
-from .models import Ticket, CustomUser, Company, EmailLog, TicketAuditLog, ReportViewLog, MonthlyReportSchedule, TicketAutomationConfig, SMTPConfiguration, InboundEmailReceipt, EmailToTicketSchedule, EmailToTicketRunLog, get_smtp_connection, get_smtp_from_email, TicketComment, TicketAttachment, CommentAttachment, TicketCategory, ResolutionCategory, ModuleCategory, TicketStatusConfig, CompanyTicketConfig, CompanyTicketField, NotificationConfig, should_send_email_notification, BackupLog
+from .models import Ticket, CustomUser, Company, EmailLog, TicketAuditLog, ReportViewLog, MonthlyReportSchedule, TicketAutomationConfig, SMTPConfiguration, InboundEmailReceipt, InboundEmailRoutingRule, EmailToTicketSchedule, EmailToTicketRunLog, get_smtp_connection, get_smtp_from_email, TicketComment, TicketAttachment, CommentAttachment, TicketCategory, ResolutionCategory, ModuleCategory, TicketStatusConfig, CompanyTicketConfig, CompanyTicketField, NotificationConfig, should_send_email_notification, BackupLog
 from .backup_service import perform_full_backup, perform_incremental_backup, get_backup_file_path, FileLock
 from .email_to_ticket_scheduler import run_email_to_ticket_cycle
 from .permissions import (
@@ -726,6 +726,60 @@ class EmailToTicketScheduleForm(forms.ModelForm):
                 ),
             }),
         }
+
+
+class InboundEmailRoutingRuleForm(forms.ModelForm):
+    class Meta:
+        model = InboundEmailRoutingRule
+        fields = [
+            'smtp_configuration',
+            'sender_email',
+            'assignee',
+            'is_active',
+        ]
+        widgets = {
+            'smtp_configuration': forms.Select(attrs={
+                'class': 'w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white',
+            }),
+            'sender_email': forms.EmailInput(attrs={
+                'class': 'w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white',
+                'placeholder': 'sender@example.com',
+            }),
+            'assignee': forms.Select(attrs={
+                'class': 'w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white',
+            }),
+            'is_active': forms.CheckboxInput(attrs={
+                'class': 'rounded bg-slate-900 border-slate-700 text-indigo-600 h-4 w-4',
+            }),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['smtp_configuration'].queryset = SMTPConfiguration.objects.filter(
+            feature_scope__in=[
+                SMTPConfiguration.FEATURE_EMAIL_TO_TICKET,
+                SMTPConfiguration.FEATURE_BOTH,
+            ],
+        ).order_by('name')
+        self.fields['assignee'].queryset = CustomUser.objects.filter(
+            is_active=True,
+            company__isnull=False,
+        ).order_by('company__name', 'username')
+
+        config_id = self.data.get('smtp_configuration') if self.is_bound else None
+        if not config_id and self.instance and self.instance.pk:
+            config_id = self.instance.smtp_configuration_id
+        try:
+            config = SMTPConfiguration.objects.filter(pk=int(config_id)).first()
+        except (TypeError, ValueError):
+            config = None
+        if config and config.email_to_ticket_company_id:
+            self.fields['assignee'].queryset = self.fields['assignee'].queryset.filter(
+                company_id=config.email_to_ticket_company_id,
+            )
+
+    def clean_sender_email(self):
+        return self.cleaned_data['sender_email'].strip().casefold()
 
 
 class MonthlyReportScheduleForm(forms.ModelForm):
@@ -2600,6 +2654,22 @@ class EmailToTicketTimerView(
                 SMTPConfiguration.FEATURE_BOTH,
             ],
         ).select_related('email_to_ticket_company').order_by('name')
+        edit_rule_id = self.request.GET.get('edit_rule')
+        edit_rule = None
+        if edit_rule_id:
+            edit_rule = get_object_or_404(
+                InboundEmailRoutingRule,
+                pk=edit_rule_id,
+            )
+        context['routing_form'] = InboundEmailRoutingRuleForm(
+            instance=edit_rule,
+        )
+        context['editing_rule'] = edit_rule
+        context['routing_rules'] = InboundEmailRoutingRule.objects.select_related(
+            'smtp_configuration',
+            'assignee',
+            'assignee__company',
+        )
         return context
 
     def post(self, request, *args, **kwargs):
@@ -2618,6 +2688,48 @@ class EmailToTicketTimerView(
             )
             return redirect('email_timer')
         return self.render_to_response(self.get_context_data(form=form))
+
+
+class InboundEmailRoutingRuleSaveView(
+    LoginRequiredMixin,
+    SuperuserOrSystemAdminRequiredMixin,
+    View,
+):
+    def post(self, request, *args, **kwargs):
+        rule_id = request.POST.get('rule_id')
+        instance = None
+        if rule_id:
+            instance = get_object_or_404(InboundEmailRoutingRule, pk=rule_id)
+        form = InboundEmailRoutingRuleForm(request.POST, instance=instance)
+        if form.is_valid():
+            rule = form.save()
+            messages.success(
+                request,
+                f'Routing rule saved: {rule.sender_email} → {rule.assignee}.',
+            )
+            return redirect('email_timer')
+
+        schedule = EmailToTicketSchedule.get_solo()
+        timer_view = EmailToTicketTimerView()
+        timer_view.request = request
+        context = timer_view.get_context_data()
+        context['routing_form'] = form
+        context['editing_rule'] = instance
+        context['schedule'] = schedule
+        return render(request, 'tickets/email_timer.html', context)
+
+
+class InboundEmailRoutingRuleDeleteView(
+    LoginRequiredMixin,
+    SuperuserOrSystemAdminRequiredMixin,
+    View,
+):
+    def post(self, request, pk, *args, **kwargs):
+        rule = get_object_or_404(InboundEmailRoutingRule, pk=pk)
+        sender_email = rule.sender_email
+        rule.delete()
+        messages.success(request, f'Deleted routing rule for {sender_email}.')
+        return redirect('email_timer')
 
 
 class EmailToTicketTimerRunView(

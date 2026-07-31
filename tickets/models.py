@@ -1037,6 +1037,65 @@ class InboundEmailReceipt(models.Model):
         return f"{self.subject or self.message_id} ({self.status})"
 
 
+class InboundEmailRoutingRule(models.Model):
+    smtp_configuration = models.ForeignKey(
+        SMTPConfiguration,
+        on_delete=models.CASCADE,
+        related_name='inbound_routing_rules',
+    )
+    sender_email = models.EmailField()
+    assignee = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='inbound_email_routing_rules',
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['smtp_configuration__name', 'sender_email']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['smtp_configuration', 'sender_email'],
+                name='unique_sender_route_per_smtp',
+            ),
+        ]
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+
+        errors = {}
+        if (
+            self.smtp_configuration_id
+            and not self.smtp_configuration.uses_email_to_ticket
+        ):
+            errors['smtp_configuration'] = (
+                'The SMTP configuration must support Email to Ticket.'
+            )
+        if not self.assignee_id:
+            errors['assignee'] = 'An assignee is required for an active routing rule.'
+        elif (
+            self.smtp_configuration_id
+            and self.smtp_configuration.email_to_ticket_company_id
+            and self.assignee.company_id
+            != self.smtp_configuration.email_to_ticket_company_id
+        ):
+            errors['assignee'] = (
+                'The assignee must belong to the SMTP target company.'
+            )
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        self.sender_email = (self.sender_email or '').strip().casefold()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.sender_email} -> {self.assignee or 'Default assignee'}"
+
+
 class EmailToTicketSchedule(models.Model):
     INTERVAL_10_MINUTES = 10
     INTERVAL_20_MINUTES = 20

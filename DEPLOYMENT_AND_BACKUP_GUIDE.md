@@ -255,6 +255,11 @@ timer จะปลุกตัวประมวลผลตามนาที `
 สถานะ, จำนวน mailbox และอีเมลที่ found/imported/skipped/duplicate/failed,
 ระยะเวลา และรายละเอียด error
 
+ส่วน **Sender → Assignee routing** ใช้จับคู่อีเมลผู้ส่งกับผู้ดูแล Ticket ภายใน
+Target Company ของ mailbox หากไม่พบกฎ, กฎถูกปิด หรือผู้ดูแลไม่ active ระบบจะใช้
+Default Assignee จาก SMTP configuration เดิม Custom subject keywords จะถูกรวมกับ
+คำมาตรฐานของระบบ จึงไม่ทำให้คำอย่าง `ปัญหา` หรือ `issue` หายไป
+
 ค่ามาตรฐาน:
 
 | Provider | SMTP | IMAP SSL |

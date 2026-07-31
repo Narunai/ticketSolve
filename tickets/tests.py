@@ -723,8 +723,18 @@ class MultiTenantTicketTests(TestCase):
         from email.message import EmailMessage as RawEmailMessage
         from unittest import mock
         from django.test import override_settings
-        from .email_to_ticket import InboundMessage, _is_issue_message, import_email_to_tickets
-        from .models import InboundEmailReceipt, SMTPConfiguration, TicketAttachment
+        from .email_to_ticket import (
+            InboundMessage,
+            _create_ticket,
+            _is_issue_message,
+            import_email_to_tickets,
+        )
+        from .models import (
+            InboundEmailReceipt,
+            InboundEmailRoutingRule,
+            SMTPConfiguration,
+            TicketAttachment,
+        )
 
         raw_message = RawEmailMessage()
         raw_message['Subject'] = 'Issue: VPN connection failed'
@@ -750,7 +760,15 @@ class MultiTenantTicketTests(TestCase):
             incoming_folder='INBOX',
             email_to_ticket_company=self.company_a,
             email_to_ticket_creator=self.user_a,
+            email_to_ticket_assignee=self.user_a,
             filter_issue_only=True,
+            issue_keywords='from gmail only',
+            is_active=True,
+        )
+        routing_rule = InboundEmailRoutingRule.objects.create(
+            smtp_configuration=config,
+            sender_email='EXTERNAL@EXAMPLE.COM',
+            assignee=self.admin_a,
             is_active=True,
         )
         system_notification = InboundMessage(
@@ -784,14 +802,38 @@ class MultiTenantTicketTests(TestCase):
                 mock.patch('tickets.email_to_ticket.imaplib.IMAP4_SSL', return_value=imap_client):
             first = import_email_to_tickets(config)
             second = import_email_to_tickets(config)
+            fallback_ticket, _ = _create_ticket(
+                config,
+                InboundMessage(
+                    uid=b'102',
+                    message_id='<fallback-route@example.com>',
+                    subject='Issue: printer offline',
+                    body='Printer cannot print.',
+                    sender_email='another-sender@example.com',
+                ),
+            )
 
         self.assertTrue(first['success'])
         self.assertEqual(first['imported'], 1)
         self.assertEqual(second['duplicates'], 1)
-        self.assertEqual(Ticket.objects.count(), ticket_count + 1)
+        self.assertEqual(Ticket.objects.count(), ticket_count + 2)
         imported_ticket = Ticket.objects.get(title='Issue: VPN connection failed')
         self.assertEqual(imported_ticket.company, self.company_a)
         self.assertEqual(imported_ticket.created_by, self.user_a)
+        self.assertEqual(imported_ticket.assigned_to, self.admin_a)
+        self.assertEqual(
+            imported_ticket.custom_fields_data['email_to_ticket']['routing_rule_id'],
+            routing_rule.pk,
+        )
+        self.assertEqual(
+            imported_ticket.custom_fields_data['email_to_ticket']['assignment_source'],
+            'SENDER_RULE',
+        )
+        self.assertEqual(fallback_ticket.assigned_to, self.user_a)
+        self.assertEqual(
+            fallback_ticket.custom_fields_data['email_to_ticket']['assignment_source'],
+            'SMTP_DEFAULT',
+        )
         self.assertEqual(
             imported_ticket.custom_fields_data['email_to_ticket']['message_id'],
             '<email-to-ticket-1@example.com>',
@@ -854,7 +896,11 @@ class MultiTenantTicketTests(TestCase):
         )
 
     def test_email_timer_page_is_system_admin_only_and_saves_interval(self):
-        from .models import EmailToTicketSchedule
+        from .models import (
+            EmailToTicketSchedule,
+            InboundEmailRoutingRule,
+            SMTPConfiguration,
+        )
 
         url = reverse('email_timer')
         self.client.login(username='admin_a', password='password123')
@@ -878,6 +924,52 @@ class MultiTenantTicketTests(TestCase):
         self.assertEqual(schedule.interval_minutes, 30)
         self.assertTrue(schedule.is_active)
         self.assertEqual(schedule.updated_by, self.system_admin)
+
+        config = SMTPConfiguration.objects.create(
+            name='Routing mailbox',
+            provider='GMAIL',
+            username='routing@example.com',
+            password='app-password',
+            feature_scope=SMTPConfiguration.FEATURE_EMAIL_TO_TICKET,
+            incoming_host='imap.gmail.com',
+            email_to_ticket_company=self.company_a,
+            email_to_ticket_creator=self.user_a,
+            email_to_ticket_assignee=self.user_a,
+            is_active=True,
+        )
+        routing_url = reverse('email_routing_rule_save')
+        self.client.logout()
+        self.client.login(username='admin_a', password='password123')
+        self.assertEqual(
+            self.client.post(
+                routing_url,
+                {
+                    'smtp_configuration': config.pk,
+                    'sender_email': 'CUSTOMER@EXAMPLE.COM',
+                    'assignee': self.admin_a.pk,
+                    'is_active': 'on',
+                },
+            ).status_code,
+            403,
+        )
+
+        self.client.logout()
+        self.client.login(username='system_admin', password='password123')
+        response = self.client.post(
+            routing_url,
+            {
+                'smtp_configuration': config.pk,
+                'sender_email': 'CUSTOMER@EXAMPLE.COM',
+                'assignee': self.admin_a.pk,
+                'is_active': 'on',
+            },
+        )
+        self.assertRedirects(response, url)
+        rule = InboundEmailRoutingRule.objects.get(
+            smtp_configuration=config,
+        )
+        self.assertEqual(rule.sender_email, 'customer@example.com')
+        self.assertEqual(rule.assignee, self.admin_a)
 
     def test_email_timer_command_respects_interval_and_creates_run_log(self):
         import tempfile

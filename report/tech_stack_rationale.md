@@ -33,6 +33,7 @@
 * **SMTP Delivery Integration**: สามารถสร้างระบบยิงส่งอีเมลแจ้งเตือนรายงานประจำเดือน และการตั้งค่า SMTP Dynamic แบบเปลี่ยนผ่านหน้าเว็บได้อย่างราบรื่น
 * **Email Ingestion**: ใช้ IMAP SSL จาก Python standard library และ `BeautifulSoup` ล้าง HTML ก่อนสร้าง Ticket พร้อม Message-ID deduplication; Microsoft 365 ที่ปิด IMAP ต้องเพิ่ม Graph/OAuth แยกต่างหาก
 * **Database-controlled Timer**: systemd ใช้ base tick 10 นาที ขณะที่ Django เก็บ interval 10/20/30/60 นาทีและ execution log ในฐานข้อมูล ทำให้ปรับรอบจากหน้าเว็บได้โดยไม่แก้ unit file
+* **Database-driven Sender Routing**: ตาราง routing แยกตาม SMTP mailbox ใช้ sender email เลือก assignee และ fallback ไปค่าหลักเมื่อไม่พบกฎ
 
 ---
 

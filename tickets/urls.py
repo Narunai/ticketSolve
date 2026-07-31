@@ -83,6 +83,8 @@ urlpatterns = [
     # Email to Ticket timer and execution logs
     path('email-timer/', views.EmailToTicketTimerView.as_view(), name='email_timer'),
     path('email-timer/run/', views.EmailToTicketTimerRunView.as_view(), name='email_timer_run'),
+    path('email-timer/routing/save/', views.InboundEmailRoutingRuleSaveView.as_view(), name='email_routing_rule_save'),
+    path('email-timer/routing/<int:pk>/delete/', views.InboundEmailRoutingRuleDeleteView.as_view(), name='email_routing_rule_delete'),
 
     # Backup Management URLs
     path('backups/', views.BackupManagementView.as_view(), name='backup_list'),

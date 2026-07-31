@@ -109,12 +109,98 @@
                 <div class="mt-1 text-[10px] text-slate-500">
                     Target: {{ mailbox.email_to_ticket_company|default:"Not configured" }}
                 </div>
+                <div class="mt-1 text-[10px] text-slate-500">
+                    Default assignee: {{ mailbox.email_to_ticket_assignee|default:"Unassigned" }}
+                </div>
             </div>
             {% empty %}
             <div class="text-xs text-amber-300 sm:col-span-2 lg:col-span-3">
                 ยังไม่มี SMTP configuration ที่เปิดใช้ Email → Ticket
             </div>
             {% endfor %}
+        </div>
+    </section>
+
+    <section class="overflow-hidden rounded-xl border border-slate-800/80 bg-slate-900/40">
+        <div class="border-b border-slate-800/80 px-4 py-3">
+            <h2 class="text-sm font-bold text-white">Sender → Assignee routing</h2>
+            <p class="mt-1 text-[10px] text-slate-500">
+                กำหนดผู้ดูแลตามอีเมลผู้ส่ง หากไม่พบกฎ ระบบจะใช้ Default Assignee จาก SMTP Settings
+            </p>
+        </div>
+        <div class="grid gap-4 p-4 lg:grid-cols-3">
+            <form method="post" action="{% url 'email_routing_rule_save' %}" class="space-y-3 rounded-lg border border-slate-800 bg-slate-950/30 p-3">
+                {% csrf_token %}
+                {% if editing_rule %}<input type="hidden" name="rule_id" value="{{ editing_rule.pk }}">{% endif %}
+                {% if routing_form.errors %}
+                <div class="rounded-lg border border-rose-500/30 bg-rose-500/10 p-2 text-[10px] text-rose-300">
+                    {{ routing_form.errors }}
+                </div>
+                {% endif %}
+                <div>
+                    <label class="mb-1 block text-[10px] font-bold uppercase tracking-wider text-slate-400">Mailbox</label>
+                    {{ routing_form.smtp_configuration }}
+                </div>
+                <div>
+                    <label class="mb-1 block text-[10px] font-bold uppercase tracking-wider text-slate-400">Sender email</label>
+                    {{ routing_form.sender_email }}
+                </div>
+                <div>
+                    <label class="mb-1 block text-[10px] font-bold uppercase tracking-wider text-slate-400">Assign ticket to</label>
+                    {{ routing_form.assignee }}
+                    <p class="mt-1 text-[9px] text-slate-500">ผู้ดูแลต้องอยู่บริษัทเดียวกับ Target Company ของ mailbox</p>
+                </div>
+                <label class="flex items-center gap-2 text-xs text-slate-300">
+                    {{ routing_form.is_active }} Active rule
+                </label>
+                <div class="flex gap-2">
+                    <button type="submit" class="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white hover:bg-indigo-500">
+                        {% if editing_rule %}Update rule{% else %}Add routing rule{% endif %}
+                    </button>
+                    {% if editing_rule %}
+                    <a href="{% url 'email_timer' %}" class="rounded-lg bg-slate-800 px-3 py-2 text-xs text-slate-300">Cancel</a>
+                    {% endif %}
+                </div>
+            </form>
+
+            <div class="overflow-x-auto lg:col-span-2">
+                <table class="w-full min-w-[650px] text-left text-[11px]">
+                    <thead class="border-b border-slate-800 text-slate-500">
+                        <tr>
+                            <th class="px-3 py-2">Mailbox</th>
+                            <th class="px-3 py-2">Sender</th>
+                            <th class="px-3 py-2">Assignee</th>
+                            <th class="px-3 py-2">Status</th>
+                            <th class="px-3 py-2 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-800/50 text-slate-300">
+                        {% for rule in routing_rules %}
+                        <tr>
+                            <td class="px-3 py-2">{{ rule.smtp_configuration.name }}</td>
+                            <td class="px-3 py-2 font-mono">{{ rule.sender_email }}</td>
+                            <td class="px-3 py-2">
+                                {{ rule.assignee|default:"SMTP default" }}
+                            </td>
+                            <td class="px-3 py-2 {% if rule.is_active %}text-emerald-400{% else %}text-slate-500{% endif %}">
+                                {% if rule.is_active %}Active{% else %}Inactive{% endif %}
+                            </td>
+                            <td class="px-3 py-2">
+                                <div class="flex justify-end gap-2">
+                                    <a href="{% url 'email_timer' %}?edit_rule={{ rule.pk }}" class="text-sky-400 hover:underline">Edit</a>
+                                    <form method="post" action="{% url 'email_routing_rule_delete' rule.pk %}" onsubmit="return confirm('Delete this routing rule?');">
+                                        {% csrf_token %}
+                                        <button type="submit" class="text-rose-400 hover:underline">Delete</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="5" class="px-3 py-8 text-center text-slate-500">ยังไม่มีกฎกำหนดผู้ดูแลตามผู้ส่ง</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         </div>
     </section>
 

@@ -32,6 +32,7 @@
 | **`MonthlyReportSchedule`** | การตั้งค่าการส่งรายงานสรุป Ticket ประจำเดือนแบบ PDF |
 | **`SMTPConfiguration`** | ตั้งค่าการเชื่อมต่อเมลเซิร์ฟเวอร์ SMTP |
 | **`InboundEmailReceipt`** | บันทึก Message-ID และผลการนำอีเมลเข้าเป็น Ticket เพื่อป้องกันการสร้างซ้ำ |
+| **`InboundEmailRoutingRule`** | จับคู่อีเมลผู้ส่งกับผู้ดูแล Ticket โดยแยกตาม mailbox |
 | **`EmailToTicketSchedule`** | ตั้งค่าเปิด/ปิดและรอบสแกน Email → Ticket |
 | **`EmailToTicketRunLog`** | สรุปผลการทำงานแต่ละรอบ พร้อมจำนวนรายการและระยะเวลา |
 | **`EmailLog`** | บันทึกประวัติการส่งอีเมล, ผู้รับ To/CC, สถานะ, เหตุผลข้อผิดพลาด, ปุ่ม Resend |
@@ -95,6 +96,8 @@ Backup archive เก็บที่ `/var/backups/ticketsolve` บน AWS VPS �
 * กด **Scan now** หรือ **Import Now** เพื่อสแกนทันทีโดยไม่รอรอบ
 * เก็บ run log 50 รอบล่าสุด พร้อม trigger/ผู้สั่งรัน, สถานะ, จำนวน mailbox,
   found/imported/skipped/duplicate/failed, ระยะเวลา และรายละเอียดข้อผิดพลาด
+* Sender → Assignee routing กำหนดผู้ดูแลตามอีเมลผู้ส่ง หากไม่มีกฎหรือผู้ดูแลในกฎไม่ active จะใช้ Default Assignee จาก SMTP
+* Custom subject keywords เป็นคำเพิ่มเติมจากคำมาตรฐาน เช่น `ปัญหา` และ `issue` ไม่ได้แทนที่คำมาตรฐาน
 * อ่านเฉพาะข้อความ `UNSEEN` ย้อนหลังตามจำนวนวันที่กำหนด และจำกัดจำนวนต่อรอบ
 * กรอง subject ด้วย keyword ไทย/อังกฤษก่อนสร้าง Ticket ได้
 * กำหนด target company, ticket creator และ default assignee ต่อ mailbox

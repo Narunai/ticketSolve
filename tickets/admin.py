@@ -4,6 +4,7 @@ from .models import (
     Company,
     CustomUser,
     InboundEmailReceipt,
+    InboundEmailRoutingRule,
     EmailToTicketRunLog,
     EmailToTicketSchedule,
     MonthlyReportSchedule,
@@ -160,6 +161,19 @@ class InboundEmailReceiptAdmin(admin.ModelAdmin):
 
     def has_add_permission(self, request):
         return False
+
+
+@admin.register(InboundEmailRoutingRule)
+class InboundEmailRoutingRuleAdmin(admin.ModelAdmin):
+    list_display = (
+        'sender_email',
+        'smtp_configuration',
+        'assignee',
+        'is_active',
+        'updated_at',
+    )
+    list_filter = ('is_active', 'smtp_configuration')
+    search_fields = ('sender_email', 'assignee__username', 'assignee__email')
 
 
 @admin.register(EmailToTicketSchedule)
