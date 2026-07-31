@@ -49,7 +49,8 @@
 * เลือก ticket creator/default assignee และกรอง subject ด้วย keyword ไทย/อังกฤษ
 * ป้องกันการสร้างซ้ำด้วย Message-ID และมี import receipts สำหรับ Imported/Skipped/Failed
 * รองรับไฟล์แนบภายใต้ขีดจำกัด 10 MB ต่อไฟล์, 10 ไฟล์ และรวม 50 MB
-* สแกนอัตโนมัติด้วย timer แยกทุก 10 นาที หรือกด **Import Now** ใน SMTP Settings
+* หน้า Email Timer แยกสำหรับเปิด/ปิดและเลือกรอบ 10, 20, 30 นาที (ครึ่งชั่วโมง) หรือ 1 ชั่วโมง
+* กด **Scan now** หรือ **Import Now** เพื่อสแกนทันที พร้อมเก็บ execution log ของทุกครั้งที่ทำงานจริง
 * รองรับ Gmail และ Outlook ที่เปิด IMAP; Microsoft Graph/OAuth ยังไม่รวมใน integration นี้
 
 ---

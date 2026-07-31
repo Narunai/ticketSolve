@@ -8,9 +8,9 @@ from django.urls import reverse, reverse_lazy
 
 from django.core.exceptions import PermissionDenied
 from django.http import FileResponse
-from .models import Ticket, CustomUser, Company, EmailLog, TicketAuditLog, ReportViewLog, MonthlyReportSchedule, TicketAutomationConfig, SMTPConfiguration, InboundEmailReceipt, get_smtp_connection, get_smtp_from_email, TicketComment, TicketAttachment, CommentAttachment, TicketCategory, ResolutionCategory, ModuleCategory, TicketStatusConfig, CompanyTicketConfig, CompanyTicketField, NotificationConfig, should_send_email_notification, BackupLog
+from .models import Ticket, CustomUser, Company, EmailLog, TicketAuditLog, ReportViewLog, MonthlyReportSchedule, TicketAutomationConfig, SMTPConfiguration, InboundEmailReceipt, EmailToTicketSchedule, EmailToTicketRunLog, get_smtp_connection, get_smtp_from_email, TicketComment, TicketAttachment, CommentAttachment, TicketCategory, ResolutionCategory, ModuleCategory, TicketStatusConfig, CompanyTicketConfig, CompanyTicketField, NotificationConfig, should_send_email_notification, BackupLog
 from .backup_service import perform_full_backup, perform_incremental_backup, get_backup_file_path, FileLock
-from .email_to_ticket import import_email_to_tickets
+from .email_to_ticket_scheduler import run_email_to_ticket_cycle
 from .permissions import (
     is_system_staff,
     is_tenant_admin,
@@ -706,6 +706,26 @@ class SMTPConfigurationForm(forms.ModelForm):
         if not password and self.instance and self.instance.pk:
             return self.instance.password
         return password
+
+
+class EmailToTicketScheduleForm(forms.ModelForm):
+    class Meta:
+        model = EmailToTicketSchedule
+        fields = ['interval_minutes', 'is_active']
+        widgets = {
+            'interval_minutes': forms.Select(attrs={
+                'class': (
+                    'w-full bg-slate-900 border border-slate-700 rounded-lg '
+                    'px-4 py-2.5 text-white'
+                ),
+            }),
+            'is_active': forms.CheckboxInput(attrs={
+                'class': (
+                    'rounded bg-slate-900 border-slate-700 text-indigo-600 '
+                    'h-4 w-4'
+                ),
+            }),
+        }
 
 
 class MonthlyReportScheduleForm(forms.ModelForm):
@@ -2554,6 +2574,81 @@ class MonthlyReportScheduleDeleteView(LoginRequiredMixin, AdminRequiredMixin, Vi
         return redirect('monthly_report')
 
 
+# Email to Ticket timer settings and run-level logs
+class EmailToTicketTimerView(
+    LoginRequiredMixin,
+    SuperuserOrSystemAdminRequiredMixin,
+    TemplateView,
+):
+    template_name = 'tickets/email_timer.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        schedule = EmailToTicketSchedule.get_solo()
+        context['schedule'] = schedule
+        context['form'] = kwargs.get('form') or EmailToTicketScheduleForm(
+            instance=schedule,
+        )
+        context['next_run_at'] = schedule.next_run_at()
+        context['run_logs'] = EmailToTicketRunLog.objects.select_related(
+            'actor',
+        )[:50]
+        context['mailboxes'] = SMTPConfiguration.objects.filter(
+            is_active=True,
+            feature_scope__in=[
+                SMTPConfiguration.FEATURE_EMAIL_TO_TICKET,
+                SMTPConfiguration.FEATURE_BOTH,
+            ],
+        ).select_related('email_to_ticket_company').order_by('name')
+        return context
+
+    def post(self, request, *args, **kwargs):
+        schedule = EmailToTicketSchedule.get_solo()
+        form = EmailToTicketScheduleForm(request.POST, instance=schedule)
+        if form.is_valid():
+            configured_schedule = form.save(commit=False)
+            configured_schedule.updated_by = request.user
+            configured_schedule.save()
+            messages.success(
+                request,
+                (
+                    'Email timer settings saved: '
+                    f'{configured_schedule.get_interval_minutes_display()}.'
+                ),
+            )
+            return redirect('email_timer')
+        return self.render_to_response(self.get_context_data(form=form))
+
+
+class EmailToTicketTimerRunView(
+    LoginRequiredMixin,
+    SuperuserOrSystemAdminRequiredMixin,
+    View,
+):
+    def post(self, request, *args, **kwargs):
+        outcome = run_email_to_ticket_cycle(
+            trigger=EmailToTicketRunLog.TRIGGER_MANUAL,
+            actor=request.user,
+        )
+        run_log = outcome['log']
+        if run_log.status in {
+            EmailToTicketRunLog.STATUS_SUCCESS,
+            EmailToTicketRunLog.STATUS_SKIPPED,
+        }:
+            message_method = messages.success
+        else:
+            message_method = messages.error
+        message_method(
+            request,
+            (
+                f'Email scan finished with status {run_log.get_status_display()}: '
+                f'found {run_log.found_count}, imported {run_log.imported_count}, '
+                f'skipped {run_log.skipped_count}, failed {run_log.failed_count}.'
+            ),
+        )
+        return redirect('email_timer')
+
+
 # System Settings views (SMTP configurations)
 class SystemSettingsView(LoginRequiredMixin, SuperuserOrSystemAdminRequiredMixin, TemplateView):
     template_name = 'tickets/settings.html'
@@ -2610,7 +2705,24 @@ class SMTPToggleActiveView(LoginRequiredMixin, SuperuserOrSystemAdminRequiredMix
 class SMTPImportEmailView(LoginRequiredMixin, SuperuserOrSystemAdminRequiredMixin, View):
     def post(self, request, pk, *args, **kwargs):
         config = get_object_or_404(SMTPConfiguration, pk=pk)
-        result = import_email_to_tickets(config)
+        outcome = run_email_to_ticket_cycle(
+            trigger=EmailToTicketRunLog.TRIGGER_MANUAL,
+            actor=request.user,
+            config=config,
+        )
+        if outcome['results']:
+            result = outcome['results'][0][1]
+        else:
+            run_log = outcome['log']
+            result = {
+                'success': False,
+                'found': 0,
+                'imported': 0,
+                'skipped': 0,
+                'duplicates': 0,
+                'failed': run_log.failed_count,
+                'error': run_log.details,
+            }
         summary = (
             f"Found {result['found']}, imported {result['imported']}, "
             f"skipped {result['skipped']}, duplicate {result['duplicates']}, "

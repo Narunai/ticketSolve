@@ -1,0 +1,177 @@
+{% extends 'tickets/base.html' %}
+
+{% block header_title %}Email Timer{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto space-y-5">
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+            <h1 class="text-xl font-bold text-white">Email → Ticket Timer</h1>
+            <p class="mt-1 text-xs text-slate-400">
+                ตั้งรอบสแกน mailbox และตรวจสอบประวัติการทำงานของระบบ
+            </p>
+        </div>
+        <div class="flex gap-2">
+            <a href="{% url 'system_settings' %}" class="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-700">
+                SMTP Settings
+            </a>
+            <form method="post" action="{% url 'email_timer_run' %}">
+                {% csrf_token %}
+                <button type="submit" class="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-bold text-amber-300 hover:bg-amber-500/20">
+                    Scan now
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div class="grid gap-4 lg:grid-cols-3">
+        <section class="rounded-xl border border-slate-800/80 bg-slate-900/40 p-4 lg:col-span-2">
+            <h2 class="text-sm font-bold text-white">Timer settings</h2>
+            <p class="mt-1 text-[11px] text-slate-500">
+                Systemd ตรวจทุก 10 นาทีเป็นฐาน ระบบจะสแกนจริงเมื่อครบช่วงเวลาที่เลือก
+            </p>
+
+            <form method="post" class="mt-4 grid gap-4 sm:grid-cols-2">
+                {% csrf_token %}
+                {% if form.errors %}
+                <div class="rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-300 sm:col-span-2">
+                    {{ form.errors }}
+                </div>
+                {% endif %}
+                <div>
+                    <label class="mb-1 block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                        Scan interval
+                    </label>
+                    {{ form.interval_minutes }}
+                </div>
+                <div class="flex items-end">
+                    <label class="flex min-h-[42px] w-full items-center gap-2 rounded-lg border border-slate-700 bg-slate-900 px-3 text-xs text-slate-200">
+                        {{ form.is_active }}
+                        Enable automatic email scanning
+                    </label>
+                </div>
+                <div class="sm:col-span-2">
+                    <button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-indigo-500">
+                        Save timer settings
+                    </button>
+                </div>
+            </form>
+        </section>
+
+        <section class="rounded-xl border border-slate-800/80 bg-slate-900/40 p-4">
+            <h2 class="text-sm font-bold text-white">Current status</h2>
+            <dl class="mt-3 space-y-2 text-xs">
+                <div class="flex justify-between gap-3">
+                    <dt class="text-slate-500">Automatic scan</dt>
+                    <dd class="{% if schedule.is_active %}text-emerald-400{% else %}text-rose-400{% endif %}">
+                        {% if schedule.is_active %}Enabled{% else %}Disabled{% endif %}
+                    </dd>
+                </div>
+                <div class="flex justify-between gap-3">
+                    <dt class="text-slate-500">Interval</dt>
+                    <dd class="text-slate-200">{{ schedule.get_interval_minutes_display }}</dd>
+                </div>
+                <div class="flex justify-between gap-3">
+                    <dt class="text-slate-500">Active mailboxes</dt>
+                    <dd class="text-slate-200">{{ mailboxes|length }}</dd>
+                </div>
+                <div class="flex justify-between gap-3">
+                    <dt class="text-slate-500">Last status</dt>
+                    <dd class="text-slate-200">{{ schedule.last_status|default:"Never run" }}</dd>
+                </div>
+                <div class="flex justify-between gap-3">
+                    <dt class="text-slate-500">Last run</dt>
+                    <dd class="text-right text-slate-200">
+                        {{ schedule.last_run_at|date:"Y-m-d H:i:s"|default:"-" }}
+                    </dd>
+                </div>
+                <div class="flex justify-between gap-3">
+                    <dt class="text-slate-500">Next scheduled run</dt>
+                    <dd class="text-right text-slate-200">
+                        {{ next_run_at|date:"Y-m-d H:i:s"|default:"Disabled" }}
+                    </dd>
+                </div>
+            </dl>
+        </section>
+    </div>
+
+    <section class="overflow-hidden rounded-xl border border-slate-800/80 bg-slate-900/40">
+        <div class="border-b border-slate-800/80 px-4 py-3">
+            <h2 class="text-sm font-bold text-white">Active inbound mailboxes</h2>
+        </div>
+        <div class="grid gap-2 p-4 sm:grid-cols-2 lg:grid-cols-3">
+            {% for mailbox in mailboxes %}
+            <div class="rounded-lg border border-slate-800 bg-slate-950/30 p-3">
+                <div class="text-xs font-semibold text-white">{{ mailbox.name }}</div>
+                <div class="mt-1 text-[10px] text-slate-500">
+                    {{ mailbox.username }} · {{ mailbox.incoming_host }}:{{ mailbox.incoming_port }}
+                </div>
+                <div class="mt-1 text-[10px] text-slate-500">
+                    Target: {{ mailbox.email_to_ticket_company|default:"Not configured" }}
+                </div>
+            </div>
+            {% empty %}
+            <div class="text-xs text-amber-300 sm:col-span-2 lg:col-span-3">
+                ยังไม่มี SMTP configuration ที่เปิดใช้ Email → Ticket
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+
+    <section class="overflow-hidden rounded-xl border border-slate-800/80 bg-slate-900/40">
+        <div class="border-b border-slate-800/80 px-4 py-3">
+            <h2 class="text-sm font-bold text-white">Execution logs</h2>
+            <p class="mt-1 text-[10px] text-slate-500">แสดง 50 รอบล่าสุด ทั้ง Timer และการกด Scan now</p>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full min-w-[1050px] text-left text-[11px]">
+                <thead class="border-b border-slate-800/80 text-slate-500">
+                    <tr>
+                        <th class="px-3 py-2">Started</th>
+                        <th class="px-3 py-2">Trigger</th>
+                        <th class="px-3 py-2">Status</th>
+                        <th class="px-3 py-2 text-right">Mailboxes</th>
+                        <th class="px-3 py-2 text-right">Found</th>
+                        <th class="px-3 py-2 text-right">Imported</th>
+                        <th class="px-3 py-2 text-right">Skipped</th>
+                        <th class="px-3 py-2 text-right">Duplicate</th>
+                        <th class="px-3 py-2 text-right">Failed</th>
+                        <th class="px-3 py-2 text-right">Duration</th>
+                        <th class="px-3 py-2">Details</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800/50 text-slate-300">
+                    {% for log in run_logs %}
+                    <tr class="align-top hover:bg-slate-800/20">
+                        <td class="whitespace-nowrap px-3 py-2">{{ log.started_at|date:"Y-m-d H:i:s" }}</td>
+                        <td class="px-3 py-2">
+                            {{ log.get_trigger_display }}
+                            {% if log.actor %}<div class="text-[9px] text-slate-500">{{ log.actor.username }}</div>{% endif %}
+                        </td>
+                        <td class="px-3 py-2">
+                            <span class="{% if log.status == 'SUCCESS' %}text-emerald-400{% elif log.status == 'FAILED' %}text-rose-400{% elif log.status == 'PARTIAL' %}text-amber-300{% else %}text-slate-400{% endif %}">
+                                {{ log.get_status_display }}
+                            </span>
+                        </td>
+                        <td class="px-3 py-2 text-right">{{ log.mailbox_count }}</td>
+                        <td class="px-3 py-2 text-right">{{ log.found_count }}</td>
+                        <td class="px-3 py-2 text-right text-emerald-400">{{ log.imported_count }}</td>
+                        <td class="px-3 py-2 text-right">{{ log.skipped_count }}</td>
+                        <td class="px-3 py-2 text-right">{{ log.duplicate_count }}</td>
+                        <td class="px-3 py-2 text-right text-rose-400">{{ log.failed_count }}</td>
+                        <td class="px-3 py-2 text-right">{{ log.duration_ms }} ms</td>
+                        <td class="max-w-sm px-3 py-2 text-slate-500" title="{{ log.details }}">{{ log.details|truncatechars:180 }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="11" class="px-3 py-8 text-center text-slate-500">
+                            ยังไม่มีประวัติการสแกนอีเมล
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+{% endblock %}

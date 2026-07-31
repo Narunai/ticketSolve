@@ -4,6 +4,8 @@ from .models import (
     Company,
     CustomUser,
     InboundEmailReceipt,
+    EmailToTicketRunLog,
+    EmailToTicketSchedule,
     MonthlyReportSchedule,
     Ticket,
     TicketAutomationConfig,
@@ -157,6 +159,73 @@ class InboundEmailReceiptAdmin(admin.ModelAdmin):
     )
 
     def has_add_permission(self, request):
+        return False
+
+
+@admin.register(EmailToTicketSchedule)
+class EmailToTicketScheduleAdmin(admin.ModelAdmin):
+    list_display = (
+        'interval_minutes',
+        'is_active',
+        'last_run_at',
+        'last_status',
+        'updated_at',
+    )
+    readonly_fields = (
+        'singleton_key',
+        'last_run_at',
+        'last_scheduled_run_at',
+        'last_status',
+        'updated_at',
+        'updated_by',
+    )
+
+    def has_add_permission(self, request):
+        return not EmailToTicketSchedule.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def save_model(self, request, obj, form, change):
+        obj.updated_by = request.user
+        super().save_model(request, obj, form, change)
+
+
+@admin.register(EmailToTicketRunLog)
+class EmailToTicketRunLogAdmin(admin.ModelAdmin):
+    list_display = (
+        'started_at',
+        'trigger',
+        'status',
+        'mailbox_count',
+        'found_count',
+        'imported_count',
+        'failed_count',
+        'duration_ms',
+    )
+    list_filter = ('trigger', 'status')
+    search_fields = ('details', 'actor__username')
+    readonly_fields = (
+        'schedule',
+        'trigger',
+        'status',
+        'actor',
+        'mailbox_count',
+        'found_count',
+        'imported_count',
+        'skipped_count',
+        'duplicate_count',
+        'failed_count',
+        'duration_ms',
+        'details',
+        'started_at',
+        'completed_at',
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
         return False
 
 

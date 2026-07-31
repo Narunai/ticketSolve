@@ -32,6 +32,8 @@
 | **`MonthlyReportSchedule`** | การตั้งค่าการส่งรายงานสรุป Ticket ประจำเดือนแบบ PDF |
 | **`SMTPConfiguration`** | ตั้งค่าการเชื่อมต่อเมลเซิร์ฟเวอร์ SMTP |
 | **`InboundEmailReceipt`** | บันทึก Message-ID และผลการนำอีเมลเข้าเป็น Ticket เพื่อป้องกันการสร้างซ้ำ |
+| **`EmailToTicketSchedule`** | ตั้งค่าเปิด/ปิดและรอบสแกน Email → Ticket |
+| **`EmailToTicketRunLog`** | สรุปผลการทำงานแต่ละรอบ พร้อมจำนวนรายการและระยะเวลา |
 | **`EmailLog`** | บันทึกประวัติการส่งอีเมล, ผู้รับ To/CC, สถานะ, เหตุผลข้อผิดพลาด, ปุ่ม Resend |
 | **`BackupLog`** | บันทึกประวัติการสำรองข้อมูล (FULL / INCREMENTAL 2-HR), ขนาดไฟล์, สถานะ |
 | **`TicketAuditLog`** | บันทึกการเปลี่ยนแปลงสถานะและผู้ดำเนินการสำหรับตรวจสอบย้อนหลัง |
@@ -59,7 +61,8 @@
 
 งานรายงาน, Ticket automation และ backup ตรวจทุก 1 นาทีผ่าน
 `ticketsolve-scheduler.timer` ส่วน Email → Ticket แยกเป็น
-`ticketsolve-email-to-ticket.timer` และสแกน mailbox ทุก 10 นาที:
+`ticketsolve-email-to-ticket.timer` ปลุกตัวประมวลผลทุก 10 นาที ส่วนรอบสแกนจริง
+กำหนดจากหน้า **Email Timer** เป็น 10, 20, 30 นาที หรือ 1 ชั่วโมง:
 
 ```bash
 # คำสั่งที่รันอัตโนมัติใน scheduler service:
@@ -68,7 +71,7 @@ python manage.py process_ticket_automations # ย้ายสถานะ Ticket
 python manage.py run_2hr_backup             # สั่งทำ Backup 2 ชั่วโมงย้อนหลัง (มี Throttling ป้องกันรันซ้ำ)
 python manage.py run_2hr_backup --full      # Full backup รายวัน (มี Throttling ป้องกันรันซ้ำ)
 
-# รันแยกทุก 10 นาที:
+# Systemd เรียกทุก 10 นาทีและคำสั่งตรวจรอบเวลาจากฐานข้อมูล:
 python manage.py process_email_to_tickets   # อ่านอีเมล IMAP ที่ยังไม่อ่านและสร้าง Ticket
 ```
 
@@ -88,7 +91,10 @@ Backup archive เก็บที่ `/var/backups/ticketsolve` บน AWS VPS �
 ## 📥 Email → Ticket
 
 * รองรับ Gmail/Google Workspace และ Outlook ที่เปิด IMAP SSL
-* สแกน mailbox อัตโนมัติทุก 10 นาที หรือกด **Import Now** เพื่อสแกนทันที
+* หน้า **Email Timer** แยกสำหรับเปิด/ปิดและเลือกรอบ 10, 20, 30 นาที (ครึ่งชั่วโมง) หรือ 1 ชั่วโมง
+* กด **Scan now** หรือ **Import Now** เพื่อสแกนทันทีโดยไม่รอรอบ
+* เก็บ run log 50 รอบล่าสุด พร้อม trigger/ผู้สั่งรัน, สถานะ, จำนวน mailbox,
+  found/imported/skipped/duplicate/failed, ระยะเวลา และรายละเอียดข้อผิดพลาด
 * อ่านเฉพาะข้อความ `UNSEEN` ย้อนหลังตามจำนวนวันที่กำหนด และจำกัดจำนวนต่อรอบ
 * กรอง subject ด้วย keyword ไทย/อังกฤษก่อนสร้าง Ticket ได้
 * กำหนด target company, ticket creator และ default assignee ต่อ mailbox

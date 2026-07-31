@@ -1037,6 +1037,133 @@ class InboundEmailReceipt(models.Model):
         return f"{self.subject or self.message_id} ({self.status})"
 
 
+class EmailToTicketSchedule(models.Model):
+    INTERVAL_10_MINUTES = 10
+    INTERVAL_20_MINUTES = 20
+    INTERVAL_30_MINUTES = 30
+    INTERVAL_60_MINUTES = 60
+    INTERVAL_CHOICES = [
+        (INTERVAL_10_MINUTES, '10 minutes'),
+        (INTERVAL_20_MINUTES, '20 minutes'),
+        (INTERVAL_30_MINUTES, '30 minutes (half an hour)'),
+        (INTERVAL_60_MINUTES, '1 hour'),
+    ]
+
+    singleton_key = models.BooleanField(default=True, unique=True, editable=False)
+    is_active = models.BooleanField(default=True)
+    interval_minutes = models.PositiveSmallIntegerField(
+        choices=INTERVAL_CHOICES,
+        default=INTERVAL_10_MINUTES,
+    )
+    last_run_at = models.DateTimeField(null=True, blank=True)
+    last_scheduled_run_at = models.DateTimeField(null=True, blank=True)
+    last_status = models.CharField(max_length=20, blank=True, default='')
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='updated_email_to_ticket_schedules',
+    )
+
+    @classmethod
+    def get_solo(cls):
+        schedule, _ = cls.objects.get_or_create(singleton_key=True)
+        return schedule
+
+    def save(self, *args, **kwargs):
+        self.singleton_key = True
+        super().save(*args, **kwargs)
+
+    def is_due(self, at=None):
+        if not self.is_active:
+            return False
+        at = at or timezone.now()
+        if not self.last_scheduled_run_at:
+            return True
+        return at >= self.last_scheduled_run_at + datetime.timedelta(
+            minutes=self.interval_minutes,
+        )
+
+    def next_run_at(self, at=None):
+        if not self.is_active:
+            return None
+        at = at or timezone.now()
+        if not self.last_scheduled_run_at:
+            return at
+        candidate = self.last_scheduled_run_at + datetime.timedelta(
+            minutes=self.interval_minutes,
+        )
+        return max(candidate, at)
+
+    def __str__(self):
+        return f"Email to Ticket every {self.interval_minutes} minutes"
+
+
+class EmailToTicketRunLog(models.Model):
+    TRIGGER_TIMER = 'TIMER'
+    TRIGGER_MANUAL = 'MANUAL'
+    TRIGGER_CHOICES = [
+        (TRIGGER_TIMER, 'Timer'),
+        (TRIGGER_MANUAL, 'Manual'),
+    ]
+
+    STATUS_RUNNING = 'RUNNING'
+    STATUS_SUCCESS = 'SUCCESS'
+    STATUS_PARTIAL = 'PARTIAL'
+    STATUS_SKIPPED = 'SKIPPED'
+    STATUS_FAILED = 'FAILED'
+    STATUS_CHOICES = [
+        (STATUS_RUNNING, 'Running'),
+        (STATUS_SUCCESS, 'Success'),
+        (STATUS_PARTIAL, 'Partial success'),
+        (STATUS_SKIPPED, 'Skipped'),
+        (STATUS_FAILED, 'Failed'),
+    ]
+
+    schedule = models.ForeignKey(
+        EmailToTicketSchedule,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='run_logs',
+    )
+    trigger = models.CharField(max_length=10, choices=TRIGGER_CHOICES)
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_RUNNING,
+    )
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='email_to_ticket_run_logs',
+    )
+    mailbox_count = models.PositiveIntegerField(default=0)
+    found_count = models.PositiveIntegerField(default=0)
+    imported_count = models.PositiveIntegerField(default=0)
+    skipped_count = models.PositiveIntegerField(default=0)
+    duplicate_count = models.PositiveIntegerField(default=0)
+    failed_count = models.PositiveIntegerField(default=0)
+    duration_ms = models.PositiveIntegerField(default=0)
+    details = models.TextField(blank=True, default='')
+    started_at = models.DateTimeField(default=timezone.now)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-started_at']
+        indexes = [
+            models.Index(fields=['-started_at'], name='email_run_started_idx'),
+            models.Index(fields=['status'], name='email_run_status_idx'),
+        ]
+
+    def __str__(self):
+        return f"{self.get_trigger_display()} email import ({self.status}) at {self.started_at}"
+
+
 class NotificationConfig(models.Model):
     STATUS_NOTIFY_ALL = 'ALL'
     STATUS_NOTIFY_IMPORTANT_ONLY = 'IMPORTANT_ONLY'

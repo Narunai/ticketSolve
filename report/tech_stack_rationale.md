@@ -32,6 +32,7 @@
 * **Ecosystem ภาษาไทยสมบูรณ์**: Python มีไลบรารีแปลงโครงสร้าง HTML เป็น PDF (`xhtml2pdf`) ที่รองรับการประมวลผลฟอนต์ภาษาไทย (Sarabun / Tahoma) ได้อย่างคมชัด แม่นยำ ไม่เจอปัญหาตัวอักษรสี่เหลี่ยมหรืออักขระเพี้ยน
 * **SMTP Delivery Integration**: สามารถสร้างระบบยิงส่งอีเมลแจ้งเตือนรายงานประจำเดือน และการตั้งค่า SMTP Dynamic แบบเปลี่ยนผ่านหน้าเว็บได้อย่างราบรื่น
 * **Email Ingestion**: ใช้ IMAP SSL จาก Python standard library และ `BeautifulSoup` ล้าง HTML ก่อนสร้าง Ticket พร้อม Message-ID deduplication; Microsoft 365 ที่ปิด IMAP ต้องเพิ่ม Graph/OAuth แยกต่างหาก
+* **Database-controlled Timer**: systemd ใช้ base tick 10 นาที ขณะที่ Django เก็บ interval 10/20/30/60 นาทีและ execution log ในฐานข้อมูล ทำให้ปรับรอบจากหน้าเว็บได้โดยไม่แก้ unit file
 
 ---
 

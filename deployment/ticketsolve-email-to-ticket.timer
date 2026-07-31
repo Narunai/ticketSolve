@@ -1,5 +1,5 @@
 [Unit]
-Description=Scan TicketSolve inbound mailboxes every 10 minutes
+Description=Check the TicketSolve email scan schedule every 10 minutes
 
 [Timer]
 OnCalendar=*-*-* *:0/10:00

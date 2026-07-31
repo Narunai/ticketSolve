@@ -835,10 +835,105 @@ class MultiTenantTicketTests(TestCase):
             'failed': 0,
             'error': '',
         }
-        with mock.patch('tickets.views.import_email_to_tickets', return_value=result) as importer:
+        outcome = {
+            'executed': True,
+            'reason': '',
+            'log': None,
+            'results': [(config, result)],
+        }
+        with mock.patch(
+            'tickets.views.run_email_to_ticket_cycle',
+            return_value=outcome,
+        ) as importer:
             response = self.client.post(url)
         self.assertRedirects(response, reverse('system_settings'))
-        importer.assert_called_once_with(config)
+        importer.assert_called_once_with(
+            trigger='MANUAL',
+            actor=self.system_admin,
+            config=config,
+        )
+
+    def test_email_timer_page_is_system_admin_only_and_saves_interval(self):
+        from .models import EmailToTicketSchedule
+
+        url = reverse('email_timer')
+        self.client.login(username='admin_a', password='password123')
+        self.assertEqual(self.client.get(url).status_code, 403)
+
+        self.client.logout()
+        self.client.login(username='system_admin', password='password123')
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Email → Ticket Timer')
+
+        response = self.client.post(
+            url,
+            {
+                'interval_minutes': '30',
+                'is_active': 'on',
+            },
+        )
+        self.assertRedirects(response, url)
+        schedule = EmailToTicketSchedule.get_solo()
+        self.assertEqual(schedule.interval_minutes, 30)
+        self.assertTrue(schedule.is_active)
+        self.assertEqual(schedule.updated_by, self.system_admin)
+
+    def test_email_timer_command_respects_interval_and_creates_run_log(self):
+        import tempfile
+        from unittest import mock
+        from .models import (
+            EmailToTicketRunLog,
+            EmailToTicketSchedule,
+            SMTPConfiguration,
+        )
+
+        config = SMTPConfiguration.objects.create(
+            name='Scheduled inbound mailbox',
+            provider='GMAIL',
+            username='scheduled@example.com',
+            password='app-password',
+            feature_scope=SMTPConfiguration.FEATURE_EMAIL_TO_TICKET,
+            incoming_host='imap.gmail.com',
+            email_to_ticket_company=self.company_a,
+            email_to_ticket_creator=self.user_a,
+            is_active=True,
+        )
+        schedule = EmailToTicketSchedule.get_solo()
+        schedule.interval_minutes = 20
+        schedule.is_active = True
+        schedule.last_scheduled_run_at = None
+        schedule.save()
+        result = {
+            'success': True,
+            'found': 3,
+            'imported': 1,
+            'skipped': 1,
+            'duplicates': 1,
+            'failed': 0,
+            'error': '',
+        }
+
+        with tempfile.TemporaryDirectory() as backup_dir, \
+                mock.patch('tickets.backup_service.BACKUP_DIR', backup_dir), \
+                mock.patch(
+                    'tickets.email_to_ticket_scheduler.import_all_active_email_to_ticket_configs',
+                    return_value=[(config, result)],
+                ) as importer:
+            call_command('process_email_to_tickets', verbosity=0)
+            call_command('process_email_to_tickets', verbosity=0)
+
+        importer.assert_called_once_with()
+        run_log = EmailToTicketRunLog.objects.get()
+        self.assertEqual(run_log.trigger, EmailToTicketRunLog.TRIGGER_TIMER)
+        self.assertEqual(run_log.status, EmailToTicketRunLog.STATUS_SUCCESS)
+        self.assertEqual(run_log.mailbox_count, 1)
+        self.assertEqual(run_log.found_count, 3)
+        self.assertEqual(run_log.imported_count, 1)
+        self.assertEqual(run_log.skipped_count, 1)
+        self.assertEqual(run_log.duplicate_count, 1)
+        schedule.refresh_from_db()
+        self.assertIsNotNone(schedule.last_scheduled_run_at)
 
     def test_sub_admin_permissions(self):
         sub_admin = CustomUser.objects.create_user(

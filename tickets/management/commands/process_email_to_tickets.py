@@ -1,30 +1,42 @@
 from django.core.management.base import BaseCommand
 
-from tickets.email_to_ticket import import_all_active_email_to_ticket_configs
+from tickets.email_to_ticket_scheduler import run_email_to_ticket_cycle
+from tickets.models import EmailToTicketRunLog
 
 
 class Command(BaseCommand):
     help = 'Import unread IMAP messages into TicketSolve tickets.'
 
+    def add_arguments(self, parser):
+        parser.add_argument(
+            '--force',
+            action='store_true',
+            help='Run immediately instead of waiting for the configured timer interval.',
+        )
+
     def handle(self, *args, **options):
-        results = import_all_active_email_to_ticket_configs()
-        if not results:
-            self.stdout.write('No active Email to Ticket SMTP configuration.')
+        trigger = (
+            EmailToTicketRunLog.TRIGGER_MANUAL
+            if options['force']
+            else EmailToTicketRunLog.TRIGGER_TIMER
+        )
+        outcome = run_email_to_ticket_cycle(trigger=trigger)
+        if not outcome['executed']:
+            self.stdout.write(outcome['reason'])
             return
 
-        has_failure = False
-        for config, result in results:
-            summary = (
-                f"{config.name}: found={result['found']} imported={result['imported']} "
-                f"skipped={result['skipped']} duplicates={result['duplicates']} "
-                f"failed={result['failed']}"
-            )
-            if result['success']:
-                self.stdout.write(self.style.SUCCESS(summary))
-            else:
-                has_failure = True
-                error = result.get('error') or 'One or more messages failed.'
-                self.stderr.write(self.style.ERROR(f'{summary} error={error}'))
+        run_log = outcome['log']
+        summary = (
+            f"status={run_log.status} mailboxes={run_log.mailbox_count} "
+            f"found={run_log.found_count} imported={run_log.imported_count} "
+            f"skipped={run_log.skipped_count} duplicates={run_log.duplicate_count} "
+            f"failed={run_log.failed_count} duration_ms={run_log.duration_ms}"
+        )
 
-        if has_failure:
+        if run_log.status in {
+            EmailToTicketRunLog.STATUS_FAILED,
+            EmailToTicketRunLog.STATUS_PARTIAL,
+        }:
+            self.stderr.write(self.style.ERROR(summary))
             raise RuntimeError('One or more Email to Ticket imports failed.')
+        self.stdout.write(self.style.SUCCESS(summary))

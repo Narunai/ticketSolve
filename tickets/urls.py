@@ -80,6 +80,10 @@ urlpatterns = [
     path('settings/smtp/<int:pk>/import-email/', views.SMTPImportEmailView.as_view(), name='smtp_import_email'),
     path('settings/smtp/<int:pk>/delete/', views.SMTPDeleteView.as_view(), name='smtp_delete'),
 
+    # Email to Ticket timer and execution logs
+    path('email-timer/', views.EmailToTicketTimerView.as_view(), name='email_timer'),
+    path('email-timer/run/', views.EmailToTicketTimerRunView.as_view(), name='email_timer_run'),
+
     # Backup Management URLs
     path('backups/', views.BackupManagementView.as_view(), name='backup_list'),
     path('backups/trigger/', views.TriggerBackupView.as_view(), name='backup_trigger'),

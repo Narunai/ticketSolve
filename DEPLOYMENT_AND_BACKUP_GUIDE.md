@@ -120,7 +120,8 @@ exit
 ระบบแยก timer เป็นสองชุด:
 
 * `ticketsolve-scheduler.timer` ตรวจรายงาน, Ticket automation และ backup ทุก 1 นาที
-* `ticketsolve-email-to-ticket.timer` สแกน mailbox สำหรับ Email → Ticket ทุก 10 นาที
+* `ticketsolve-email-to-ticket.timer` ปลุกตัวประมวลผลทุก 10 นาที และตัวประมวลผล
+  ตรวจ interval จากฐานข้อมูลก่อนสแกนจริง
 
 ### ไฟล์ Service: `/etc/systemd/system/ticketsolve-scheduler.service`
 ```ini
@@ -184,7 +185,7 @@ NoNewPrivileges=true
 
 ```ini
 [Unit]
-Description=Scan TicketSolve inbound mailboxes every 10 minutes
+Description=Check the TicketSolve email scan schedule every 10 minutes
 
 [Timer]
 OnCalendar=*-*-* *:0/10:00
@@ -244,9 +245,15 @@ sudo bash -c '
 คนละบัญชีพร้อมกันได้ สำหรับ inbound ต้องกำหนด IMAP host/port/folder, target company,
 ticket creator และ optional assignee
 
-timer จะเริ่มสแกนตามนาที `00, 10, 20, 30, 40, 50` ของทุกชั่วโมง หากเครื่องปิดอยู่
-`Persistent=true` จะสั่งทำรอบที่พลาดหลังเครื่องกลับมาทำงาน ส่วนปุ่ม **Import Now**
-จะเรียกคำสั่งทันทีโดยไม่ต้องรอรอบถัดไป
+timer จะปลุกตัวประมวลผลตามนาที `00, 10, 20, 30, 40, 50` ของทุกชั่วโมง
+ตัวประมวลผลจะอ่านค่าจากหน้า **Email Timer** แล้วสแกนเมื่อครบ 10, 20, 30 นาที
+(ครึ่งชั่วโมง) หรือ 1 ชั่วโมง หากยังไม่ครบ interval จะจบโดยไม่สร้าง run log
+`Persistent=true` จะสั่งทำรอบที่พลาดหลังเครื่องกลับมาทำงาน ส่วนปุ่ม **Scan now**,
+**Import Now** และคำสั่ง `--force` จะเรียกทันทีโดยไม่ต้องรอรอบถัดไป
+
+หน้า Email Timer แสดง execution log 50 รอบล่าสุด โดยเก็บ trigger/ผู้สั่งรัน,
+สถานะ, จำนวน mailbox และอีเมลที่ found/imported/skipped/duplicate/failed,
+ระยะเวลา และรายละเอียด error
 
 ค่ามาตรฐาน:
 
@@ -264,7 +271,7 @@ sudo bash -c '
   set +a
   cd /var/www/ticketSolve
   runuser -u ubuntu -g www-data --preserve-environment -- \
-    venv/bin/python manage.py process_email_to_tickets
+    venv/bin/python manage.py process_email_to_tickets --force
 '
 ```
 

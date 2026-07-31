@@ -62,6 +62,7 @@
 - **App Password Guide**: มีหน้าต่างคู่มือแนะนำวิธีขอรหัส App Password 16 หลักจาก Google และ Microsoft แบบละเอียด
 - **Feature Routing**: แยกบัญชีที่ใช้ส่ง system email กับบัญชีที่ใช้รับ Email → Ticket หรือเลือกใช้บัญชีเดียวกันทั้งสองฟังก์ชัน
 - **Email → Ticket**: อ่าน unread mail ผ่าน IMAP SSL, กรอง subject, สร้าง Ticket/ไฟล์แนบ และป้องกัน Message-ID ซ้ำ
+- **Configurable Email Timer**: มีหน้าแยกสำหรับเลือกรอบ 10/20/30/60 นาที, สั่ง Scan now และดู execution log 50 รอบล่าสุด
 
 ### 🎨 6. การปรับแต่ง UI/UX & ความปลอดภัย (Design & Usability)
 - **Bilingual Support (TH/EN)**: ระบบเปลี่ยนภาษาไทย-อังกฤษ สลับใช้งานได้ทันทีทั่วทั้งระบบผ่าน Header Switcher

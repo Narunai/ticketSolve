@@ -8,7 +8,7 @@
 
 ## 📌 1. ภาพรวมชุดทดสอบ (Test Suite Overview)
 
-ชุดทดสอบอยู่ใน `tickets/tests.py` ปัจจุบันมี test methods 72 รายการ ครอบคลุม:
+ชุดทดสอบอยู่ใน `tickets/tests.py` ปัจจุบันมี test methods 74 รายการ ครอบคลุม:
 
 1. **Multi-Tenant Data Isolation**: ตรวจสอบว่าพนักงาน/ผู้บริหารแต่ละบริษัทเห็นเฉพาะ Ticket ในบริษัทตนเองเท่านั้น
 2. **Role-Based Access Control (RBAC)**: ตรวจสอบสิทธิ์การเข้าถึง URL และการทำรายการของผู้ใช้ทั้ง 5 บทบาท
@@ -19,7 +19,7 @@
 7. **Backup System & Management Views**: ทดสอบคำสั่ง Backup (Full & 2-Hr Incremental), การบันทึก `BackupLog`, และการลบประวัติ Backup
 8. **Authorization Regression**: ทดสอบ `CLIENT_USER` เห็นเฉพาะ Ticket ของตน, `CLIENT_STAFF` แก้ไข Ticket ใน tenant ได้, การป้องกัน superuser และการดาวน์โหลดไฟล์แนบแบบ authenticated
 9. **Backup Security Regression**: ทดสอบ path traversal, incremental backup เมื่อ Ticket เก่ามี comment ใหม่ และการลบรายการ backup ที่ไม่มี archive
-10. **Email → Ticket**: ทดสอบ SMTP feature scope, การสร้าง Ticket/ไฟล์แนบจาก IMAP, Message-ID deduplication และสิทธิ์ Import Now
+10. **Email → Ticket**: ทดสอบ SMTP feature scope, การสร้าง Ticket/ไฟล์แนบจาก IMAP, Message-ID deduplication, สิทธิ์ Import Now, หน้า Email Timer, interval gating และ run log
 
 ---
 
@@ -64,6 +64,6 @@ OK
 System check identified no issues (0 silenced).
 ```
 
-* **Discovered test methods**: 72
+* **Discovered test methods**: 74
 * **ยืนยันแล้วบน AWS**: regression test สำหรับลบ backup ว่างผ่าน
 * **Full suite**: ต้องใช้ผลจากคำสั่ง `python manage.py test` ล่าสุดเป็นเกณฑ์ก่อน release; ไม่ควรสรุปว่า test methods ทั้งหมดผ่านจากผล targeted test ข้างต้น

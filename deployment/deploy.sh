@@ -8,6 +8,9 @@ ENV_DIR="/etc/ticketsolve"
 ENV_FILE="${ENV_DIR}/ticketsolve.env"
 BACKUP_DIR="/var/backups/ticketsolve"
 
+# Prevent the email worker from loading new model code before migrations finish.
+sudo systemctl stop ticketsolve-email-to-ticket.timer 2>/dev/null || true
+
 sudo apt update
 sudo apt install -y python3-pip python3-venv nginx curl git python3-certbot-nginx
 
