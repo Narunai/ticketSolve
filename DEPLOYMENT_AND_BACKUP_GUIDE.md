@@ -78,6 +78,7 @@ sudo systemctl restart nginx
 * **ไฟล์ที่สร้าง**: `system_data_no_tickets_YYYY-MM-DD_HH-MM-SS.tar.gz` ภายในมี `db.sqlite3` และ `backup_manifest.json`
 * **ข้อมูลที่ไม่รวม**: Ticket rows, ข้อมูลลูกที่ถูก cascade, `media/` และ `/etc/ticketsolve/ticketsolve.env`
 * **ตารางเวลา**: `run_weekly_system_backup` ตรวจทุกนาทีผ่าน scheduler แต่สร้างสำเร็จไม่เกินหนึ่งครั้งในทุก 7 วัน เว้นแต่ใช้ `--force`
+* **สั่งจากหน้าเว็บ**: System Admin กด **Run Manually: System Data (No Tickets)** เพื่อสร้าง backup ทันทีได้ การกดปุ่มนี้ไม่ยกเลิกหรือเปลี่ยน schedule อัตโนมัติ
 
 ### 3.4 📥 Backup Download และ Delete
 * **การใช้งาน**: สามารถดาวน์โหลดไฟล์ Backup (`.zip` หรือ `.tar.gz`) มาตรวจสอบและดูข้อมูลบนเครื่องของคุณได้ทันทีผ่านปุ่ม **📥 Download** ในหน้าจอ Backup Management (`/backups/`)
@@ -270,6 +271,7 @@ timer จะปลุกตัวประมวลผลตามนาที `
 ระยะเวลา และรายละเอียด error
 พร้อมตารางรายละเอียดอีเมล 100 รายการล่าสุดที่แสดง mailbox, ผู้ส่ง, subject,
 Message-ID, ผล Imported/Skipped/Failed, Ticket ที่สร้าง และเหตุผลของผลลัพธ์
+โดย Email import details และ execution log อยู่ใน container เดียวกันและสลับดูผ่านแท็บ
 
 ส่วน **Sender → Assignee routing** ใช้จับคู่อีเมลผู้ส่งกับผู้ดูแล Ticket ได้ทุกบริษัท
 เมื่อเลือกผู้ดูแลต่างจาก Target Company ระบบจะสร้าง Ticket ในบริษัทของผู้ดูแลและใช้

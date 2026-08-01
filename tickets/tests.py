@@ -256,6 +256,37 @@ class MultiTenantTicketTests(TestCase):
         response = self.client.get(reverse('monthly_report'))
         self.assertEqual(response.status_code, 403)
 
+    def test_sidebar_navigation_follows_the_admin_workflow(self):
+        self.client.login(username="system_admin", password="password123")
+        response = self.client.get(reverse('dashboard'))
+        self.assertEqual(response.status_code, 200)
+
+        page = response.content.decode('utf-8')
+        nav_start = page.index('aria-label="Main navigation"')
+        navigation = page[nav_start:page.index('</nav>', nav_start)]
+        expected_order = [
+            'Workspace',
+            f'href="{reverse("dashboard")}"',
+            f'href="{reverse("ticket_create")}"',
+            'Administration',
+            f'href="{reverse("user_list")}"',
+            f'href="{reverse("company_list")}"',
+            'Reports &amp; Data',
+            f'href="{reverse("monthly_report")}"',
+            f'href="{reverse("log_list")}"',
+            f'href="{reverse("backup_list")}"',
+            f'href="{reverse("ticket_delete_manage")}"',
+            'Ticket Configuration',
+            f'href="{reverse("category_list")}"',
+            f'href="{reverse("notification_config_list")}"',
+            f'href="{reverse("ticket_automation_list")}"',
+            'Email Integration',
+            f'href="{reverse("email_timer")}"',
+            f'href="{reverse("system_settings")}"',
+        ]
+        positions = [navigation.index(marker) for marker in expected_order]
+        self.assertEqual(positions, sorted(positions))
+
     def test_parent_subsidiary_company_hierarchy_and_clean_validation(self):
         from django.core.exceptions import ValidationError
 
@@ -921,6 +952,17 @@ class MultiTenantTicketTests(TestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Email → Ticket Timer')
+        self.assertContains(response, 'id="emailLogTabsContainer"', count=1)
+        self.assertContains(response, 'data-email-log-tab="import"', count=1)
+        self.assertContains(response, 'data-email-log-tab="execution"', count=1)
+        self.assertContains(response, 'id="emailImportTabPanel"', count=1)
+        self.assertContains(response, 'id="executionLogTabPanel"', count=1)
+        rendered_page = response.content.decode('utf-8')
+        log_container_start = rendered_page.index('id="emailLogTabsContainer"')
+        log_container_end = rendered_page.index('</section>', log_container_start)
+        log_container = rendered_page[log_container_start:log_container_end]
+        self.assertIn('id="emailImportTabPanel"', log_container)
+        self.assertIn('id="executionLogTabPanel"', log_container)
 
         response = self.client.post(
             url,
@@ -2110,7 +2152,8 @@ class MultiTenantTicketTests(TestCase):
 
         self.client.login(username='system_admin', password='password123')
         backup_page = self.client.get(reverse('backup_list'))
-        self.assertContains(backup_page, 'System Data (No Tickets)')
+        self.assertContains(backup_page, 'Run Manually: System Data (No Tickets)')
+        self.assertContains(backup_page, 'the automatic backup continues every 7 days')
         self.assertContains(backup_page, 'System Data (7 Days)')
         filtered_page = self.client.get(reverse('backup_list'), {'type': 'SYSTEM'})
         self.assertEqual(filtered_page.status_code, 200)

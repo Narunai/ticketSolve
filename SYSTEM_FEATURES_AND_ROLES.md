@@ -49,6 +49,7 @@
 * เลือก ticket creator/default assignee และกรอง subject ด้วย keyword ไทย/อังกฤษ
 * ป้องกันการสร้างซ้ำด้วย Message-ID และมี import receipts สำหรับ Imported/Skipped/Failed
 * แสดงชื่อ/อีเมลผู้ส่งจริงบน Ticket และมีตาราง receipt รายอีเมล 100 รายการล่าสุดพร้อมเหตุผลที่นำเข้าหรือคัดออก
+* Email import details และ Execution logs อยู่ในการ์ดเดียวกันและเลือกดูผ่านแท็บที่รองรับคีย์บอร์ด
 * รองรับไฟล์แนบภายใต้ขีดจำกัด 10 MB ต่อไฟล์, 10 ไฟล์ และรวม 50 MB
 * หน้า Email Timer แยกสำหรับเปิด/ปิดและเลือกรอบ 10, 20, 30 นาที (ครึ่งชั่วโมง) หรือ 1 ชั่วโมง
 * กด **Scan now** หรือ **Import Now** เพื่อสแกนทันที พร้อมเก็บ execution log ของทุกครั้งที่ทำงานจริง
@@ -68,7 +69,7 @@
 ### 💾 1.7 ระบบสำรองข้อมูล (AWS VPS Backup)
 * **2-Hour Incremental Backup**: บันทึก Ticket ที่ถูกสร้าง/แก้ไข หรือมี Comments/ไฟล์แนบใหม่ใน 2 ชั่วโมงย้อนหลังเป็น `.zip` ไว้ที่ `/var/backups/ticketsolve`
 * **Full Backup**: ใช้ SQLite Online Backup API สำรองฐานข้อมูลและบีบอัดร่วมกับ `media/` เป็น `.tar.gz` บน AWS VPS โดยไม่รวม secrets
-* **7-Day System Data (No Tickets)**: สำรองฐานข้อมูลส่วน Users, Companies, roles, SMTP/IMAP, routing, schedules, categories และค่าระบบทุก 7 วัน โดยล้าง Ticket/ข้อมูลลูกที่ cascade ออกจากสำเนา และไม่รวม `media/` หรือ runtime secrets
+* **7-Day System Data (No Tickets)**: สำรองฐานข้อมูลส่วน Users, Companies, roles, SMTP/IMAP, routing, schedules, categories และค่าระบบทุก 7 วัน โดยล้าง Ticket/ข้อมูลลูกที่ cascade ออกจากสำเนา และไม่รวม `media/` หรือ runtime secrets; สามารถกด **Run Manually: System Data (No Tickets)** เพื่อสำรองทันทีได้โดย schedule 7 วันยังทำงานตามเดิม
 * **Retention**: ลบ archive ที่เก่ากว่า `BACKUP_RETENTION_DAYS` ซึ่งมีค่าเริ่มต้น 30 วัน
 * **Backup Management UI (`/backups/`)**: กดสำรองข้อมูล, ดาวน์โหลด archive, ดูสถิติ และลบทั้ง archive/log; รายการไม่มีข้อมูลหรือไฟล์หายมีปุ่ม **Delete empty record** และปุ่มรวม **Delete all 0 MB**
 * **Access Control**: เฉพาะ `SYSTEM_ADMIN`, `SYSTEM_SUB_ADMIN` และ Django superuser เท่านั้น

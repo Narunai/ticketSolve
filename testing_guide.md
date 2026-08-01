@@ -8,10 +8,10 @@
 
 ## 📌 1. ภาพรวมชุดทดสอบ (Test Suite Overview)
 
-ชุดทดสอบอยู่ใน `tickets/tests.py` ปัจจุบันมี test methods 79 รายการ ครอบคลุม:
+ชุดทดสอบอยู่ใน `tickets/tests.py` ปัจจุบันมี test methods 80 รายการ ครอบคลุม:
 
 1. **Multi-Tenant Data Isolation**: ตรวจสอบว่าพนักงาน/ผู้บริหารแต่ละบริษัทเห็นเฉพาะ Ticket ในบริษัทตนเองเท่านั้น
-2. **Role-Based Access Control (RBAC)**: ตรวจสอบสิทธิ์การเข้าถึง URL และการทำรายการของผู้ใช้ทั้ง 5 บทบาท
+2. **Role-Based Access Control (RBAC)**: ตรวจสอบสิทธิ์การเข้าถึง URL และการทำรายการของผู้ใช้ทั้ง 5 บทบาท รวมถึงลำดับกลุ่มเมนู sidebar สำหรับ System Admin
 3. **Ticket Lifecycle & Custom Fields**: ทดสอบการสร้าง, แก้ไข, เปลี่ยนสถานะ, บันทึก Note, และการแสดงผล Custom Fields
 4. **Ticket Status Automation**: ทดสอบการย้ายสถานะอัตโนมัติจาก Open ➔ In Progress เมื่อเวลาผ่านไปตามกำหนด
 5. **Notification Config & Email Dispatch**: ทดสอบการสร้างจดหมายแจ้งเตือนและการบันทึก `EmailLog`
@@ -19,7 +19,7 @@
 7. **Backup System & Management Views**: ทดสอบ Full, 2-Hr Incremental และ 7-Day System Data (No Tickets), ตรวจเนื้อหา SQLite/manifest, throttling 7 วัน, การบันทึก `BackupLog`, การลบประวัติ Backup และการลบรายการ 0 MB ทั้งหมดอย่างปลอดภัย
 8. **Authorization Regression**: ทดสอบ `CLIENT_USER` เห็นเฉพาะ Ticket ของตน, `CLIENT_STAFF` แก้ไข Ticket ใน tenant ได้, การป้องกัน superuser และการดาวน์โหลดไฟล์แนบแบบ authenticated
 9. **Backup Security Regression**: ทดสอบ path traversal, incremental backup เมื่อ Ticket เก่ามี comment ใหม่ และการลบรายการ backup ที่ไม่มี archive
-10. **Email → Ticket**: ทดสอบ SMTP feature scope, การสร้าง Ticket/ไฟล์แนบจาก IMAP, การติดชื่อผู้ส่งบน Ticket, log รายอีเมล Imported/Skipped/Failed, Message-ID deduplication, built-in/custom keywords, Sender → Assignee routing ข้ามบริษัทแบบเปลี่ยน tenant context พร้อม default fallback, สิทธิ์ Import Now, หน้า Email Timer, interval gating และ run log
+10. **Email → Ticket**: ทดสอบ SMTP feature scope, การสร้าง Ticket/ไฟล์แนบจาก IMAP, การติดชื่อผู้ส่งบน Ticket, log รายอีเมล Imported/Skipped/Failed, container แบบแท็บร่วมกับ Execution logs, Message-ID deduplication, built-in/custom keywords, Sender → Assignee routing ข้ามบริษัทแบบเปลี่ยน tenant context พร้อม default fallback, สิทธิ์ Import Now, หน้า Email Timer, interval gating และ run log
 11. **In-App Notifications**: ทดสอบกระดิ่งแจ้งเตือน, การเปิด Ticket/ทำเครื่องหมายอ่านแล้ว, Mark all read และป้องกันการอ่านแจ้งเตือนข้ามผู้ใช้หรือข้าม tenant
 
 ---

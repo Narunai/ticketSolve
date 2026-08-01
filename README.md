@@ -88,7 +88,7 @@ Backup archive เก็บที่ `/var/backups/ticketsolve` บน AWS VPS �
 * Production เปิด HTTPS redirect, secure cookies, HSTS, `nosniff` และ referrer policy
 * `SECRET_KEY`, allowed hosts, CSRF origins, SMTP credentials และตำแหน่ง backup กำหนดผ่าน environment file นอก Git checkout
 * หน้า Backup Management แสดง Download เฉพาะ archive ที่มีข้อมูล; รายการขนาด 0 หรือไฟล์หายสามารถลบรายรายการด้วย **Delete empty record** หรือลบรายการ 0 MB ทั้งหมดด้วย **Delete all 0 MB**
-* **System Data (No Tickets)** สร้างทุก 7 วัน: เก็บ Users, Companies, roles, SMTP/IMAP, routing, schedules, categories และค่าระบบใน SQLite ที่ล้าง Ticket ออกจากสำเนาแล้ว โดยไม่รวม `media/` และ runtime secrets
+* **System Data (No Tickets)** สร้างทุก 7 วัน: เก็บ Users, Companies, roles, SMTP/IMAP, routing, schedules, categories และค่าระบบใน SQLite ที่ล้าง Ticket ออกจากสำเนาแล้ว โดยไม่รวม `media/` และ runtime secrets; System Admin สามารถสั่งทันทีด้วยปุ่ม **Run Manually: System Data (No Tickets)** โดยไม่กระทบรอบอัตโนมัติ
 * SMTP Configuration แยกขอบเขตการใช้งานเป็นส่งอีเมล, Email → Ticket หรือทั้งสองฟังก์ชัน โดยมี active configuration แยกตาม feature
 
 ## 📥 Email → Ticket
@@ -99,6 +99,7 @@ Backup archive เก็บที่ `/var/backups/ticketsolve` บน AWS VPS �
 * เก็บ run log 50 รอบล่าสุด พร้อม trigger/ผู้สั่งรัน, สถานะ, จำนวน mailbox,
   found/imported/skipped/duplicate/failed, ระยะเวลา และรายละเอียดข้อผิดพลาด
 * เก็บ log รายอีเมล 100 รายการล่าสุด พร้อม mailbox, ชื่อ/อีเมลผู้ส่ง, subject, Message-ID, ผล Imported/Skipped/Failed, Ticket ที่สร้าง และเหตุผล
+* หน้า Email Timer รวม log รายอีเมลและ execution log ไว้ใน container เดียว โดยสลับดูผ่านแท็บและจำแท็บล่าสุดใน browser
 * Ticket ที่สร้างจากอีเมลจะแสดงการ์ด **Email sender** แยกจาก internal creator เพื่อให้ติดตามผู้แจ้งตัวจริงได้
 * Sender → Assignee routing กำหนดผู้ดูแลตามอีเมลผู้ส่งได้ทุกบริษัท โดย Ticket จะอยู่ในบริษัทของผู้ดูแลเพื่อรักษา tenant isolation; หากไม่มีกฎหรือผู้ดูแลในกฎไม่ active จะใช้ค่า Company/Creator/Default Assignee จาก SMTP
 * Custom subject keywords เป็นคำเพิ่มเติมจากคำมาตรฐาน เช่น `ปัญหา` และ `issue` ไม่ได้แทนที่คำมาตรฐาน
