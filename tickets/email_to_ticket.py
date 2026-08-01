@@ -218,6 +218,20 @@ def _create_ticket(config, message):
         if routing_rule and routing_rule.assignee_id
         else config.email_to_ticket_assignee
     )
+    ticket_company = (
+        assignee.company
+        if routing_rule and assignee and assignee.company_id
+        else config.email_to_ticket_company
+    )
+    ticket_creator = config.email_to_ticket_creator
+    creator_source = 'SMTP_DEFAULT'
+    if (
+        routing_rule
+        and assignee
+        and ticket_creator.company_id != ticket_company.id
+    ):
+        ticket_creator = assignee
+        creator_source = 'ROUTED_ASSIGNEE'
     source_metadata = {
         'source': 'EMAIL_TO_TICKET',
         'smtp_configuration_id': config.pk,
@@ -226,13 +240,15 @@ def _create_ticket(config, message):
         'message_id': message.message_id,
         'routing_rule_id': routing_rule.pk if routing_rule else None,
         'assignment_source': 'SENDER_RULE' if routing_rule else 'SMTP_DEFAULT',
+        'company_source': 'ASSIGNEE_COMPANY' if routing_rule else 'SMTP_DEFAULT',
+        'creator_source': creator_source,
     }
     with transaction.atomic():
         ticket = Ticket.objects.create(
             title=message.subject,
             description=message.body,
-            company=config.email_to_ticket_company,
-            created_by=config.email_to_ticket_creator,
+            company=ticket_company,
+            created_by=ticket_creator,
             assigned_to=assignee,
             category=Ticket.CATEGORY_OTHER,
             custom_fields_data={'email_to_ticket': source_metadata},

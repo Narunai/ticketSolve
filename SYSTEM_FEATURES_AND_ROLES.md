@@ -51,7 +51,7 @@
 * รองรับไฟล์แนบภายใต้ขีดจำกัด 10 MB ต่อไฟล์, 10 ไฟล์ และรวม 50 MB
 * หน้า Email Timer แยกสำหรับเปิด/ปิดและเลือกรอบ 10, 20, 30 นาที (ครึ่งชั่วโมง) หรือ 1 ชั่วโมง
 * กด **Scan now** หรือ **Import Now** เพื่อสแกนทันที พร้อมเก็บ execution log ของทุกครั้งที่ทำงานจริง
-* กำหนด Sender → Assignee routing ต่อ mailbox ได้ และ fallback ไป Default Assignee ใน SMTP เมื่อไม่พบกฎ
+* กำหนด Sender → Assignee routing ต่อ mailbox ได้ทุกบริษัท; Ticket จะอยู่ในบริษัทของผู้ดูแล และ fallback ไปค่า SMTP เมื่อไม่พบกฎ
 * รองรับ Gmail และ Outlook ที่เปิด IMAP; Microsoft Graph/OAuth ยังไม่รวมใน integration นี้
 
 ---

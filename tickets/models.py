@@ -1076,14 +1076,9 @@ class InboundEmailRoutingRule(models.Model):
             )
         if not self.assignee_id:
             errors['assignee'] = 'An assignee is required for an active routing rule.'
-        elif (
-            self.smtp_configuration_id
-            and self.smtp_configuration.email_to_ticket_company_id
-            and self.assignee.company_id
-            != self.smtp_configuration.email_to_ticket_company_id
-        ):
+        elif not self.assignee.company_id:
             errors['assignee'] = (
-                'The assignee must belong to the SMTP target company.'
+                'The assignee must belong to a company.'
             )
         if errors:
             raise ValidationError(errors)

@@ -19,7 +19,7 @@
 7. **Backup System & Management Views**: ทดสอบคำสั่ง Backup (Full & 2-Hr Incremental), การบันทึก `BackupLog`, และการลบประวัติ Backup
 8. **Authorization Regression**: ทดสอบ `CLIENT_USER` เห็นเฉพาะ Ticket ของตน, `CLIENT_STAFF` แก้ไข Ticket ใน tenant ได้, การป้องกัน superuser และการดาวน์โหลดไฟล์แนบแบบ authenticated
 9. **Backup Security Regression**: ทดสอบ path traversal, incremental backup เมื่อ Ticket เก่ามี comment ใหม่ และการลบรายการ backup ที่ไม่มี archive
-10. **Email → Ticket**: ทดสอบ SMTP feature scope, การสร้าง Ticket/ไฟล์แนบจาก IMAP, Message-ID deduplication, built-in/custom keywords, Sender → Assignee routing พร้อม default fallback, สิทธิ์ Import Now, หน้า Email Timer, interval gating และ run log
+10. **Email → Ticket**: ทดสอบ SMTP feature scope, การสร้าง Ticket/ไฟล์แนบจาก IMAP, Message-ID deduplication, built-in/custom keywords, Sender → Assignee routing ข้ามบริษัทแบบเปลี่ยน tenant context พร้อม default fallback, สิทธิ์ Import Now, หน้า Email Timer, interval gating และ run log
 
 ---
 

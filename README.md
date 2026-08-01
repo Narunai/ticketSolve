@@ -96,7 +96,7 @@ Backup archive เก็บที่ `/var/backups/ticketsolve` บน AWS VPS �
 * กด **Scan now** หรือ **Import Now** เพื่อสแกนทันทีโดยไม่รอรอบ
 * เก็บ run log 50 รอบล่าสุด พร้อม trigger/ผู้สั่งรัน, สถานะ, จำนวน mailbox,
   found/imported/skipped/duplicate/failed, ระยะเวลา และรายละเอียดข้อผิดพลาด
-* Sender → Assignee routing กำหนดผู้ดูแลตามอีเมลผู้ส่ง หากไม่มีกฎหรือผู้ดูแลในกฎไม่ active จะใช้ Default Assignee จาก SMTP
+* Sender → Assignee routing กำหนดผู้ดูแลตามอีเมลผู้ส่งได้ทุกบริษัท โดย Ticket จะอยู่ในบริษัทของผู้ดูแลเพื่อรักษา tenant isolation; หากไม่มีกฎหรือผู้ดูแลในกฎไม่ active จะใช้ค่า Company/Creator/Default Assignee จาก SMTP
 * Custom subject keywords เป็นคำเพิ่มเติมจากคำมาตรฐาน เช่น `ปัญหา` และ `issue` ไม่ได้แทนที่คำมาตรฐาน
 * อ่านเฉพาะข้อความ `UNSEEN` ย้อนหลังตามจำนวนวันที่กำหนด และจำกัดจำนวนต่อรอบ
 * กรอง subject ด้วย keyword ไทย/อังกฤษก่อนสร้าง Ticket ได้

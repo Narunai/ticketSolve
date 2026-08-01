@@ -766,18 +766,6 @@ class InboundEmailRoutingRuleForm(forms.ModelForm):
             company__isnull=False,
         ).order_by('company__name', 'username')
 
-        config_id = self.data.get('smtp_configuration') if self.is_bound else None
-        if not config_id and self.instance and self.instance.pk:
-            config_id = self.instance.smtp_configuration_id
-        try:
-            config = SMTPConfiguration.objects.filter(pk=int(config_id)).first()
-        except (TypeError, ValueError):
-            config = None
-        if config and config.email_to_ticket_company_id:
-            self.fields['assignee'].queryset = self.fields['assignee'].queryset.filter(
-                company_id=config.email_to_ticket_company_id,
-            )
-
     def clean_sender_email(self):
         return self.cleaned_data['sender_email'].strip().casefold()
 

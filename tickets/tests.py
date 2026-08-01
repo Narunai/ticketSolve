@@ -768,7 +768,7 @@ class MultiTenantTicketTests(TestCase):
         routing_rule = InboundEmailRoutingRule.objects.create(
             smtp_configuration=config,
             sender_email='EXTERNAL@EXAMPLE.COM',
-            assignee=self.admin_a,
+            assignee=self.user_b,
             is_active=True,
         )
         system_notification = InboundMessage(
@@ -818,9 +818,9 @@ class MultiTenantTicketTests(TestCase):
         self.assertEqual(second['duplicates'], 1)
         self.assertEqual(Ticket.objects.count(), ticket_count + 2)
         imported_ticket = Ticket.objects.get(title='Issue: VPN connection failed')
-        self.assertEqual(imported_ticket.company, self.company_a)
-        self.assertEqual(imported_ticket.created_by, self.user_a)
-        self.assertEqual(imported_ticket.assigned_to, self.admin_a)
+        self.assertEqual(imported_ticket.company, self.company_b)
+        self.assertEqual(imported_ticket.created_by, self.user_b)
+        self.assertEqual(imported_ticket.assigned_to, self.user_b)
         self.assertEqual(
             imported_ticket.custom_fields_data['email_to_ticket']['routing_rule_id'],
             routing_rule.pk,
@@ -829,6 +829,16 @@ class MultiTenantTicketTests(TestCase):
             imported_ticket.custom_fields_data['email_to_ticket']['assignment_source'],
             'SENDER_RULE',
         )
+        self.assertEqual(
+            imported_ticket.custom_fields_data['email_to_ticket']['company_source'],
+            'ASSIGNEE_COMPANY',
+        )
+        self.assertEqual(
+            imported_ticket.custom_fields_data['email_to_ticket']['creator_source'],
+            'ROUTED_ASSIGNEE',
+        )
+        self.assertEqual(fallback_ticket.company, self.company_a)
+        self.assertEqual(fallback_ticket.created_by, self.user_a)
         self.assertEqual(fallback_ticket.assigned_to, self.user_a)
         self.assertEqual(
             fallback_ticket.custom_fields_data['email_to_ticket']['assignment_source'],
@@ -946,7 +956,7 @@ class MultiTenantTicketTests(TestCase):
                 {
                     'smtp_configuration': config.pk,
                     'sender_email': 'CUSTOMER@EXAMPLE.COM',
-                    'assignee': self.admin_a.pk,
+                    'assignee': self.user_b.pk,
                     'is_active': 'on',
                 },
             ).status_code,
@@ -960,7 +970,7 @@ class MultiTenantTicketTests(TestCase):
             {
                 'smtp_configuration': config.pk,
                 'sender_email': 'CUSTOMER@EXAMPLE.COM',
-                'assignee': self.admin_a.pk,
+                'assignee': self.user_b.pk,
                 'is_active': 'on',
             },
         )
@@ -969,7 +979,7 @@ class MultiTenantTicketTests(TestCase):
             smtp_configuration=config,
         )
         self.assertEqual(rule.sender_email, 'customer@example.com')
-        self.assertEqual(rule.assignee, self.admin_a)
+        self.assertEqual(rule.assignee, self.user_b)
 
     def test_email_timer_command_respects_interval_and_creates_run_log(self):
         import tempfile
