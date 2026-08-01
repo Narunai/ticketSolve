@@ -6,6 +6,7 @@ urlpatterns = [
     path('', RedirectView.as_view(url='dashboard/', permanent=False)),
     path('login/', views.CustomLoginView.as_view(), name='login'),
     path('logout/', views.custom_logout, name='logout'),
+    path('account/password/', views.AccountPasswordView.as_view(), name='account_password'),
     path('dashboard/', views.DashboardView.as_view(), name='dashboard'),
     path('ticket/create/', views.TicketCreateView.as_view(), name='ticket_create'),
     path('ticket/<int:pk>/', views.TicketDetailView.as_view(), name='ticket_detail'),
@@ -25,6 +26,7 @@ urlpatterns = [
     path('users/', views.UserListView.as_view(), name='user_list'),
     path('users/create/', views.UserCreateView.as_view(), name='user_create'),
     path('users/<int:pk>/edit/', views.UserUpdateView.as_view(), name='user_update'),
+    path('users/<int:pk>/simple-password/generate/', views.SimplePasswordGenerateView.as_view(), name='simple_password_generate'),
 
     # Custom Company Management URLs
     path('companies/', views.CompanyListView.as_view(), name='company_list'),

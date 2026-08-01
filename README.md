@@ -93,6 +93,8 @@ Backup archive เก็บที่ `/var/backups/ticketsolve` บน AWS VPS �
 * Production เปิด HTTPS redirect, secure cookies, HSTS, `nosniff` และ referrer policy
 * ล็อกอินถูกจำกัด 5 ครั้งต่อช่วง 15 นาทีทั้งระดับบัญชีและ IP พร้อม Security Audit Log; logout ใช้ POST + CSRF
 * รหัสผ่านเว็บใช้ Argon2 เป็นค่าเริ่มต้น, กำหนดขั้นต่ำ 12 ตัวอักษร และ session หมดอายุภายใน 8 ชั่วโมง/เมื่อปิด browser
+* Simple Password ใช้ได้เฉพาะบัญชีที่ System Admin/System Sub-Admin หรือ Client Admin ตามขอบเขตอนุมัติ ผู้ใช้จึงตั้งรหัสแบบจำง่ายอย่าง `123456` (อย่างน้อย 6 ตัวอักษร) และใช้ต่อเนื่องได้ โดยบัญชีประเภทนี้จะ lock 10 นาทีเมื่อกรอกผิดครบ 5 ครั้ง
+* ไม่มีผู้ใช้หรือผู้ดูแลคนใดเปิดดูรหัสเดิมย้อนหลังได้ รหัสจริงยังคงเป็น Argon2 one-way hash; เจ้าของบัญชีและผู้ดูแลตามขอบเขตทำได้เฉพาะตั้งรหัสใหม่หรือสร้างรหัส Simple Password แบบตัวเลข 6 หลักซึ่งแสดงครั้งเดียว
 * รหัสผ่าน SMTP/IMAP เข้ารหัสด้วย Fernet ในฐานข้อมูล โดย key แยกออกจาก Git และ backup
 * ไฟล์แนบตรวจทั้ง allowlist, นามสกุล และ file signature รวมถึงจำกัด zip bomb/macro ในไฟล์ Office
 * Dependency หลักตรึงเวอร์ชันและตรวจด้วย `pip-audit`; security headers และ login rate limit ถูกบังคับทั้ง Django/Nginx

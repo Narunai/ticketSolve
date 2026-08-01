@@ -106,6 +106,18 @@ class CustomUser(AbstractUser):
         blank=True,
         related_name='users'
     )
+    simple_password_enabled = models.BooleanField(
+        default=False,
+        help_text='Allows this user to set a persistent password with a minimum length of 6 characters.',
+    )
+    simple_password_approved_by = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='simple_password_approvals',
+    )
+    simple_password_approved_at = models.DateTimeField(null=True, blank=True)
 
     @property
     def effective_role_display(self):

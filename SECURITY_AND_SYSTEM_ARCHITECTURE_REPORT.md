@@ -17,9 +17,10 @@
 - เข้ารหัส SMTP/IMAP password ในฐานข้อมูลด้วย Fernet โดย key แยกจากฐานข้อมูล, Git และ backup
 - ตรวจไฟล์แนบด้วย allowlist + file signature ทุกช่องทาง รวม Ticket, Comment และ Email → Ticket พร้อมป้องกัน Office macro/zip bomb เบื้องต้น
 - เพิ่ม Security Audit Log โดยไม่เก็บ username/IP ของ anonymous login เป็นข้อความตรง แต่เก็บ HMAC fingerprint
+- เพิ่ม Simple Password แบบ admin-approved สำหรับผู้สูงอายุหรือผู้ใช้ที่ไม่ถนัดเทคโนโลยี: อนุญาตรหัสอย่าง `123456` เฉพาะบัญชีที่ได้รับอนุมัติ, เก็บเป็น Argon2 hash, ใช้ต่อเนื่องได้ และ lock 10 นาทีหลังผิดครบ 5 ครั้ง โดยไม่เปิดทางให้ดึงรหัสเดิมย้อนหลัง
 - เพิ่ม security headers, HSTS preload, authenticated-page no-store และ hardening ของ Nginx/Gunicorn service
 - ตรึงเวอร์ชัน production dependencies และตรวจพบ **0 known vulnerabilities** ด้วย `pip-audit` ณ วันที่รายงาน
-- เพิ่ม security regression tests 5 รายการ; ชุดทดสอบรวม 89 รายการ
+- เพิ่ม security regression tests และ Simple Password regression tests; ชุดทดสอบรวม 97 รายการ
 
 ## 2. มาตรฐานอ้างอิงและเป้าหมาย
 

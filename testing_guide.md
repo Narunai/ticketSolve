@@ -8,7 +8,7 @@
 
 ## 📌 1. ภาพรวมชุดทดสอบ (Test Suite Overview)
 
-ชุดทดสอบอยู่ใน `tickets/tests.py` ปัจจุบันมี test methods 89 รายการ ครอบคลุม:
+ชุดทดสอบอยู่ใน `tickets/tests.py` ปัจจุบันมี test methods 97 รายการ ครอบคลุม:
 
 1. **Multi-Tenant Data Isolation**: ตรวจสอบว่าพนักงาน/ผู้บริหารแต่ละบริษัทเห็นเฉพาะ Ticket ในบริษัทตนเองเท่านั้น
 2. **Role-Based Access Control (RBAC)**: ตรวจสอบสิทธิ์การเข้าถึง URL และการทำรายการของผู้ใช้ทั้ง 5 บทบาท รวมถึงลำดับกลุ่มเมนู sidebar และการแสดงชื่อ/บริษัท/effective role ที่ถูกต้องแม้บัญชี superuser รุ่นเก่าจะมีค่า role ไม่ตรง
@@ -20,6 +20,7 @@
 8. **Authorization Regression**: ทดสอบ `CLIENT_USER` เห็นเฉพาะ Ticket ของตน, `CLIENT_STAFF` แก้ไข Ticket ใน tenant ได้, การป้องกัน superuser และการดาวน์โหลดไฟล์แนบแบบ authenticated
 9. **Backup Security Regression**: ทดสอบ path traversal, incremental backup เมื่อ Ticket เก่ามี comment ใหม่ และการลบรายการ backup ที่ไม่มี archive
 10. **Security Baseline Regression**: login throttling, POST-only logout, security audit, SMTP encryption at rest, file-signature validation, security headers และ open-redirect protection
+11. **Simple Password**: approval scope, persistent password อย่าง `123456`, one-time display ของรหัสที่สุ่มใหม่, Argon2 storage, System Sub-Admin restrictions, tenant isolation, owner reset, การห้ามบัญชีที่ไม่ได้รับอนุมัติใช้รหัสง่าย และ lock 10 นาที
 10. **Email → Ticket**: ทดสอบ SMTP feature scope, การสร้าง Ticket/ไฟล์แนบจาก IMAP, การติดชื่อผู้ส่งบน Ticket, log รายอีเมล Imported/Skipped/Failed, container แบบแท็บร่วมกับ Execution logs, Message-ID deduplication, built-in/custom keywords, Sender → Assignee routing ข้ามบริษัทแบบเปลี่ยน tenant context พร้อม default fallback, สิทธิ์ Import Now, หน้า Email Timer, interval gating และ run log
 11. **In-App Notifications**: ทดสอบกระดิ่งแจ้งเตือน, การเปิด Ticket/ทำเครื่องหมายอ่านแล้ว, Mark all read และป้องกันการอ่านแจ้งเตือนข้ามผู้ใช้หรือข้าม tenant
 
@@ -62,12 +63,12 @@ pytest
 ผลที่ยืนยันล่าสุดวันที่ 2 สิงหาคม 2026:
 
 ```text
-Found 89 test(s).
-Ran 89 tests in 25.800s
+Found 97 test(s).
+Ran 97 tests in 29.219s
 OK
 System check identified no issues (0 silenced).
 ```
 
-* **Discovered test methods**: 89
-* **Full suite**: ผ่านครบ 89/89 บน development environment (Django 5.2.16)
+* **Discovered test methods**: 97
+* **Full suite**: ผ่านครบ 97/97 บน development environment (Django 5.2.16)
 * **Dependency audit**: `pip-audit -r requirements.txt` ไม่พบ known vulnerabilities

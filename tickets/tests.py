@@ -2781,3 +2781,159 @@ class SecurityBaselineTests(TestCase):
         self.assertEqual(safe_redirect_target(request, '/logs/', '/dashboard/'), '/logs/')
 
 
+class SimplePasswordTests(TestCase):
+    def setUp(self):
+        self.company_a = Company.objects.create(name='Simple Password Company A')
+        self.company_b = Company.objects.create(name='Simple Password Company B')
+        self.system_admin = User.objects.create_user(
+            username='simple_system_admin', password='StrongPassword123!',
+            role=User.SYSTEM_ADMIN, is_staff=True,
+        )
+        self.system_sub_admin = User.objects.create_user(
+            username='simple_sub_admin', password='StrongPassword123!',
+            role=User.SYSTEM_SUB_ADMIN, is_staff=True,
+        )
+        self.client_admin_a = User.objects.create_user(
+            username='simple_client_admin_a', password='StrongPassword123!',
+            role=User.CLIENT_ADMIN, company=self.company_a, is_staff=True,
+        )
+        self.user_a = User.objects.create_user(
+            username='simple_user_a', email='simple-a@example.com',
+            password='StrongPassword123!', role=User.CLIENT_USER,
+            company=self.company_a,
+        )
+        self.user_b = User.objects.create_user(
+            username='simple_user_b', email='simple-b@example.com',
+            password='StrongPassword123!', role=User.CLIENT_USER,
+            company=self.company_b,
+        )
+
+    def _enable_simple_password(self, target, actor=None):
+        target.simple_password_enabled = True
+        target.simple_password_approved_by = actor or self.system_admin
+        target.simple_password_approved_at = timezone.now()
+        target.save(update_fields=[
+            'simple_password_enabled', 'simple_password_approved_by',
+            'simple_password_approved_at',
+        ])
+
+    def _generate(self, actor, target):
+        self.client.force_login(actor)
+        response = self.client.post(reverse('simple_password_generate', args=[target.pk]))
+        password = response.context['simple_password'] if response.status_code == 200 else None
+        return response, password
+
+    def test_system_admin_can_approve_and_issue_but_password_is_never_stored_plaintext(self):
+        from .models import SecurityAuditLog
+
+        self.client.force_login(self.system_admin)
+        response = self.client.post(reverse('user_update', args=[self.user_a.pk]), {
+            'username': self.user_a.username,
+            'email': self.user_a.email,
+            'password': '123456',
+            'role': User.CLIENT_USER,
+            'company': self.company_a.pk,
+            'simple_password_enabled': 'on',
+        })
+        self.assertRedirects(response, reverse('user_list'))
+        self.user_a.refresh_from_db()
+        self.assertTrue(self.user_a.simple_password_enabled)
+        self.assertEqual(self.user_a.simple_password_approved_by, self.system_admin)
+        self.assertTrue(self.user_a.check_password('123456'))
+
+        response, simple_password = self._generate(self.system_admin, self.user_a)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(simple_password), 6)
+        self.assertTrue(simple_password.isdigit())
+        self.user_a.refresh_from_db()
+        self.assertTrue(self.user_a.check_password(simple_password))
+        self.assertNotIn(simple_password, self.user_a.password)
+        self.assertTrue(SecurityAuditLog.objects.filter(
+            event_type='SIMPLE_PASSWORD_GENERATE', target_id=str(self.user_a.pk),
+        ).exists())
+
+    def test_company_admin_is_limited_to_own_company_scope(self):
+        self._enable_simple_password(self.user_a, self.client_admin_a)
+        self._enable_simple_password(self.user_b, self.system_admin)
+
+        allowed, password = self._generate(self.client_admin_a, self.user_a)
+        self.assertEqual(allowed.status_code, 200)
+        self.assertIsNotNone(password)
+
+        denied, _ = self._generate(self.client_admin_a, self.user_b)
+        self.assertEqual(denied.status_code, 403)
+
+    def test_system_sub_admin_cannot_reset_system_admin(self):
+        self._enable_simple_password(self.user_b, self.system_admin)
+        allowed, _ = self._generate(self.system_sub_admin, self.user_b)
+        self.assertEqual(allowed.status_code, 200)
+
+        self._enable_simple_password(self.system_admin, self.system_admin)
+        denied, _ = self._generate(self.system_sub_admin, self.system_admin)
+        self.assertEqual(denied.status_code, 403)
+
+    def test_owner_can_issue_only_after_admin_approval(self):
+        denied, _ = self._generate(self.user_a, self.user_a)
+        self.assertEqual(denied.status_code, 403)
+
+        self._enable_simple_password(self.user_a, self.client_admin_a)
+        allowed, simple_password = self._generate(self.user_a, self.user_a)
+        self.assertEqual(allowed.status_code, 200)
+        self.assertContains(allowed, simple_password)
+        self.assertEqual(self.client.get(reverse('dashboard')).status_code, 200)
+
+    def test_simple_password_account_locks_for_ten_minutes_after_five_failures(self):
+        self._enable_simple_password(self.user_a)
+        self.client.logout()
+        for attempt in range(5):
+            response = self.client.post(reverse('login'), {
+                'username': self.user_a.username,
+                'password': 'wrong-password',
+            })
+        self.assertEqual(response.status_code, 429)
+        retry_after = int(response['Retry-After'])
+        self.assertGreaterEqual(retry_after, 590)
+        self.assertLessEqual(retry_after, 601)
+
+    def test_approved_owner_can_set_and_keep_123456(self):
+        self._enable_simple_password(self.user_a)
+        self.client.force_login(self.user_a)
+        changed = self.client.post(reverse('account_password'), {
+            'old_password': 'StrongPassword123!',
+            'new_password1': '123456',
+            'new_password2': '123456',
+        })
+        self.assertRedirects(changed, reverse('dashboard'))
+        self.user_a.refresh_from_db()
+        self.assertTrue(self.user_a.check_password('123456'))
+        self.client.logout()
+        self.assertTrue(self.client.login(username=self.user_a.username, password='123456'))
+        self.assertEqual(self.client.get(reverse('dashboard')).status_code, 200)
+
+    def test_unapproved_owner_cannot_set_123456(self):
+        self.client.force_login(self.user_a)
+        response = self.client.post(reverse('account_password'), {
+            'old_password': 'StrongPassword123!',
+            'new_password1': '123456',
+            'new_password2': '123456',
+        })
+        self.assertEqual(response.status_code, 200)
+        self.user_a.refresh_from_db()
+        self.assertFalse(self.user_a.check_password('123456'))
+
+    def test_existing_password_is_not_rendered_to_admin_or_owner(self):
+        secret = 'Never-Render-This-Password-2026!'
+        self.user_a.set_password(secret)
+        self.user_a.save(update_fields=['password'])
+
+        self.client.force_login(self.system_admin)
+        admin_page = self.client.get(reverse('user_update', args=[self.user_a.pk]))
+        self.assertNotContains(admin_page, secret)
+        self.assertContains(admin_page, 'Leave blank if you do not want to change the password')
+
+        self.client.force_login(self.user_a)
+        owner_page = self.client.get(reverse('account_password'))
+        self.assertNotContains(owner_page, secret)
+        self.assertContains(owner_page, 'Existing passwords are one-way hashes')
+
+

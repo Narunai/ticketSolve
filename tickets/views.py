@@ -1,18 +1,21 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.contrib.auth.views import LoginView
-from django.contrib.auth import logout
+from django.contrib.auth import logout, update_session_auth_hash
+from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib.auth.password_validation import validate_password
-from django.views.generic import CreateView, UpdateView, DetailView, TemplateView, ListView
+from django.views.generic import CreateView, UpdateView, DetailView, TemplateView, ListView, FormView
 from django.urls import reverse, reverse_lazy
 
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.http import FileResponse
 from django.views.decorators.http import require_POST
 from .models import Ticket, CustomUser, Company, EmailLog, TicketAuditLog, SecurityAuditLog, ReportViewLog, MonthlyReportSchedule, TicketAutomationConfig, SMTPConfiguration, InboundEmailReceipt, InboundEmailRoutingRule, EmailToTicketSchedule, EmailToTicketRunLog, InAppNotification, get_smtp_connection, get_smtp_from_email, TicketComment, TicketAttachment, CommentAttachment, TicketCategory, ResolutionCategory, ModuleCategory, TicketStatusConfig, CompanyTicketConfig, CompanyTicketField, NotificationConfig, should_send_email_notification, BackupLog, BackupSchedule
 from .backup_service import perform_full_backup, perform_incremental_backup, perform_system_data_backup, get_backup_file_path, FileLock
 from .email_to_ticket_scheduler import run_email_to_ticket_cycle
 from .permissions import (
+    can_approve_simple_password,
+    can_manage_simple_password,
     is_system_staff,
     is_tenant_admin,
     is_ticket_staff,
@@ -20,7 +23,9 @@ from .permissions import (
     visible_tickets_for,
 )
 from .security import (
+    clear_account_login_failures,
     clear_login_failures,
+    generate_simple_password,
     login_retry_after,
     record_login_failure,
     safe_redirect_target,
@@ -995,6 +1000,20 @@ class CompanyForm(forms.ModelForm):
         )
 
 
+class SimpleAwarePasswordChangeForm(PasswordChangeForm):
+    def validate_password_for_user(self, user, password_field_name='password2'):
+        password = self.cleaned_data.get(password_field_name)
+        if not password:
+            return
+        if user.simple_password_enabled:
+            if len(password) < 6:
+                self.add_error(password_field_name, 'Simple passwords must contain at least 6 characters.')
+            elif len(password) > 128:
+                self.add_error(password_field_name, 'Password must not exceed 128 characters.')
+            return
+        super().validate_password_for_user(user, password_field_name)
+
+
 class CustomUserForm(forms.ModelForm):
     password = forms.CharField(
         widget=forms.PasswordInput(attrs={
@@ -1007,7 +1026,7 @@ class CustomUserForm(forms.ModelForm):
 
     class Meta:
         model = CustomUser
-        fields = ['username', 'email', 'password', 'role', 'company']
+        fields = ['username', 'email', 'password', 'role', 'company', 'simple_password_enabled']
         widgets = {
             'username': forms.TextInput(attrs={
                 'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all',
@@ -1022,12 +1041,26 @@ class CustomUserForm(forms.ModelForm):
             }),
             'company': forms.Select(attrs={
                 'class': 'w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all'
-            })
+            }),
+            'simple_password_enabled': forms.CheckboxInput(attrs={
+                'class': 'h-4 w-4 rounded border-slate-600 bg-slate-900 text-indigo-500 focus:ring-indigo-500'
+            }),
         }
 
     def __init__(self, *args, **kwargs):
         user = kwargs.pop('user', None)
+        self.request_user = user
         super().__init__(*args, **kwargs)
+        self.fields['simple_password_enabled'].label = 'Allow Simple Password'
+        self.fields['simple_password_enabled'].help_text = (
+            'After an authorized administrator approves this option, the user may keep '
+            'a simple password of at least 6 characters, such as 123456.'
+        )
+        if (
+            self.instance and self.instance.pk
+            and not can_approve_simple_password(user, self.instance)
+        ):
+            self.fields['simple_password_enabled'].disabled = True
         
         if self.instance and self.instance.pk:
             self.fields['password'].required = False
@@ -1070,11 +1103,37 @@ class CustomUserForm(forms.ModelForm):
             else:
                 self.fields['company'].choices = get_company_tree_choices(allow_empty=True, empty_label='---------')
 
-    def clean_password(self):
-        password = self.cleaned_data.get('password')
+    def clean(self):
+        cleaned = super().clean()
+        password = cleaned.get('password')
+        simple_enabled = bool(cleaned.get('simple_password_enabled'))
+
+        if self.instance and self.instance.pk:
+            original = CustomUser.objects.get(pk=self.instance.pk)
+            if simple_enabled != original.simple_password_enabled:
+                if not can_approve_simple_password(self.request_user, original):
+                    self.add_error(
+                        'simple_password_enabled',
+                        'Only an administrator within the permitted organization scope may change this approval.',
+                    )
+            if original.simple_password_enabled and not simple_enabled and not password:
+                self.add_error(
+                    'password',
+                    'Set a standard password before disabling Simple Password permission.',
+                )
+
         if password:
-            validate_password(password, self.instance)
-        return password
+            if simple_enabled:
+                if len(password) < 6:
+                    self.add_error('password', 'Simple passwords must contain at least 6 characters.')
+                if len(password) > 128:
+                    self.add_error('password', 'Password must not exceed 128 characters.')
+            else:
+                try:
+                    validate_password(password, self.instance)
+                except ValidationError as exc:
+                    self.add_error('password', exc)
+        return cleaned
 
 
     def save(self, commit=True):
@@ -1895,6 +1954,59 @@ class ResendEmailView(LoginRequiredMixin, SystemStaffRequiredMixin, View):
 # Custom User Management Views
 
 
+class AccountPasswordView(LoginRequiredMixin, FormView):
+    template_name = 'tickets/account_password.html'
+    form_class = SimpleAwarePasswordChangeForm
+    success_url = reverse_lazy('dashboard')
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        return kwargs
+
+    def form_valid(self, form):
+        user = form.save()
+        update_session_auth_hash(self.request, user)
+        write_security_audit(
+            self.request, 'PASSWORD_CHANGE', SecurityAuditLog.OUTCOME_SUCCESS,
+            actor=user, target_type='CustomUser', target_id=user.pk,
+            details='Account owner changed password; password value was not logged.',
+        )
+        messages.success(self.request, 'Password changed successfully.')
+        return super().form_valid(form)
+
+
+class SimplePasswordGenerateView(LoginRequiredMixin, View):
+    template_name = 'tickets/simple_password_generated.html'
+
+    def post(self, request, pk, *args, **kwargs):
+        target = get_object_or_404(CustomUser, pk=pk)
+        if not can_manage_simple_password(request.user, target):
+            raise PermissionDenied
+        if not target.simple_password_enabled:
+            messages.error(request, 'Simple Password has not been approved for this account.')
+            return redirect('user_update', pk=target.pk) if is_tenant_admin(request.user) else redirect('account_password')
+
+        simple_password = generate_simple_password()
+        target.set_password(simple_password)
+        target.save(update_fields=['password'])
+        if request.user.pk == target.pk:
+            update_session_auth_hash(request, target)
+        clear_account_login_failures(target.username, target.email)
+        write_security_audit(
+            request, 'SIMPLE_PASSWORD_GENERATE', SecurityAuditLog.OUTCOME_SUCCESS,
+            actor=request.user, target_type='CustomUser', target_id=target.pk,
+            details='Random Simple Password generated; password value was not logged.',
+        )
+        response = render(request, self.template_name, {
+            'target_user': target,
+            'simple_password': simple_password,
+        })
+        response['Cache-Control'] = 'no-store, private'
+        response['Pragma'] = 'no-cache'
+        return response
+
+
 
 class UserListView(LoginRequiredMixin, AdminRequiredMixin, ListView):
     model = CustomUser
@@ -1940,8 +2052,18 @@ class UserCreateView(LoginRequiredMixin, AdminRequiredMixin, CreateView):
             CustomUser.CLIENT_ADMIN,
         ]
         form.instance.is_superuser = False
-            
-        return super().form_valid(form)
+        if form.cleaned_data.get('simple_password_enabled'):
+            form.instance.simple_password_approved_by = user
+            form.instance.simple_password_approved_at = timezone.now()
+
+        response = super().form_valid(form)
+        if form.cleaned_data.get('simple_password_enabled'):
+            write_security_audit(
+                self.request, 'SIMPLE_PASSWORD_APPROVAL', SecurityAuditLog.OUTCOME_SUCCESS,
+                actor=user, target_type='CustomUser', target_id=self.object.pk,
+                details='Simple Password permission approved; no password value logged.',
+            )
+        return response
 
 class UserUpdateView(LoginRequiredMixin, AdminRequiredMixin, UpdateView):
     model = CustomUser
@@ -1978,8 +2100,19 @@ class UserUpdateView(LoginRequiredMixin, AdminRequiredMixin, UpdateView):
             return queryset
         return queryset.none()
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['can_generate_simple_password'] = can_manage_simple_password(
+            self.request.user, self.object
+        )
+        context['can_approve_simple_password'] = can_approve_simple_password(
+            self.request.user, self.object
+        )
+        return context
+
     def form_valid(self, form):
         user = self.request.user
+        original = CustomUser.objects.get(pk=self.object.pk)
         if not user.is_superuser and user.role in [CustomUser.CLIENT_ADMIN, CustomUser.SYSTEM_SUB_ADMIN]:
             if user.role == CustomUser.CLIENT_ADMIN:
                 form.instance.company = user.company
@@ -1992,8 +2125,32 @@ class UserUpdateView(LoginRequiredMixin, AdminRequiredMixin, UpdateView):
         ]
         if not user.is_superuser:
             form.instance.is_superuser = False
-            
-        return super().form_valid(form)
+
+        approval_changed = (
+            original.simple_password_enabled
+            != bool(form.cleaned_data.get('simple_password_enabled'))
+        )
+        if approval_changed and form.cleaned_data.get('simple_password_enabled'):
+            form.instance.simple_password_approved_by = user
+            form.instance.simple_password_approved_at = timezone.now()
+        elif approval_changed:
+            form.instance.simple_password_approved_by = None
+            form.instance.simple_password_approved_at = None
+
+        response = super().form_valid(form)
+        if approval_changed:
+            write_security_audit(
+                self.request, 'SIMPLE_PASSWORD_APPROVAL', SecurityAuditLog.OUTCOME_SUCCESS,
+                actor=user, target_type='CustomUser', target_id=self.object.pk,
+                details=f'Simple Password permission set to {self.object.simple_password_enabled}.',
+            )
+        elif form.cleaned_data.get('password'):
+            write_security_audit(
+                self.request, 'PASSWORD_RESET', SecurityAuditLog.OUTCOME_SUCCESS,
+                actor=user, target_type='CustomUser', target_id=self.object.pk,
+                details='Administrator reset password; password value was not logged.',
+            )
+        return response
 
 
 # Custom Company Management Views

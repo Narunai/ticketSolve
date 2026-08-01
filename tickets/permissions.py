@@ -40,6 +40,36 @@ def is_tenant_admin(user):
     )
 
 
+def can_manage_simple_password(actor, target):
+    """Return whether actor may approve/reset target's Simple Password.
+
+    Real passwords remain one-way hashes. This permission only controls the
+    Simple Password workflow and deliberately protects Django
+    superusers from app-level administrators.
+    """
+    if not actor or not actor.is_authenticated or not target or target.is_superuser:
+        return False
+    if actor.pk == target.pk:
+        return bool(target.simple_password_enabled)
+    if actor.is_superuser:
+        return True
+    if actor.role == CustomUser.SYSTEM_ADMIN:
+        return True
+    if actor.role == CustomUser.SYSTEM_SUB_ADMIN:
+        return target.role not in {CustomUser.SYSTEM_ADMIN, CustomUser.SYSTEM_SUB_ADMIN}
+    if actor.role == CustomUser.CLIENT_ADMIN and actor.company_id and target.company_id:
+        return (
+            target.company_id in actor.company.get_all_subsidiary_ids()
+            and target.role not in {CustomUser.SYSTEM_ADMIN, CustomUser.SYSTEM_SUB_ADMIN}
+        )
+    return False
+
+
+def can_approve_simple_password(actor, target):
+    """Approval follows admin scope; account owners cannot self-approve."""
+    return bool(actor and target and actor.pk != target.pk and can_manage_simple_password(actor, target))
+
+
 def visible_tickets_for(user, queryset=None):
     """
     Return the only tickets a user may read.

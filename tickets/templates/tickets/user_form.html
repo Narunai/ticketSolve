@@ -95,10 +95,31 @@
                     </div>
                     {% endif %}
                 </div>
+
+                <div class="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
+                    <label for="{{ form.simple_password_enabled.id_for_label }}" class="flex items-start gap-3">
+                        {{ form.simple_password_enabled }}
+                        <span>
+                            <span class="block text-sm font-semibold text-amber-200">{{ form.simple_password_enabled.label }}</span>
+                            <span class="block text-xs text-slate-400 mt-1">{{ form.simple_password_enabled.help_text }}</span>
+                        </span>
+                    </label>
+                    {% if object and object.simple_password_enabled %}
+                    <div class="mt-3 text-xs text-slate-400">
+                        Approved by {{ object.simple_password_approved_by.username|default:"System administrator" }}
+                        {% if object.simple_password_approved_at %}on {{ object.simple_password_approved_at|date:"Y-m-d H:i" }}{% endif %}.
+                    </div>
+                    {% endif %}
+                </div>
             </div>
 
             <!-- Action buttons -->
-            <div class="pt-6 border-t border-slate-800 flex items-center justify-end gap-4">
+            <div class="pt-6 border-t border-slate-800 flex flex-wrap items-center justify-end gap-4">
+                {% if object and object.simple_password_enabled and can_generate_simple_password %}
+                <button type="submit" formaction="{% url 'simple_password_generate' object.pk %}" formmethod="post" class="px-5 py-2.5 rounded-lg text-sm font-semibold border border-amber-500/40 text-amber-200 hover:bg-amber-500/10 transition-all">
+                    Generate Random Simple Password
+                </button>
+                {% endif %}
                 <a href="{% url 'user_list' %}" class="px-5 py-2.5 rounded-lg text-sm font-semibold border border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800 transition-all">
                     {{ t.cancel }}
                 </a>

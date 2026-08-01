@@ -106,3 +106,15 @@ Sidebar แสดงชื่อผู้ใช้ บริษัท/ส่ว�
 
 ภาพรวมระบบทั้งหมด, architecture/trust-boundary diagrams, มาตรฐานอ้างอิง, รายการแก้ไขและ residual risks อยู่ที่
 [`SECURITY_AND_SYSTEM_ARCHITECTURE_REPORT.md`](SECURITY_AND_SYSTEM_ARCHITECTURE_REPORT.md)
+
+## Simple Password (Admin-approved)
+
+* System Admin อนุมัติ/ตั้ง Simple Password ให้บัญชีที่ไม่ใช่ Django superuser ได้ทุกบริษัท
+* System Sub-Admin อนุมัติ/ตั้งให้บัญชี Client ได้ แต่แตะ System Admin/Sub-Admin ไม่ได้
+* Client Admin อนุมัติ/ตั้งให้สมาชิกในบริษัทและบริษัทลูกตาม tenant scope
+* เจ้าของบัญชีตั้งรหัสแบบจำง่ายของตนเองได้หลัง Admin อนุมัติแล้ว
+* บัญชีที่ได้รับอนุมัติใช้รหัสอย่าง `123456` ได้ (อย่างน้อย 6 ตัวอักษร) และใช้ต่อเนื่องจนกว่าจะเปลี่ยนรหัสหรือผู้ดูแลยกเลิกสิทธิ์
+* เจ้าของบัญชีหรือผู้ดูแลตามขอบเขตสามารถสร้างรหัสตัวเลข 6 หลักใหม่ ระบบแสดงค่าเพียง response เดียวและเก็บเฉพาะ Argon2 hash
+* บัญชีประเภทนี้ถูก lock 10 นาทีหลังกรอกผิดครบ 5 ครั้ง; สำเร็จแล้วล้าง failed-attempt counter
+* เมื่อยกเลิกสิทธิ์ Simple Password ผู้ดูแลต้องกำหนดรหัสมาตรฐานใหม่ในรายการเดียวกัน
+* หน้า Manage Users แสดงเฉพาะสถานะ `Simple approved`/`Standard` ไม่แสดงรหัสเดิม เพราะรหัสเป็น one-way hash

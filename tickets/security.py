@@ -6,6 +6,7 @@ import hmac
 import io
 import os
 import zipfile
+import secrets
 from pathlib import Path
 
 from cryptography.fernet import Fernet, InvalidToken
@@ -169,12 +170,27 @@ def login_retry_after(request, username):
     return max(remaining, default=0)
 
 
+def _uses_simple_password(username):
+    from django.db.models import Q
+    from .models import CustomUser
+    value = (username or '').strip()
+    return CustomUser.objects.filter(
+        Q(username__iexact=value) | Q(email__iexact=value),
+        simple_password_enabled=True,
+        is_active=True,
+    ).exists()
+
+
 def record_login_failure(request, username):
     from .models import AuthenticationThrottle
     now = timezone.now()
     window_seconds = int(getattr(settings, "LOGIN_THROTTLE_WINDOW_SECONDS", 900))
     max_failures = int(getattr(settings, "LOGIN_THROTTLE_MAX_FAILURES", 5))
-    lock_seconds = int(getattr(settings, "LOGIN_THROTTLE_LOCK_SECONDS", 900))
+    lock_seconds = (
+        int(getattr(settings, "SIMPLE_PASSWORD_LOCK_SECONDS", 600))
+        if _uses_simple_password(username)
+        else int(getattr(settings, "LOGIN_THROTTLE_LOCK_SECONDS", 900))
+    )
     with transaction.atomic():
         for key_hash in login_throttle_keys(request, username):
             row, _ = AuthenticationThrottle.objects.select_for_update().get_or_create(key_hash=key_hash)
@@ -193,6 +209,17 @@ def clear_login_failures(request, username):
     AuthenticationThrottle.objects.filter(key_hash__in=login_throttle_keys(request, username)).delete()
 
 
+def clear_account_login_failures(*identifiers):
+    """Clear only account-scoped counters without weakening the issuer's IP limit."""
+    from .models import AuthenticationThrottle
+    keys = [
+        _fingerprint('account', (identifier or '').strip().casefold())
+        for identifier in identifiers if identifier
+    ]
+    if keys:
+        AuthenticationThrottle.objects.filter(key_hash__in=keys).delete()
+
+
 def write_security_audit(request, event_type, outcome, actor=None, target_type="", target_id="", details=""):
     from .models import SecurityAuditLog
     username = request.POST.get("username", "") if hasattr(request, "POST") else ""
@@ -206,6 +233,13 @@ def write_security_audit(request, event_type, outcome, actor=None, target_type="
         target_id=str(target_id)[:100],
         details=str(details)[:1000],
     )
+
+
+def generate_simple_password(length=6):
+    """Generate a numeric simple password for an explicitly approved user."""
+    length = max(6, int(length))
+    first = str(secrets.randbelow(9) + 1)
+    return first + ''.join(str(secrets.randbelow(10)) for _ in range(length - 1))
 
 
 class SecurityHeadersMiddleware:

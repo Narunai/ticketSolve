@@ -183,7 +183,6 @@ AUTH_USER_MODEL = 'tickets.CustomUser'
 
 AUTHENTICATION_BACKENDS = [
     'tickets.backends.EmailOrUsernameModelBackend',
-    'django.contrib.auth.backends.ModelBackend',
 ]
 
 
@@ -219,6 +218,7 @@ X_FRAME_OPTIONS = 'DENY'
 LOGIN_THROTTLE_MAX_FAILURES = int(os.environ.get('LOGIN_THROTTLE_MAX_FAILURES', 5))
 LOGIN_THROTTLE_WINDOW_SECONDS = int(os.environ.get('LOGIN_THROTTLE_WINDOW_SECONDS', 15 * 60))
 LOGIN_THROTTLE_LOCK_SECONDS = int(os.environ.get('LOGIN_THROTTLE_LOCK_SECONDS', 15 * 60))
+SIMPLE_PASSWORD_LOCK_SECONDS = int(os.environ.get('SIMPLE_PASSWORD_LOCK_SECONDS', 10 * 60))
 
 # Email Configuration (Supports Console and Real Gmail SMTP Delivery)
 
