@@ -5,6 +5,7 @@ from django.utils import timezone
 import calendar
 import datetime
 from zoneinfo import ZoneInfo
+from .security import EncryptedCharField
 
 class Company(models.Model):
     name = models.CharField(max_length=255, unique=True)
@@ -735,6 +736,51 @@ class TicketAuditLog(models.Model):
         return f"Ticket #{self.ticket.id} modified by {actor_name}: {self.old_status} -> {self.new_status}"
 
 
+class AuthenticationThrottle(models.Model):
+    key_hash = models.CharField(max_length=64, unique=True)
+    failed_count = models.PositiveSmallIntegerField(default=0)
+    window_started = models.DateTimeField(default=timezone.now)
+    locked_until = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-updated_at']
+
+
+class SecurityAuditLog(models.Model):
+    OUTCOME_SUCCESS = 'SUCCESS'
+    OUTCOME_FAILURE = 'FAILURE'
+    OUTCOME_BLOCKED = 'BLOCKED'
+    OUTCOME_CHOICES = [
+        (OUTCOME_SUCCESS, 'Success'),
+        (OUTCOME_FAILURE, 'Failure'),
+        (OUTCOME_BLOCKED, 'Blocked'),
+    ]
+
+    event_type = models.CharField(max_length=50, db_index=True)
+    actor = models.ForeignKey(
+        CustomUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='security_audit_logs',
+    )
+    outcome = models.CharField(max_length=10, choices=OUTCOME_CHOICES, db_index=True)
+    subject_hash = models.CharField(max_length=64, blank=True, default='')
+    ip_hash = models.CharField(max_length=64, blank=True, default='')
+    target_type = models.CharField(max_length=50, blank=True, default='')
+    target_id = models.CharField(max_length=100, blank=True, default='')
+    details = models.CharField(max_length=1000, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['event_type', '-created_at'], name='security_event_time_idx')]
+
+    def __str__(self):
+        return f"{self.created_at:%Y-%m-%d %H:%M:%S} {self.event_type} {self.outcome}"
+
+
 
 class TicketComment(models.Model):
     ticket = models.ForeignKey(
@@ -1004,7 +1050,7 @@ class SMTPConfiguration(models.Model):
     port = models.IntegerField(default=587)
     use_tls = models.BooleanField(default=True)
     username = models.CharField(max_length=255, blank=True)
-    password = models.CharField(max_length=255, blank=True)
+    password = EncryptedCharField(max_length=512, blank=True)
     feature_scope = models.CharField(
         max_length=20,
         choices=FEATURE_SCOPE_CHOICES,

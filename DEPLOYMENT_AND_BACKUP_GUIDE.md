@@ -232,9 +232,16 @@ sudo systemctl list-timers ticketsolve-email-to-ticket.timer
 
 ## 🔐 6. Production Security และไฟล์แนบ
 
+สคริปต์ deploy จะสร้าง `FIELD_ENCRYPTION_KEYS` แบบ Fernet แยกจาก `SECRET_KEY` เมื่อยังไม่มีค่า
+key นี้ใช้ถอดรหัส SMTP/IMAP password ในฐานข้อมูล จึงต้องสำรองไว้ใน secret manager ที่ได้รับอนุมัติ
+และห้ามรวมใน Git หรือ backup archive หาก key สูญหายจะไม่สามารถกู้ credential ที่เข้ารหัสไว้ได้
+
 * Nginx ให้บริการเฉพาะ `/static/`; `/media/` ตอบ `404`
 * Ticket และ Comment attachments ต้องดาวน์โหลดผ่าน authenticated Django endpoints ซึ่งตรวจ tenant/Ticket visibility ก่อนทุกครั้ง
 * Production บังคับ HTTPS, secure session/CSRF cookies, HSTS, `X-Content-Type-Options: nosniff` และ referrer policy
+* Login ถูกจำกัดทั้ง Nginx และ application, logout ใช้ POST + CSRF, password hash ใหม่ใช้ Argon2
+* SMTP/IMAP password เข้ารหัสในฐานข้อมูล และ Security events แสดงในหน้า Logs
+* ไฟล์แนบตรวจ allowlist และ file signature ทุกช่องทาง รวม Email → Ticket
 * เปิด HSTS preload เฉพาะเมื่อยืนยันว่าจะคง HTTPS สำหรับโดเมนและทุก subdomain ระยะยาว เพราะการ preload ย้อนกลับได้ช้า
 
 คำสั่งตรวจหลัง deploy:

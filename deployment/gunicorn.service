@@ -11,6 +11,17 @@ UMask=0027
 ExecStart=/var/www/ticketSolve/venv/bin/gunicorn --workers 4 --bind unix:/var/www/ticketSolve/gunicorn.sock ticket_system.wsgi:application
 PrivateTmp=true
 NoNewPrivileges=true
+PrivateDevices=true
+ProtectSystem=full
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 
 [Install]
 WantedBy=multi-user.target

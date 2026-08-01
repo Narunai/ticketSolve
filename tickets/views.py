@@ -8,7 +8,8 @@ from django.urls import reverse, reverse_lazy
 
 from django.core.exceptions import PermissionDenied
 from django.http import FileResponse
-from .models import Ticket, CustomUser, Company, EmailLog, TicketAuditLog, ReportViewLog, MonthlyReportSchedule, TicketAutomationConfig, SMTPConfiguration, InboundEmailReceipt, InboundEmailRoutingRule, EmailToTicketSchedule, EmailToTicketRunLog, InAppNotification, get_smtp_connection, get_smtp_from_email, TicketComment, TicketAttachment, CommentAttachment, TicketCategory, ResolutionCategory, ModuleCategory, TicketStatusConfig, CompanyTicketConfig, CompanyTicketField, NotificationConfig, should_send_email_notification, BackupLog, BackupSchedule
+from django.views.decorators.http import require_POST
+from .models import Ticket, CustomUser, Company, EmailLog, TicketAuditLog, SecurityAuditLog, ReportViewLog, MonthlyReportSchedule, TicketAutomationConfig, SMTPConfiguration, InboundEmailReceipt, InboundEmailRoutingRule, EmailToTicketSchedule, EmailToTicketRunLog, InAppNotification, get_smtp_connection, get_smtp_from_email, TicketComment, TicketAttachment, CommentAttachment, TicketCategory, ResolutionCategory, ModuleCategory, TicketStatusConfig, CompanyTicketConfig, CompanyTicketField, NotificationConfig, should_send_email_notification, BackupLog, BackupSchedule
 from .backup_service import perform_full_backup, perform_incremental_backup, perform_system_data_backup, get_backup_file_path, FileLock
 from .email_to_ticket_scheduler import run_email_to_ticket_cycle
 from .permissions import (
@@ -17,6 +18,14 @@ from .permissions import (
     is_ticket_staff,
     manageable_tickets_for,
     visible_tickets_for,
+)
+from .security import (
+    clear_login_failures,
+    login_retry_after,
+    record_login_failure,
+    safe_redirect_target,
+    validate_attachment,
+    write_security_audit,
 )
 
 
@@ -228,6 +237,10 @@ class TicketForm(forms.ModelForm):
             if f.size > max_size:
                 size_mb = f.size / (1024 * 1024)
                 self.add_error('attachment', f"Attachment file size for '{f.name}' must not exceed 10 MB (your file is {size_mb:.1f} MB)")
+            else:
+                validation_error = validate_attachment(f)
+                if validation_error:
+                    self.add_error('attachment', validation_error)
 
         return cleaned_data
 
@@ -488,6 +501,10 @@ class TicketUpdateForm(forms.ModelForm):
             if f.size > max_size:
                 size_mb = f.size / (1024 * 1024)
                 self.add_error('attachment', f"Attachment file size for '{f.name}' must not exceed 10 MB (your file is {size_mb:.1f} MB)")
+            else:
+                validation_error = validate_attachment(f)
+                if validation_error:
+                    self.add_error('attachment', validation_error)
 
         return cleaned_data
 
@@ -1101,7 +1118,46 @@ class CustomLoginView(LoginView):
     template_name = 'tickets/login.html'
     redirect_authenticated_user = True
 
+    def post(self, request, *args, **kwargs):
+        username = request.POST.get('username', '')
+        retry_after = login_retry_after(request, username)
+        if retry_after:
+            form = self.get_form()
+            form.add_error(None, 'Unable to sign in. Please wait and try again.')
+            write_security_audit(request, 'LOGIN_BLOCKED', SecurityAuditLog.OUTCOME_BLOCKED)
+            response = super().form_invalid(form)
+            response.status_code = 429
+            response['Retry-After'] = str(retry_after)
+            return response
+        return super().post(request, *args, **kwargs)
+
+    def form_invalid(self, form):
+        username = self.request.POST.get('username', '')
+        record_login_failure(self.request, username)
+        write_security_audit(self.request, 'LOGIN_FAILURE', SecurityAuditLog.OUTCOME_FAILURE)
+        response = super().form_invalid(form)
+        retry_after = login_retry_after(self.request, username)
+        if retry_after:
+            response.status_code = 429
+            response['Retry-After'] = str(retry_after)
+        return response
+
+    def form_valid(self, form):
+        username = self.request.POST.get('username', '')
+        clear_login_failures(self.request, username)
+        write_security_audit(
+            self.request, 'LOGIN_SUCCESS', SecurityAuditLog.OUTCOME_SUCCESS,
+            actor=form.get_user(),
+        )
+        return super().form_valid(form)
+
+@require_POST
 def custom_logout(request):
+    if request.user.is_authenticated:
+        write_security_audit(
+            request, 'LOGOUT', SecurityAuditLog.OUTCOME_SUCCESS,
+            actor=request.user,
+        )
     logout(request)
     return redirect('login')
 
@@ -1331,6 +1387,10 @@ class TicketDetailView(LoginRequiredMixin, DetailView):
             if f.size > max_size:
                 size_mb = f.size / (1024 * 1024)
                 messages.error(request, f"Unable to post comment: File '{f.name}' exceeds 10 MB (your file is {size_mb:.1f} MB)")
+                return redirect('ticket_detail', pk=self.object.id)
+            validation_error = validate_attachment(f)
+            if validation_error:
+                messages.error(request, f"Unable to post comment: {validation_error}")
                 return redirect('ticket_detail', pk=self.object.id)
 
         if content or files:
@@ -1720,7 +1780,12 @@ class TicketDeleteView(LoginRequiredMixin, SystemStaffRequiredMixin, View):
             f"Deleted ticket #{ticket_id} ('{ticket_title}') successfully "
             f"and freed {deleted_mb:.2f} MB of attachment storage."
         )
-        next_url = request.POST.get('next') or reverse('dashboard')
+        write_security_audit(
+            request, 'TICKET_DELETE', SecurityAuditLog.OUTCOME_SUCCESS,
+            actor=request.user, target_type='Ticket', target_id=ticket_id,
+            details='Ticket and related attachment files deleted.',
+        )
+        next_url = safe_redirect_target(request, request.POST.get('next'), reverse('dashboard'))
         return redirect(next_url)
 
 
@@ -1771,7 +1836,9 @@ class ResendEmailView(LoginRequiredMixin, SystemStaffRequiredMixin, View):
         ]
         if not retry_logs:
             messages.info(request, "There are no failed emails to retry in this log.")
-            return redirect(request.META.get('HTTP_REFERER') or reverse('log_list'))
+            return redirect(safe_redirect_target(
+                request, request.META.get('HTTP_REFERER'), reverse('log_list')
+            ))
 
         to_recipients = [
             log.recipient for log in retry_logs if log.recipient_type == EmailLog.RECIPIENT_TO
@@ -1817,7 +1884,11 @@ class ResendEmailView(LoginRequiredMixin, SystemStaffRequiredMixin, View):
             EmailLog.objects.bulk_update(retry_logs, ['success', 'error_message', 'sent_at'])
             messages.error(request, f"❌ Email retry failed: {err_msg}")
 
-        next_url = request.POST.get('next') or request.META.get('HTTP_REFERER') or reverse('dashboard')
+        next_url = safe_redirect_target(
+            request,
+            request.POST.get('next') or request.META.get('HTTP_REFERER'),
+            reverse('dashboard'),
+        )
         return redirect(next_url)
 
 
@@ -2065,6 +2136,8 @@ class LogListView(LoginRequiredMixin, SystemStaffRequiredMixin, TemplateView):
         context['audit_logs'] = audit_logs[:100]
         context['backup_logs'] = BackupLog.objects.all()[:100]
         context['backup_log_count'] = BackupLog.objects.count()
+        context['security_logs'] = SecurityAuditLog.objects.select_related('actor')[:100]
+        context['security_log_count'] = SecurityAuditLog.objects.count()
         return context
 
 
@@ -2881,7 +2954,12 @@ class SystemSettingsView(LoginRequiredMixin, SuperuserOrSystemAdminRequiredMixin
             form = SMTPConfigurationForm(request.POST)
 
         if form.is_valid():
-            form.save()
+            config = form.save()
+            write_security_audit(
+                request, 'SMTP_CONFIGURATION_SAVE', SecurityAuditLog.OUTCOME_SUCCESS,
+                actor=request.user, target_type='SMTPConfiguration', target_id=config.pk,
+                details='SMTP/IMAP configuration saved; credential value was not logged.',
+            )
             messages.success(request, "SMTP feature settings saved successfully!")
             return redirect('system_settings')
         
@@ -2896,6 +2974,11 @@ class SMTPToggleActiveView(LoginRequiredMixin, SuperuserOrSystemAdminRequiredMix
         config = get_object_or_404(SMTPConfiguration, pk=pk)
         config.is_active = not config.is_active
         config.save()
+        write_security_audit(
+            request, 'SMTP_CONFIGURATION_TOGGLE', SecurityAuditLog.OUTCOME_SUCCESS,
+            actor=request.user, target_type='SMTPConfiguration', target_id=config.pk,
+            details=f'Active set to {config.is_active}.',
+        )
         messages.success(request, f"Successfully changed activation status of '{config.name}'!")
         return redirect('system_settings')
 
@@ -2940,7 +3023,13 @@ class SMTPDeleteView(LoginRequiredMixin, SuperuserOrSystemAdminRequiredMixin, Vi
     def post(self, request, pk, *args, **kwargs):
         config = get_object_or_404(SMTPConfiguration, pk=pk)
         name = config.name
+        config_id = config.pk
         config.delete()
+        write_security_audit(
+            request, 'SMTP_CONFIGURATION_DELETE', SecurityAuditLog.OUTCOME_SUCCESS,
+            actor=request.user, target_type='SMTPConfiguration', target_id=config_id,
+            details='SMTP/IMAP configuration deleted; credential value was not logged.',
+        )
         messages.success(request, f"Deleted SMTP configuration '{name}' successfully!")
         return redirect('system_settings')
 
@@ -3721,6 +3810,12 @@ class TriggerBackupView(LoginRequiredMixin, SystemStaffRequiredMixin, View):
             else:
                 messages.error(request, f"❌ Backup failed: {res.get('error')}")
 
+        write_security_audit(
+            request, 'BACKUP_MANUAL_RUN',
+            SecurityAuditLog.OUTCOME_SUCCESS if res.get('success') else SecurityAuditLog.OUTCOME_FAILURE,
+            actor=request.user, target_type='Backup', target_id=backup_type,
+            details='Manual backup execution completed.' if res.get('success') else 'Manual backup execution failed.',
+        )
         return redirect('backup_list')
 
 
@@ -3766,6 +3861,7 @@ class DeleteBackupLogView(LoginRequiredMixin, SystemStaffRequiredMixin, View):
     def post(self, request, pk, *args, **kwargs):
         log = get_object_or_404(BackupLog, pk=pk)
         filename = log.filename
+        log_id = log.pk
         file_path = get_backup_file_path(filename)
         has_data_file = False
         if file_path:
@@ -3780,6 +3876,11 @@ class DeleteBackupLogView(LoginRequiredMixin, SystemStaffRequiredMixin, View):
                 return redirect('backup_list')
 
         log.delete()
+        write_security_audit(
+            request, 'BACKUP_DELETE', SecurityAuditLog.OUTCOME_SUCCESS,
+            actor=request.user, target_type='BackupLog', target_id=log_id,
+            details=f'Deleted backup record and local file reference: {filename[:200]}',
+        )
         if has_data_file:
             messages.success(request, f"Deleted backup record and file '{filename}'.")
         else:

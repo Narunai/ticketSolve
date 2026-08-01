@@ -4,6 +4,9 @@
 
 **อัปเดตล่าสุด**: 2 สิงหาคม 2026
 
+> เอกสารภาพรวมสถาปัตยกรรม การควบคุมความปลอดภัย ผลการแก้ไข และแผนผังระบบ:
+> [SECURITY_AND_SYSTEM_ARCHITECTURE_REPORT.md](SECURITY_AND_SYSTEM_ARCHITECTURE_REPORT.md)
+
 ---
 
 ## 🏗️ 1. เทคโนโลยีและสถาปัตยกรรมระบบ (Tech Stack & Architecture)
@@ -88,6 +91,11 @@ Backup archive เก็บที่ `/var/backups/ticketsolve` บน AWS VPS �
 * ไฟล์แนบดาวน์โหลดผ่าน Django view ที่ตรวจ login และขอบเขต Ticket เท่านั้น; Nginx ตอบ `404` สำหรับ `/media/` โดยตรง
 * จำกัดไฟล์แนบสูงสุด 10 MB ต่อไฟล์, 10 ไฟล์ต่อ request และรวมไม่เกิน 50 MB
 * Production เปิด HTTPS redirect, secure cookies, HSTS, `nosniff` และ referrer policy
+* ล็อกอินถูกจำกัด 5 ครั้งต่อช่วง 15 นาทีทั้งระดับบัญชีและ IP พร้อม Security Audit Log; logout ใช้ POST + CSRF
+* รหัสผ่านเว็บใช้ Argon2 เป็นค่าเริ่มต้น, กำหนดขั้นต่ำ 12 ตัวอักษร และ session หมดอายุภายใน 8 ชั่วโมง/เมื่อปิด browser
+* รหัสผ่าน SMTP/IMAP เข้ารหัสด้วย Fernet ในฐานข้อมูล โดย key แยกออกจาก Git และ backup
+* ไฟล์แนบตรวจทั้ง allowlist, นามสกุล และ file signature รวมถึงจำกัด zip bomb/macro ในไฟล์ Office
+* Dependency หลักตรึงเวอร์ชันและตรวจด้วย `pip-audit`; security headers และ login rate limit ถูกบังคับทั้ง Django/Nginx
 * `SECRET_KEY`, allowed hosts, CSRF origins, SMTP credentials และตำแหน่ง backup กำหนดผ่าน environment file นอก Git checkout
 * หน้า Backup Management แสดง Download เฉพาะ archive ที่มีข้อมูล; รายการขนาด 0 หรือไฟล์หายสามารถลบรายรายการด้วย **Delete empty record** หรือลบรายการ 0 MB ทั้งหมดด้วย **Delete all 0 MB**
 * **System Data (No Tickets)** สร้างทุก 7 วัน: เก็บ Users, Companies, roles, SMTP/IMAP, routing, schedules, categories และค่าระบบใน SQLite ที่ล้าง Ticket ออกจากสำเนาแล้ว โดยไม่รวม `media/` และ runtime secrets; System Admin สามารถสั่งทันทีด้วยปุ่ม **Run Manually: System Data (No Tickets)** โดยไม่กระทบรอบอัตโนมัติ

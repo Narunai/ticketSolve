@@ -33,6 +33,10 @@
             <span>{{ t.backup_log }}</span>
             <span class="px-1.5 py-0.2 rounded bg-slate-800 text-slate-400 text-[10px] font-mono tabular-nums">{{ backup_log_count }}</span>
         </button>
+        <button type="button" id="tab-btn-security" onclick="switchLogPageTab('security')" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all bg-slate-900 text-slate-400 hover:text-white border border-slate-800 cursor-pointer flex items-center gap-1.5">
+            <span>🛡️</span><span>Security events</span>
+            <span class="px-1.5 py-0.2 rounded bg-slate-800 text-slate-400 text-[10px] font-mono tabular-nums">{{ security_log_count }}</span>
+        </button>
     </div>
 
     <!-- Log Section 1: Ticket Audit Trail -->
@@ -205,6 +209,32 @@
             </table>
         </div>
     </div>
+
+    <div id="log-section-security" class="hidden glass-panel rounded-2xl border border-slate-800/80 overflow-hidden shadow-xl">
+        <div class="px-6 py-4 border-b border-slate-800/80 flex items-center justify-between bg-slate-900/40">
+            <h3 class="font-bold text-white text-base">🛡️ Security audit trail</h3>
+            <span class="text-xs px-2.5 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-400">{{ security_log_count }} items</span>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead><tr class="bg-slate-900/60 border-b border-slate-800 text-slate-400 text-xs uppercase">
+                    <th class="px-6 py-3.5">Timestamp</th><th class="px-6 py-3.5">Event</th>
+                    <th class="px-6 py-3.5">Actor</th><th class="px-6 py-3.5">Outcome</th><th class="px-6 py-3.5">Details</th>
+                </tr></thead>
+                <tbody class="divide-y divide-slate-800/60 text-sm">
+                {% for log in security_logs %}
+                    <tr class="hover:bg-slate-800/30">
+                        <td class="px-6 py-4 text-slate-400 font-mono text-xs whitespace-nowrap">{{ log.created_at|date:"Y-m-d H:i:s" }}</td>
+                        <td class="px-6 py-4 text-white font-semibold">{{ log.event_type }}</td>
+                        <td class="px-6 py-4 text-slate-300">{{ log.actor.username|default:"Anonymous" }}</td>
+                        <td class="px-6 py-4"><span class="px-2 py-1 rounded text-xs {% if log.outcome == 'SUCCESS' %}text-emerald-400 bg-emerald-500/10{% elif log.outcome == 'BLOCKED' %}text-amber-300 bg-amber-500/10{% else %}text-rose-400 bg-rose-500/10{% endif %}">{{ log.outcome }}</span></td>
+                        <td class="px-6 py-4 text-slate-400 text-xs">{{ log.target_type }} {{ log.target_id }} {{ log.details }}</td>
+                    </tr>
+                {% empty %}<tr><td colspan="5" class="px-6 py-8 text-center text-slate-500">No security events.</td></tr>{% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
 </div>
 
     <!-- Log Section 3: Backup Logs -->
@@ -297,22 +327,26 @@ function switchLogPageTab(tabName) {
     const auditSec = document.getElementById('log-section-audit');
     const emailSec = document.getElementById('log-section-email');
     const backupSec = document.getElementById('log-section-backup');
+    const securitySec = document.getElementById('log-section-security');
     const auditBtn = document.getElementById('tab-btn-audit');
     const emailBtn = document.getElementById('tab-btn-email');
     const backupBtn = document.getElementById('tab-btn-backup');
+    const securityBtn = document.getElementById('tab-btn-security');
 
-    if (!auditSec || !emailSec || !backupSec || !auditBtn || !emailBtn || !backupBtn) return;
+    if (!auditSec || !emailSec || !backupSec || !securitySec || !auditBtn || !emailBtn || !backupBtn || !securityBtn) return;
 
     // Reset all buttons to inactive state
     const inactiveClass = 'px-4 py-2.5 rounded-xl text-xs font-bold transition-all bg-slate-900 text-slate-400 hover:text-white border border-slate-800 cursor-pointer flex items-center gap-2';
     auditBtn.className = inactiveClass;
     emailBtn.className = inactiveClass;
     backupBtn.className = inactiveClass;
+    securityBtn.className = inactiveClass;
 
     // Hide all sections
     auditSec.classList.add('hidden');
     emailSec.classList.add('hidden');
     backupSec.classList.add('hidden');
+    securitySec.classList.add('hidden');
 
     if (tabName === 'audit') {
         auditSec.classList.remove('hidden');
@@ -323,6 +357,9 @@ function switchLogPageTab(tabName) {
     } else if (tabName === 'backup') {
         backupSec.classList.remove('hidden');
         backupBtn.className = 'px-4 py-2.5 rounded-xl text-xs font-bold transition-all bg-blue-600 text-white shadow-lg shadow-blue-500/20 cursor-pointer flex items-center gap-2';
+    } else if (tabName === 'security') {
+        securitySec.classList.remove('hidden');
+        securityBtn.className = 'px-4 py-2.5 rounded-xl text-xs font-bold transition-all bg-amber-600 text-white shadow-lg shadow-amber-500/20 cursor-pointer flex items-center gap-2';
     }
 }
 
@@ -331,6 +368,8 @@ document.addEventListener('DOMContentLoaded', function () {
         switchLogPageTab('email');
     } else if (window.location.hash === '#log-section-backup') {
         switchLogPageTab('backup');
+    } else if (window.location.hash === '#log-section-security') {
+        switchLogPageTab('security');
     }
 });
 </script>

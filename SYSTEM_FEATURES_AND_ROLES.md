@@ -102,3 +102,7 @@ Sidebar แสดงชื่อผู้ใช้ บริษัท/ส่ว�
 * `CLIENT_ADMIN` และ `CLIENT_STAFF` อ่านและจัดการ Ticket ภายใน company tree ของตน
 * System roles อ่าน Ticket ได้ทุก tenant แต่บัญชีที่เป็น Django superuser จะแก้ไขได้เฉพาะ Django superuser ด้วยกัน
 * การยืนยัน deployment เป็นคำสั่ง `POST` และจำกัดเฉพาะ Ticket Staff
+# เอกสารประกอบความปลอดภัย
+
+ภาพรวมระบบทั้งหมด, architecture/trust-boundary diagrams, มาตรฐานอ้างอิง, รายการแก้ไขและ residual risks อยู่ที่
+[`SECURITY_AND_SYSTEM_ARCHITECTURE_REPORT.md`](SECURITY_AND_SYSTEM_ARCHITECTURE_REPORT.md)

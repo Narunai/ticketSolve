@@ -7,6 +7,8 @@ from django.core.management import call_command
 from django.contrib.admin.sites import AdminSite
 from django.core.exceptions import PermissionDenied
 from django.utils import timezone
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import connection
 
 from .models import Company, Ticket, CustomUser, EmailLog, MonthlyReportSchedule, TicketAuditLog, TicketAutomationConfig
 
@@ -589,8 +591,8 @@ class MultiTenantTicketTests(TestCase):
 
         self.client.login(username="user_a", password="password123")
 
-        f1 = SimpleUploadedFile("doc1.pdf", b"content1", content_type="application/pdf")
-        f2 = SimpleUploadedFile("doc2.jpg", b"content2", content_type="image/jpeg")
+        f1 = SimpleUploadedFile("doc1.pdf", b"%PDF-1.7\ncontent1", content_type="application/pdf")
+        f2 = SimpleUploadedFile("doc2.jpg", b"\xff\xd8\xffcontent2\xff\xd9", content_type="image/jpeg")
 
         # Create ticket with multiple files
         response = self.client.post(reverse('ticket_create'), {
@@ -2691,5 +2693,91 @@ class MultiTenantTicketTests(TestCase):
 
 
 
+
+class SecurityBaselineTests(TestCase):
+    def setUp(self):
+        self.company = Company.objects.create(name='Security Tenant')
+        self.user = User.objects.create_user(
+            username='security_user',
+            email='security@example.com',
+            password='StrongPassword123!',
+            company=self.company,
+            role=User.CLIENT_USER,
+        )
+        self.system_admin = User.objects.create_user(
+            username='security_admin',
+            email='security-admin@example.com',
+            password='StrongPassword123!',
+            role=User.SYSTEM_ADMIN,
+            is_staff=True,
+        )
+
+    def test_login_is_throttled_and_security_events_are_logged(self):
+        from .models import SecurityAuditLog
+
+        for attempt in range(5):
+            response = self.client.post(reverse('login'), {
+                'username': self.user.username,
+                'password': 'wrong-password',
+            })
+            self.assertEqual(response.status_code, 429 if attempt == 4 else 200)
+
+        blocked = self.client.post(reverse('login'), {
+            'username': self.user.username,
+            'password': 'StrongPassword123!',
+        })
+        self.assertEqual(blocked.status_code, 429)
+        self.assertIn('Retry-After', blocked)
+        self.assertEqual(SecurityAuditLog.objects.filter(event_type='LOGIN_FAILURE').count(), 5)
+        self.assertTrue(SecurityAuditLog.objects.filter(event_type='LOGIN_BLOCKED').exists())
+
+    def test_logout_requires_post_and_writes_audit_event(self):
+        from .models import SecurityAuditLog
+
+        self.client.login(username=self.user.username, password='StrongPassword123!')
+        self.assertEqual(self.client.get(reverse('logout')).status_code, 405)
+        response = self.client.post(reverse('logout'))
+        self.assertRedirects(response, reverse('login'))
+        self.assertTrue(SecurityAuditLog.objects.filter(
+            event_type='LOGOUT', actor=self.user,
+        ).exists())
+
+    def test_smtp_password_is_encrypted_at_rest(self):
+        from .models import SMTPConfiguration
+
+        configuration = SMTPConfiguration.objects.create(
+            name='Encrypted mailbox', provider='GMAIL',
+            username='mailbox@example.com', password='smtp-app-secret',
+        )
+        with connection.cursor() as cursor:
+            cursor.execute(
+                'SELECT password FROM tickets_smtpconfiguration WHERE id = %s',
+                [configuration.pk],
+            )
+            raw_password = cursor.fetchone()[0]
+        self.assertTrue(raw_password.startswith('enc:v1:'))
+        self.assertNotIn('smtp-app-secret', raw_password)
+        configuration.refresh_from_db()
+        self.assertEqual(configuration.password, 'smtp-app-secret')
+
+    def test_attachment_content_is_checked_not_only_extension(self):
+        from .security import validate_attachment
+
+        fake_image = SimpleUploadedFile('invoice.jpg', b'MZ executable content')
+        real_pdf = SimpleUploadedFile('report.pdf', b'%PDF-1.7\nminimal')
+        self.assertIn('does not match', validate_attachment(fake_image))
+        self.assertIsNone(validate_attachment(real_pdf))
+
+    def test_security_headers_and_open_redirect_protection(self):
+        from .security import safe_redirect_target
+
+        response = self.client.get(reverse('login'))
+        self.assertEqual(response['Permissions-Policy'], 'camera=(), microphone=(), geolocation=(), payment=(), usb=()')
+        self.assertIn("object-src 'none'", response['Content-Security-Policy-Report-Only'])
+
+        request = RequestFactory().post('/ticket/1/delete/')
+        request.META['HTTP_HOST'] = 'testserver'
+        self.assertEqual(safe_redirect_target(request, 'https://evil.example/', '/dashboard/'), '/dashboard/')
+        self.assertEqual(safe_redirect_target(request, '/logs/', '/dashboard/'), '/logs/')
 
 

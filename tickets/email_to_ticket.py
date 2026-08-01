@@ -14,6 +14,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from .backup_service import FileLock
+from .security import validate_attachment
 from .models import (
     InboundEmailReceipt,
     SMTPConfiguration,
@@ -204,6 +205,10 @@ def _create_ticket(config, message, matched_keywords=None):
             continue
         if total_bytes + size > MAX_TOTAL_ATTACHMENT_BYTES:
             skipped.append(f'{filename}: total would exceed 50 MB')
+            continue
+        validation_error = validate_attachment(content, filename)
+        if validation_error:
+            skipped.append(validation_error)
             continue
         accepted.append((filename, content))
         total_bytes += size

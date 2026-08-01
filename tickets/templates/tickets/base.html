@@ -478,9 +478,12 @@
                         <span class="block text-[10px] text-slate-500 truncate">{{ user.email }}</span>
                     </div>
                 </div>
-                <a href="{% url 'logout' %}" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors" title="{{ t.logout }}">
+                <form method="post" action="{% url 'logout' %}" class="inline-flex">
+                    {% csrf_token %}
+                <button type="submit" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors" title="{{ t.logout }}">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3 3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
-                </a>
+                </button>
+                </form>
             </div>
         </div>
     </aside>

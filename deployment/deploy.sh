@@ -48,6 +48,11 @@ if [ "${#EXISTING_SECRET}" -lt 50 ] || [[ "$EXISTING_SECRET" == django-insecure-
     fi
     echo "Generated a strong production SECRET_KEY."
 fi
+if ! sudo grep -qE '^FIELD_ENCRYPTION_KEYS=.+$' "$ENV_FILE"; then
+    GENERATED_FIELD_KEY="$(venv/bin/python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')"
+    echo "FIELD_ENCRYPTION_KEYS=${GENERATED_FIELD_KEY}" | sudo tee -a "$ENV_FILE" >/dev/null
+    echo "Generated an independent field-encryption key. Back it up in the approved secret store."
+fi
 if ! sudo grep -qE '^ALLOWED_HOSTS=.+$' "$ENV_FILE"; then
     echo "ALLOWED_HOSTS=tikketsolve-systemoneit.uk,www.tikketsolve-systemoneit.uk" | sudo tee -a "$ENV_FILE" >/dev/null
 fi
@@ -59,6 +64,9 @@ if ! sudo grep -q '^BACKUP_DIR=' "$ENV_FILE"; then
 fi
 if ! sudo grep -q '^BACKUP_RETENTION_DAYS=' "$ENV_FILE"; then
     echo "BACKUP_RETENTION_DAYS=30" | sudo tee -a "$ENV_FILE" >/dev/null
+fi
+if ! sudo grep -q '^SECURE_HSTS_PRELOAD=' "$ENV_FILE"; then
+    echo "SECURE_HSTS_PRELOAD=True" | sudo tee -a "$ENV_FILE" >/dev/null
 fi
 sudo chmod 640 "$ENV_FILE"
 sudo chown root:www-data "$ENV_FILE"
