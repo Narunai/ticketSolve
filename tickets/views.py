@@ -8,8 +8,8 @@ from django.urls import reverse, reverse_lazy
 
 from django.core.exceptions import PermissionDenied
 from django.http import FileResponse
-from .models import Ticket, CustomUser, Company, EmailLog, TicketAuditLog, ReportViewLog, MonthlyReportSchedule, TicketAutomationConfig, SMTPConfiguration, InboundEmailReceipt, InboundEmailRoutingRule, EmailToTicketSchedule, EmailToTicketRunLog, get_smtp_connection, get_smtp_from_email, TicketComment, TicketAttachment, CommentAttachment, TicketCategory, ResolutionCategory, ModuleCategory, TicketStatusConfig, CompanyTicketConfig, CompanyTicketField, NotificationConfig, should_send_email_notification, BackupLog
-from .backup_service import perform_full_backup, perform_incremental_backup, get_backup_file_path, FileLock
+from .models import Ticket, CustomUser, Company, EmailLog, TicketAuditLog, ReportViewLog, MonthlyReportSchedule, TicketAutomationConfig, SMTPConfiguration, InboundEmailReceipt, InboundEmailRoutingRule, EmailToTicketSchedule, EmailToTicketRunLog, InAppNotification, get_smtp_connection, get_smtp_from_email, TicketComment, TicketAttachment, CommentAttachment, TicketCategory, ResolutionCategory, ModuleCategory, TicketStatusConfig, CompanyTicketConfig, CompanyTicketField, NotificationConfig, should_send_email_notification, BackupLog
+from .backup_service import perform_full_backup, perform_incremental_backup, perform_system_data_backup, get_backup_file_path, FileLock
 from .email_to_ticket_scheduler import run_email_to_ticket_cycle
 from .permissions import (
     is_system_staff,
@@ -1256,6 +1256,27 @@ class TicketDetailView(LoginRequiredMixin, DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['comments'] = self.object.comments.all().order_by('created_at')
+        receipt = self.object.inbound_email_receipts.select_related(
+            'smtp_configuration',
+        ).first()
+        raw_email_source = (
+            (self.object.custom_fields_data or {}).get('email_to_ticket') or {}
+        )
+        email_source = dict(raw_email_source) if isinstance(raw_email_source, dict) else {}
+        if receipt:
+            email_source.setdefault('sender_name', receipt.sender_name)
+            email_source.setdefault('sender_email', receipt.sender_email)
+            email_source.setdefault('message_id', receipt.message_id)
+            email_source['mailbox_name'] = (
+                receipt.smtp_configuration.name
+                if receipt.smtp_configuration else 'Deleted mailbox'
+            )
+        context['email_source'] = email_source or None
+        context['display_custom_fields'] = {
+            key: value
+            for key, value in (self.object.custom_fields_data or {}).items()
+            if key != 'email_to_ticket'
+        }
         from .models import EmailLog
         context['email_logs'] = EmailLog.objects.filter(
             models.Q(subject__icontains=f"Ticket #{self.object.id}") |
@@ -2635,6 +2656,10 @@ class EmailToTicketTimerView(
         context['run_logs'] = EmailToTicketRunLog.objects.select_related(
             'actor',
         )[:50]
+        context['inbound_receipts'] = InboundEmailReceipt.objects.select_related(
+            'smtp_configuration',
+            'ticket',
+        )[:100]
         context['mailboxes'] = SMTPConfiguration.objects.filter(
             is_active=True,
             feature_scope__in=[
@@ -2676,6 +2701,49 @@ class EmailToTicketTimerView(
             )
             return redirect('email_timer')
         return self.render_to_response(self.get_context_data(form=form))
+
+
+class InAppNotificationListView(LoginRequiredMixin, ListView):
+    model = InAppNotification
+    template_name = 'tickets/notification_list.html'
+    context_object_name = 'notifications'
+    paginate_by = 50
+
+    def get_queryset(self):
+        return InAppNotification.objects.filter(
+            recipient=self.request.user,
+        ).select_related('ticket', 'actor')
+
+
+class InAppNotificationOpenView(LoginRequiredMixin, View):
+    def get(self, request, pk):
+        notification = get_object_or_404(
+            InAppNotification,
+            pk=pk,
+            recipient=request.user,
+        )
+        if not notification.is_read:
+            notification.is_read = True
+            notification.read_at = timezone.now()
+            notification.save(update_fields=['is_read', 'read_at'])
+
+        if notification.ticket_id and visible_tickets_for(
+            request.user,
+            Ticket.objects.filter(pk=notification.ticket_id),
+        ).exists():
+            return redirect('ticket_detail', pk=notification.ticket_id)
+        if notification.ticket_id:
+            messages.warning(request, 'The related ticket is no longer available to your account.')
+        return redirect('notification_list')
+
+
+class InAppNotificationReadAllView(LoginRequiredMixin, View):
+    def post(self, request):
+        InAppNotification.objects.filter(
+            recipient=request.user,
+            is_read=False,
+        ).update(is_read=True, read_at=timezone.now())
+        return redirect('notification_list')
 
 
 class InboundEmailRoutingRuleSaveView(
@@ -3494,7 +3562,11 @@ class BackupManagementView(LoginRequiredMixin, SystemStaffRequiredMixin, Templat
         if q:
             logs = logs.filter(models.Q(filename__icontains=q) | models.Q(details__icontains=q))
 
-        if backup_type in [BackupLog.TYPE_FULL, BackupLog.TYPE_INCREMENTAL]:
+        if backup_type in [
+            BackupLog.TYPE_FULL,
+            BackupLog.TYPE_INCREMENTAL,
+            BackupLog.TYPE_SYSTEM,
+        ]:
             logs = logs.filter(backup_type=backup_type)
 
         if min_size:
@@ -3532,7 +3604,9 @@ class BackupManagementView(LoginRequiredMixin, SystemStaffRequiredMixin, Templat
         context['filtered_count'] = filtered_count
         context['full_count'] = all_logs.filter(backup_type=BackupLog.TYPE_FULL).count()
         context['incremental_count'] = all_logs.filter(backup_type=BackupLog.TYPE_INCREMENTAL).count()
+        context['system_count'] = all_logs.filter(backup_type=BackupLog.TYPE_SYSTEM).count()
         context['large_count'] = all_logs.filter(file_size_bytes__gte=1024 * 1024).count()
+        context['zero_mb_count'] = all_logs.filter(file_size_bytes=0).count()
         context['last_backup'] = all_logs.first()
 
         context['q'] = q
@@ -3555,6 +3629,15 @@ class TriggerBackupView(LoginRequiredMixin, SystemStaffRequiredMixin, View):
             res = perform_incremental_backup(hours=hours)
             if res.get('success'):
                 messages.success(request, f"✅ 2-Hour Incremental Backup completed! {res.get('details', res.get('message'))}")
+            else:
+                messages.error(request, f"❌ Backup failed: {res.get('error')}")
+        elif backup_type == 'system':
+            res = perform_system_data_backup()
+            if res.get('success'):
+                messages.success(
+                    request,
+                    f"✅ System Data Backup (No Tickets) completed! {res.get('details')}",
+                )
             else:
                 messages.error(request, f"❌ Backup failed: {res.get('error')}")
         else:
@@ -3604,6 +3687,56 @@ class DeleteBackupLogView(LoginRequiredMixin, SystemStaffRequiredMixin, View):
             messages.success(
                 request,
                 f"Deleted empty backup record '{filename}'.",
+            )
+        return redirect('backup_list')
+
+
+class DeleteAllZeroMbBackupsView(LoginRequiredMixin, SystemStaffRequiredMixin, View):
+    def post(self, request, *args, **kwargs):
+        deleted_record_ids = []
+        deleted_file_count = 0
+        skipped_count = 0
+
+        try:
+            with FileLock('system_backup.lock', timeout=30):
+                zero_mb_logs = list(
+                    BackupLog.objects.filter(file_size_bytes=0).only('id', 'filename')
+                )
+                for backup_log in zero_mb_logs:
+                    file_path = get_backup_file_path(backup_log.filename)
+                    if file_path:
+                        try:
+                            if os.path.getsize(file_path) > 0:
+                                skipped_count += 1
+                                continue
+                            os.remove(file_path)
+                            deleted_file_count += 1
+                        except OSError:
+                            skipped_count += 1
+                            continue
+                    deleted_record_ids.append(backup_log.pk)
+
+                if deleted_record_ids:
+                    BackupLog.objects.filter(pk__in=deleted_record_ids).delete()
+        except TimeoutError:
+            messages.error(
+                request,
+                'Unable to delete 0 MB backups because another backup operation is running.',
+            )
+            return redirect('backup_list')
+
+        if deleted_record_ids:
+            summary = f'Deleted {len(deleted_record_ids)} zero-MB backup record(s)'
+            if deleted_file_count:
+                summary += f' and {deleted_file_count} empty file(s)'
+            summary += '.'
+            messages.success(request, summary)
+        else:
+            messages.info(request, 'No safe 0 MB backup records were found to delete.')
+        if skipped_count:
+            messages.warning(
+                request,
+                f'Skipped {skipped_count} record(s) because the file was not empty or could not be removed.',
             )
         return redirect('backup_list')
 

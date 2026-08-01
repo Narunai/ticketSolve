@@ -13,5 +13,6 @@ ExecStart=-/var/www/ticketSolve/venv/bin/python manage.py process_report_schedul
 ExecStart=-/var/www/ticketSolve/venv/bin/python manage.py process_ticket_automations
 ExecStart=-/var/www/ticketSolve/venv/bin/python manage.py run_2hr_backup
 ExecStart=/var/www/ticketSolve/venv/bin/python manage.py run_2hr_backup --full
+ExecStart=/var/www/ticketSolve/venv/bin/python manage.py run_weekly_system_backup
 PrivateTmp=true
 NoNewPrivileges=true

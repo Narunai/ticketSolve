@@ -2,7 +2,7 @@
 
 เอกสารฉบับนี้อธิบายขั้นตอนการติดตั้งระบบ **TicketSolve** บน AWS Lightsail รวมถึงการตั้งค่า Nginx, Gunicorn, Systemd Timer และ Local VPS Backup
 
-**อัปเดตล่าสุด**: 31 กรกฎาคม 2026
+**อัปเดตล่าสุด**: 2 สิงหาคม 2026
 
 ---
 
@@ -58,7 +58,7 @@ sudo systemctl restart nginx
 
 ## 💾 3. โครงสร้างและการทำงานของระบบสำรองข้อมูล (Backup System)
 
-ระบบสำรองข้อมูลใน TicketSolve แบ่งออกเป็น 2 ประเภทหลัก:
+ระบบสำรองข้อมูลใน TicketSolve แบ่งออกเป็น 3 ประเภทหลัก:
 
 ### 3.1 ⏱️ 2-Hour Incremental Backup (สำรองข้อมูล 2 ชั่วโมงย้อนหลัง)
 * **การทำงาน**: ดึง Ticket ที่ถูกสร้าง/แก้ไข หรือมี Comments/ไฟล์แนบใหม่ใน 2 ชั่วโมงย้อนหลัง
@@ -72,10 +72,17 @@ sudo systemctl restart nginx
 * **Secrets**: ไม่รวม `/etc/ticketsolve/ticketsolve.env` ใน archive ต้องสำรอง secrets แยกต่างหาก
 * **ตารางเวลา**: Scheduler เรียกคำสั่งทุกนาที แต่ระบบสร้าง Full Backup สำเร็จไม่เกินวันละหนึ่งครั้ง เว้นแต่ใช้ `--force`
 
-### 3.3 📥 Backup Download และ Delete
+### 3.3 🧩 7-Day System Data Backup (ไม่รวม Ticket)
+* **การทำงาน**: ใช้ SQLite Online Backup API สร้างสำเนาฐานข้อมูล จากนั้นลบ Ticket ในสำเนาเท่านั้น โดยให้ foreign-key `CASCADE`/`SET_NULL` จัดการข้อมูลที่สัมพันธ์กัน ฐานข้อมูลจริงไม่ถูกแก้ไข
+* **ข้อมูลที่คงไว้**: Users, Companies, roles, SMTP/IMAP, Email-to-Ticket configuration, routing, schedules, categories และข้อมูลระบบอื่น
+* **ไฟล์ที่สร้าง**: `system_data_no_tickets_YYYY-MM-DD_HH-MM-SS.tar.gz` ภายในมี `db.sqlite3` และ `backup_manifest.json`
+* **ข้อมูลที่ไม่รวม**: Ticket rows, ข้อมูลลูกที่ถูก cascade, `media/` และ `/etc/ticketsolve/ticketsolve.env`
+* **ตารางเวลา**: `run_weekly_system_backup` ตรวจทุกนาทีผ่าน scheduler แต่สร้างสำเร็จไม่เกินหนึ่งครั้งในทุก 7 วัน เว้นแต่ใช้ `--force`
+
+### 3.4 📥 Backup Download และ Delete
 * **การใช้งาน**: สามารถดาวน์โหลดไฟล์ Backup (`.zip` หรือ `.tar.gz`) มาตรวจสอบและดูข้อมูลบนเครื่องของคุณได้ทันทีผ่านปุ่ม **📥 Download** ในหน้าจอ Backup Management (`/backups/`)
 * **Authorization**: ดาวน์โหลดและลบได้เฉพาะ System Staff ที่ยืนยันตัวตนแล้ว
-* **Empty/Missing Archive**: รายการขนาด 0 หรือ archive ที่ไม่มีอยู่จะแสดง **No data file** โดยซ่อน Download และแสดงปุ่ม **Delete empty record**
+* **Empty/Missing Archive**: รายการขนาด 0 หรือ archive ที่ไม่มีอยู่จะแสดง **No data file** โดยซ่อน Download และแสดงปุ่ม **Delete empty record**; ปุ่ม **Delete all 0 MB** ลบรายการ 0 MB ทั้งหมดในครั้งเดียว และจะไม่ลบไฟล์จริงหากตรวจพบว่าขนาดบนดิสก์มากกว่า 0
 * **Delete Behavior**: การลบใช้ `POST` + CSRF; ถ้ามี archive จะลบทั้งไฟล์และ `BackupLog` แต่หากลบไฟล์ไม่ได้ ระบบจะคง log ไว้และแจ้งข้อผิดพลาด
 
 > Backup ชุดนี้อยู่บน VPS เครื่องเดียวกับแอป จึงช่วยกู้คืนจากความเสียหายระดับไฟล์/ฐานข้อมูล แต่ไม่ใช่ off-site backup หากต้องการป้องกันกรณี VPS หรือดิสก์สูญหายทั้งเครื่อง ต้องทำสำเนา archive ไปยัง storage คนละระบบเพิ่มเติม
@@ -110,6 +117,12 @@ runuser -u ubuntu -g www-data --preserve-environment -- venv/bin/python manage.p
 # 5. บังคับรัน Full Backup แม้มี backup ภายใน 24 ชั่วโมง
 runuser -u ubuntu -g www-data --preserve-environment -- venv/bin/python manage.py run_2hr_backup --full --force
 
+# 6. รัน System Data Backup ที่ไม่มี Ticket (ระบบป้องกันการรันซ้ำภายใน 7 วัน)
+runuser -u ubuntu -g www-data --preserve-environment -- venv/bin/python manage.py run_weekly_system_backup
+
+# 7. บังคับรัน System Data Backup ทันที
+runuser -u ubuntu -g www-data --preserve-environment -- venv/bin/python manage.py run_weekly_system_backup --force
+
 exit
 ```
 
@@ -139,6 +152,7 @@ ExecStart=-/var/www/ticketSolve/venv/bin/python manage.py process_report_schedul
 ExecStart=-/var/www/ticketSolve/venv/bin/python manage.py process_ticket_automations
 ExecStart=-/var/www/ticketSolve/venv/bin/python manage.py run_2hr_backup
 ExecStart=/var/www/ticketSolve/venv/bin/python manage.py run_2hr_backup --full
+ExecStart=/var/www/ticketSolve/venv/bin/python manage.py run_weekly_system_backup
 UMask=0027
 PrivateTmp=true
 NoNewPrivileges=true
@@ -254,6 +268,8 @@ timer จะปลุกตัวประมวลผลตามนาที `
 หน้า Email Timer แสดง execution log 50 รอบล่าสุด โดยเก็บ trigger/ผู้สั่งรัน,
 สถานะ, จำนวน mailbox และอีเมลที่ found/imported/skipped/duplicate/failed,
 ระยะเวลา และรายละเอียด error
+พร้อมตารางรายละเอียดอีเมล 100 รายการล่าสุดที่แสดง mailbox, ผู้ส่ง, subject,
+Message-ID, ผล Imported/Skipped/Failed, Ticket ที่สร้าง และเหตุผลของผลลัพธ์
 
 ส่วน **Sender → Assignee routing** ใช้จับคู่อีเมลผู้ส่งกับผู้ดูแล Ticket ได้ทุกบริษัท
 เมื่อเลือกผู้ดูแลต่างจาก Target Company ระบบจะสร้าง Ticket ในบริษัทของผู้ดูแลและใช้

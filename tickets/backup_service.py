@@ -1,5 +1,6 @@
 import os
 import json
+import io
 import sqlite3
 import tarfile
 import time
@@ -187,6 +188,137 @@ def perform_full_backup():
                 details=f"Backup Failed: {str(e)}"
             )
             return {"success": False, "log": log, "error": str(e)}
+
+
+def perform_system_data_backup():
+    """Back up the database configuration/master data without Ticket rows."""
+    os.makedirs(BACKUP_DIR, exist_ok=True)
+    now_str = timezone.now().strftime("%Y-%m-%d_%H-%M-%S")
+    archive_name = f"system_data_no_tickets_{now_str}.tar.gz"
+    archive_path = os.path.join(BACKUP_DIR, archive_name)
+    temp_db_path = os.path.join(BACKUP_DIR, f"temp_system_data_{now_str}.sqlite3")
+
+    with FileLock("system_backup.lock", timeout=60):
+        try:
+            db_path = os.path.join(settings.BASE_DIR, "db.sqlite3")
+            if not os.path.isfile(db_path):
+                raise FileNotFoundError('The SQLite database file was not found.')
+
+            source_connection = sqlite3.connect(db_path)
+            destination_connection = sqlite3.connect(temp_db_path)
+            try:
+                with destination_connection:
+                    source_connection.backup(
+                        destination_connection,
+                        pages=100,
+                        sleep=0.01,
+                    )
+            finally:
+                destination_connection.close()
+                source_connection.close()
+
+            sanitized_connection = sqlite3.connect(temp_db_path)
+            try:
+                sanitized_connection.execute('PRAGMA foreign_keys = ON')
+                ticket_table = sanitized_connection.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='tickets_ticket'"
+                ).fetchone()
+                if not ticket_table:
+                    raise RuntimeError('The Ticket table was not found in the database snapshot.')
+
+                removed_ticket_count = sanitized_connection.execute(
+                    'SELECT COUNT(*) FROM tickets_ticket'
+                ).fetchone()[0]
+                with sanitized_connection:
+                    # SQLite applies each model's CASCADE/SET_NULL policy in the
+                    # cloned database. The live database is never modified.
+                    sanitized_connection.execute('DELETE FROM tickets_ticket')
+                    sanitized_connection.execute(
+                        "DELETE FROM sqlite_sequence WHERE name IN ("
+                        "'tickets_ticket', 'tickets_ticketcomment', "
+                        "'tickets_ticketattachment', 'tickets_commentattachment', "
+                        "'tickets_ticketauditlog')"
+                    )
+
+                remaining_ticket_count = sanitized_connection.execute(
+                    'SELECT COUNT(*) FROM tickets_ticket'
+                ).fetchone()[0]
+                foreign_key_errors = sanitized_connection.execute(
+                    'PRAGMA foreign_key_check'
+                ).fetchall()
+                if remaining_ticket_count or foreign_key_errors:
+                    raise RuntimeError('Ticket data could not be removed safely from the snapshot.')
+                sanitized_connection.execute('VACUUM')
+            finally:
+                sanitized_connection.close()
+
+            manifest = {
+                'backup_type': 'SYSTEM_DATA_NO_TICKETS',
+                'created_at': timezone.now().isoformat(),
+                'removed_ticket_count': removed_ticket_count,
+                'included': [
+                    'SQLite schema',
+                    'users and companies',
+                    'roles and system configuration',
+                    'SMTP/IMAP and Email-to-Ticket configuration',
+                    'routing, schedules, categories, and non-ticket records',
+                ],
+                'excluded': [
+                    'Ticket rows and database rows deleted by Ticket foreign-key cascades',
+                    'media directory and Ticket attachments',
+                    'runtime environment secrets',
+                ],
+            }
+            manifest_bytes = json.dumps(
+                manifest,
+                indent=2,
+                ensure_ascii=False,
+            ).encode('utf-8')
+            with tarfile.open(archive_path, 'w:gz') as archive:
+                archive.add(temp_db_path, arcname='db.sqlite3')
+                manifest_info = tarfile.TarInfo('backup_manifest.json')
+                manifest_info.size = len(manifest_bytes)
+                manifest_info.mtime = int(timezone.now().timestamp())
+                archive.addfile(manifest_info, io.BytesIO(manifest_bytes))
+
+            os.remove(temp_db_path)
+            file_size = os.path.getsize(archive_path)
+            expired_count = cleanup_expired_backups()
+            details = (
+                '7-Day System Data Backup without Tickets '
+                f'({file_size} bytes, removed {removed_ticket_count} Ticket row(s)). '
+                'Includes database configuration/master data; excludes media and runtime secrets. '
+                f'Expired local archives removed: {expired_count}.'
+            )
+            log = BackupLog.objects.create(
+                filename=archive_name,
+                file_size_bytes=file_size,
+                backup_type=BackupLog.TYPE_SYSTEM,
+                status=BackupLog.STATUS_SUCCESS,
+                details=details,
+            )
+            return {
+                'success': True,
+                'log': log,
+                'details': details,
+                'file_path': archive_path,
+                'removed_ticket_count': removed_ticket_count,
+            }
+        except Exception as exc:
+            for path in (temp_db_path, archive_path):
+                if os.path.exists(path):
+                    try:
+                        os.remove(path)
+                    except OSError:
+                        pass
+            log = BackupLog.objects.create(
+                filename=archive_name,
+                file_size_bytes=0,
+                backup_type=BackupLog.TYPE_SYSTEM,
+                status=BackupLog.STATUS_FAILED,
+                details=f'System Data Backup Failed: {str(exc)}',
+            )
+            return {'success': False, 'log': log, 'error': str(exc)}
 
 
 def perform_incremental_backup(hours=2):

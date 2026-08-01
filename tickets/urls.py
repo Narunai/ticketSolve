@@ -50,6 +50,11 @@ urlpatterns = [
     path('notification-configs/<int:pk>/edit/', views.NotificationConfigUpdateView.as_view(), name='notification_config_edit'),
     path('notification-configs/<int:pk>/delete/', views.NotificationConfigDeleteView.as_view(), name='notification_config_delete'),
 
+    # Private in-app notifications
+    path('notifications/', views.InAppNotificationListView.as_view(), name='notification_list'),
+    path('notifications/<int:pk>/open/', views.InAppNotificationOpenView.as_view(), name='notification_open'),
+    path('notifications/read-all/', views.InAppNotificationReadAllView.as_view(), name='notification_read_all'),
+
     # Ticket status automation URLs
     path('ticket-automations/', views.TicketAutomationListView.as_view(), name='ticket_automation_list'),
     path('ticket-automations/create/', views.TicketAutomationCreateView.as_view(), name='ticket_automation_create'),
@@ -91,4 +96,5 @@ urlpatterns = [
     path('backups/trigger/', views.TriggerBackupView.as_view(), name='backup_trigger'),
     path('backups/<int:pk>/download/', views.DownloadBackupView.as_view(), name='backup_download'),
     path('backups/<int:pk>/delete/', views.DeleteBackupLogView.as_view(), name='backup_delete'),
+    path('backups/delete-zero-mb/', views.DeleteAllZeroMbBackupsView.as_view(), name='backup_delete_zero_mb'),
 ]

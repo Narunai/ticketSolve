@@ -250,6 +250,12 @@
             if (dropdown) dropdown.classList.toggle('hidden');
         }
 
+        function toggleNotificationMenu(event) {
+            if (event) event.stopPropagation();
+            const dropdown = document.getElementById('notificationMenuDropdown');
+            if (dropdown) dropdown.classList.toggle('hidden');
+        }
+
         function setAppMode(modeName) {
             document.documentElement.setAttribute('data-mode', modeName);
             localStorage.setItem('ticket_mode', modeName);
@@ -304,6 +310,11 @@
             const btn = event.target.closest('#themeMenuDropdown') || event.target.closest('button[onclick*="toggleThemeMenu"]');
             if (dropdown && !dropdown.classList.contains('hidden') && !btn) {
                 dropdown.classList.add('hidden');
+            }
+            const notificationDropdown = document.getElementById('notificationMenuDropdown');
+            const notificationTarget = event.target.closest('#notificationMenuDropdown') || event.target.closest('button[onclick*="toggleNotificationMenu"]');
+            if (notificationDropdown && !notificationDropdown.classList.contains('hidden') && !notificationTarget) {
+                notificationDropdown.classList.add('hidden');
             }
         });
 
@@ -507,11 +518,46 @@
                     </div>
                 </div>
 
-                <!-- Notification Bell simulation -->
-                <button class="p-2 rounded-xl text-slate-400 hover:text-white bg-slate-900/50 border border-slate-800 hover:border-slate-700 transition-all relative">
-                    <span class="w-1.5 h-1.5 rounded-full bg-theme-gradient absolute top-1.5 right-1.5"></span>
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
-                </button>
+                <!-- Private in-app notifications -->
+                <div class="relative">
+                    <button onclick="toggleNotificationMenu(event)" class="p-2 rounded-xl text-slate-400 hover:text-white bg-slate-900/50 border border-slate-800 hover:border-slate-700 transition-all relative" aria-label="Notifications" aria-haspopup="true" title="Notifications">
+                        {% if unread_notification_count %}
+                        <span class="absolute -right-1.5 -top-1.5 min-w-4 rounded-full bg-violet-500 px-1 text-center text-[9px] font-bold leading-4 text-white">{{ unread_notification_count }}</span>
+                        {% endif %}
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
+                    </button>
+                    <div id="notificationMenuDropdown" class="hidden absolute right-0 z-50 mt-3 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/95 shadow-2xl backdrop-blur-xl">
+                        <div class="flex items-center justify-between border-b border-slate-800 px-4 py-3">
+                            <div>
+                                <div class="text-sm font-bold text-white">Notifications</div>
+                                <div class="text-[10px] text-slate-500">{{ unread_notification_count }} unread</div>
+                            </div>
+                            {% if unread_notification_count %}
+                            <form method="post" action="{% url 'notification_read_all' %}">
+                                {% csrf_token %}
+                                <button type="submit" class="text-[10px] font-semibold text-sky-400 hover:underline">Mark all read</button>
+                            </form>
+                            {% endif %}
+                        </div>
+                        <div class="max-h-80 overflow-y-auto divide-y divide-slate-800/70">
+                            {% for notification in header_notifications %}
+                            <a href="{% url 'notification_open' notification.pk %}" class="block px-4 py-3 hover:bg-slate-800/50 {% if not notification.is_read %}bg-theme-bg{% endif %}">
+                                <div class="flex items-start gap-2">
+                                    {% if not notification.is_read %}<span class="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-violet-400"></span>{% else %}<span class="w-1.5 shrink-0"></span>{% endif %}
+                                    <div class="min-w-0">
+                                        <div class="truncate text-xs font-semibold text-slate-200">{{ notification.title }}</div>
+                                        <div class="mt-0.5 line-clamp-2 text-[10px] text-slate-500">{{ notification.message }}</div>
+                                        <div class="mt-1 text-[9px] text-slate-600">{{ notification.created_at|timesince }} ago</div>
+                                    </div>
+                                </div>
+                            </a>
+                            {% empty %}
+                            <div class="px-4 py-8 text-center text-xs text-slate-500">No notifications yet</div>
+                            {% endfor %}
+                        </div>
+                        <a href="{% url 'notification_list' %}" class="block border-t border-slate-800 px-4 py-2.5 text-center text-xs font-semibold text-sky-400 hover:bg-slate-800/40">View all notifications</a>
+                    </div>
+                </div>
             </div>
         </header>
         {% endif %}

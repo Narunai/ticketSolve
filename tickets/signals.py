@@ -4,7 +4,39 @@ from django.core.mail import EmailMessage, send_mail
 from django.conf import settings
 from django.utils import timezone
 import uuid
-from .models import Ticket, CustomUser, Company, EmailLog, get_smtp_connection, get_smtp_from_email, should_send_email_notification
+from .models import (
+    Ticket,
+    TicketComment,
+    CustomUser,
+    Company,
+    EmailLog,
+    InAppNotification,
+    get_smtp_connection,
+    get_smtp_from_email,
+    should_send_email_notification,
+)
+
+
+def create_in_app_notifications(recipients, event_type, title, message, ticket, actor=None):
+    """Create one private notification per active recipient."""
+    recipient_ids = {
+        user.pk
+        for user in recipients
+        if user and user.pk and user.is_active
+    }
+    if actor:
+        recipient_ids.discard(actor.pk)
+    InAppNotification.objects.bulk_create([
+        InAppNotification(
+            recipient_id=recipient_id,
+            ticket=ticket,
+            actor=actor,
+            event_type=event_type,
+            title=title[:255],
+            message=message,
+        )
+        for recipient_id in recipient_ids
+    ])
 
 def log_and_send_email(subject, message, recipient_list, action_type, ticket=None, new_status=None):
     """
@@ -157,6 +189,40 @@ def send_ticket_notifications(sender, instance, created, **kwargs):
     Send email notifications and save EmailLog when a ticket is created or updated.
     """
     if created:
+        email_source = (instance.custom_fields_data or {}).get('email_to_ticket') or {}
+        if not isinstance(email_source, dict):
+            email_source = {}
+        is_email_ticket = email_source.get('source') == 'EMAIL_TO_TICKET'
+        in_app_recipients = set(
+            CustomUser.objects.filter(
+                company=instance.company,
+                role=CustomUser.CLIENT_ADMIN,
+                is_active=True,
+            )
+        )
+        if instance.assigned_to and (is_email_ticket or instance.assigned_to_id != instance.created_by_id):
+            in_app_recipients.add(instance.assigned_to)
+        if not is_email_ticket:
+            in_app_recipients.discard(instance.created_by)
+
+        if is_email_ticket:
+            sender_label = email_source.get('sender_name') or email_source.get('sender_email') or 'Unknown sender'
+            notification_title = f'New email ticket #{instance.id}'
+            notification_message = f'Imported from {sender_label}'
+            if email_source.get('sender_email') and email_source.get('sender_name'):
+                notification_message += f" <{email_source['sender_email']}>"
+        else:
+            notification_title = f'New ticket #{instance.id}'
+            notification_message = f'Created by {instance.created_by.username}'
+
+        create_in_app_notifications(
+            in_app_recipients,
+            InAppNotification.EVENT_TICKET_CREATED,
+            notification_title,
+            notification_message,
+            instance,
+        )
+
         subject = f"[TicketSolve] New Support Ticket Created: Ticket #{instance.id} - {instance.title}"
         message = (
             f"Dear {instance.created_by.username},\n\n"
@@ -190,6 +256,14 @@ def send_ticket_notifications(sender, instance, created, **kwargs):
         previous_status = getattr(instance, '_previous_status', None)
         if previous_status == instance.status:
             return
+
+        create_in_app_notifications(
+            [instance.created_by, instance.assigned_to],
+            InAppNotification.EVENT_STATUS_CHANGED,
+            f'Ticket #{instance.id} status changed',
+            f'{previous_status or "Unknown"} → {instance.get_status_display()}',
+            instance,
+        )
 
         # Keep the status clock correct when save(update_fields=['status']) is used.
         Ticket.objects.filter(pk=instance.pk).update(status_changed_at=instance.status_changed_at)
@@ -230,6 +304,22 @@ def send_ticket_notifications(sender, instance, created, **kwargs):
             )
                   
         send_status_change_email(instance, subject, message)
+
+
+@receiver(post_save, sender=TicketComment)
+def notify_ticket_comment(sender, instance, created, **kwargs):
+    if not created:
+        return
+    create_in_app_notifications(
+        [instance.ticket.created_by, instance.ticket.assigned_to],
+        InAppNotification.EVENT_COMMENT_ADDED,
+        f'New comment on Ticket #{instance.ticket_id}',
+        f'{instance.author.username}: {instance.content[:180]}',
+        instance.ticket,
+        actor=instance.author,
+    )
+
+
 @receiver(post_migrate)
 def ensure_default_categories_and_configs(sender, **kwargs):
     if sender.name == 'tickets':

@@ -486,9 +486,11 @@ class BackupLog(models.Model):
 
     TYPE_FULL = 'FULL'
     TYPE_INCREMENTAL = 'INCREMENTAL'
+    TYPE_SYSTEM = 'SYSTEM'
     TYPE_CHOICES = [
         (TYPE_FULL, 'Full Backup'),
         (TYPE_INCREMENTAL, '2-Hour Incremental'),
+        (TYPE_SYSTEM, 'System Data (No Tickets)'),
     ]
 
     filename = models.CharField(max_length=255)
@@ -618,6 +620,49 @@ class TicketComment(models.Model):
 
     def __str__(self):
         return f"Comment by {self.author.username} on Ticket #{self.ticket.id}"
+
+
+class InAppNotification(models.Model):
+    EVENT_TICKET_CREATED = 'TICKET_CREATED'
+    EVENT_STATUS_CHANGED = 'STATUS_CHANGED'
+    EVENT_COMMENT_ADDED = 'COMMENT_ADDED'
+    EVENT_CHOICES = [
+        (EVENT_TICKET_CREATED, 'Ticket created'),
+        (EVENT_STATUS_CHANGED, 'Ticket status changed'),
+        (EVENT_COMMENT_ADDED, 'Comment added'),
+    ]
+
+    recipient = models.ForeignKey(
+        CustomUser,
+        on_delete=models.CASCADE,
+        related_name='in_app_notifications',
+    )
+    ticket = models.ForeignKey(
+        Ticket,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='in_app_notifications',
+    )
+    actor = models.ForeignKey(
+        CustomUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='triggered_in_app_notifications',
+    )
+    event_type = models.CharField(max_length=30, choices=EVENT_CHOICES)
+    title = models.CharField(max_length=255)
+    message = models.TextField(blank=True, default='')
+    is_read = models.BooleanField(default=False)
+    read_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.recipient.username}: {self.title}"
 
 
 class TicketAttachment(models.Model):

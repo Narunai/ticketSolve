@@ -85,11 +85,11 @@
                 </div>
 
                 <!-- Render Dynamic Custom Fields if present -->
-                {% if ticket.custom_fields_data %}
+                {% if display_custom_fields %}
                 <div class="pt-3 border-t border-slate-800/80 space-y-2">
                     <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Custom Fields:</h4>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                    {% for key, val in ticket.custom_fields_data.items %}
+                    {% for key, val in display_custom_fields.items %}
                         <div class="bg-slate-900/40 p-2.5 rounded-lg border border-slate-800">
                             <span class="text-slate-400 font-semibold block">{{ key }}:</span>
                             <span class="text-white mt-0.5 block font-medium">{{ val|default:"-" }}</span>
@@ -274,23 +274,62 @@
                 </div>
                 {% endif %}
 
+                {% if email_source %}
+                <!-- Original email sender (different from the internal ticket creator) -->
+                <div class="my-2 rounded-lg border border-sky-500/20 bg-sky-500/5 p-3">
+                    <div class="mb-2 flex items-center gap-2">
+                        <span class="text-sm">✉️</span>
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-sky-300">Email sender</span>
+                    </div>
+                    <div class="text-sm font-semibold text-white">
+                        {{ email_source.sender_name|default:"(No display name)" }}
+                    </div>
+                    {% if email_source.sender_email %}
+                    <a href="mailto:{{ email_source.sender_email }}" class="mt-0.5 block break-all text-xs text-sky-400 hover:underline">
+                        {{ email_source.sender_email }}
+                    </a>
+                    {% endif %}
+                    {% if email_source.mailbox_name %}
+                    <div class="mt-2 text-[10px] text-slate-500">Mailbox: {{ email_source.mailbox_name }}</div>
+                    {% endif %}
+                </div>
+                {% endif %}
+
 
                 <!-- Creator -->
-                <div class="flex items-center justify-between py-2 border-b border-slate-800/60">
-                    <span class="text-slate-500">{{ t.creator_label }}:</span>
-                    <span class="text-white font-semibold">{{ ticket.created_by.username }}</span>
+                <div class="flex items-start justify-between gap-3 py-2 border-b border-slate-800/60">
+                    <span class="shrink-0 text-slate-500">{{ t.creator_label }}:</span>
+                    <div class="min-w-0 text-right">
+                        <div class="font-semibold text-white">{{ ticket.created_by.username }}</div>
+                        {% if ticket.created_by.email %}
+                        <a href="mailto:{{ ticket.created_by.email }}" class="block break-all text-[10px] text-sky-400 hover:underline">{{ ticket.created_by.email }}</a>
+                        {% else %}
+                        <div class="text-[10px] text-slate-600">No email</div>
+                        {% endif %}
+                        <div class="text-[10px] text-slate-500">
+                            {{ ticket.created_by.get_role_display }}{% if ticket.created_by.company %} · {{ ticket.created_by.company.name }}{% endif %}
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Assignee -->
-                <div class="flex items-center justify-between py-2 border-b border-slate-800/60">
-                    <span class="text-slate-500">{{ t.assignee_label }}:</span>
-                    <span class="text-white font-semibold">
-                        {% if ticket.assigned_to %}
-                            {{ ticket.assigned_to.username }}
+                <div class="flex items-start justify-between gap-3 py-2 border-b border-slate-800/60">
+                    <span class="shrink-0 text-slate-500">{{ t.assignee_label }}:</span>
+                    {% if ticket.assigned_to %}
+                    <div class="min-w-0 text-right">
+                        <div class="font-semibold text-white">{{ ticket.assigned_to.username }}</div>
+                        {% if ticket.assigned_to.email %}
+                        <a href="mailto:{{ ticket.assigned_to.email }}" class="block break-all text-[10px] text-sky-400 hover:underline">{{ ticket.assigned_to.email }}</a>
                         {% else %}
-                            <span class="text-slate-500 italic font-normal text-xs">{{ t.no_assignee }}</span>
+                        <div class="text-[10px] text-slate-600">No email</div>
                         {% endif %}
-                    </span>
+                        <div class="text-[10px] text-slate-500">
+                            {{ ticket.assigned_to.get_role_display }}{% if ticket.assigned_to.company %} · {{ ticket.assigned_to.company.name }}{% endif %}
+                        </div>
+                    </div>
+                    {% else %}
+                    <span class="text-slate-500 italic font-normal text-xs">{{ t.no_assignee }}</span>
+                    {% endif %}
                 </div>
 
                 <!-- Attachment -->

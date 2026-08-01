@@ -76,6 +76,7 @@
 ### 💾 7. ระบบสำรองข้อมูลบน AWS VPS
 - **Incremental Backup**: เก็บ Ticket ที่สร้าง/แก้ไขหรือมี comment/ไฟล์แนบใหม่ย้อนหลัง 2 ชั่วโมง
 - **Full Backup**: ใช้ SQLite Online Backup API และรวม `media/` โดยไม่รวม secrets
+- **7-Day System Data Backup**: เก็บ Users, Companies, SMTP/IMAP, routing, schedules, categories และค่าระบบใน SQLite ที่ไม่มี Ticket/`media/` พร้อม manifest และ throttling 7 วัน
 - **Storage & Retention**: เก็บ archive ที่ `/var/backups/ticketsolve` และลบไฟล์เก่าตามค่า retention เริ่มต้น 30 วัน
 - **Management UI**: System Staff ดาวน์โหลดหรือลบ archive ได้ และลบ record ที่ไม่มีข้อมูล/ไม่มีไฟล์ได้ด้วย **Delete empty record**
 - **ข้อจำกัด**: เป็น backup บน VPS เครื่องเดียว ไม่ใช่ off-site backup

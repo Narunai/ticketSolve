@@ -71,7 +71,7 @@ graph TD
 ### 4.2 ทรัพยากรพื้นที่จัดเก็บข้อมูล (Disk Storage Capacity & Mitigation)
 * **พื้นที่ดิสก์รวม**: 60 GB SSD (มีพื้นที่ว่างใช้งานจริงคงเหลือประมาณ ~45 GB)
 * **ขีดจำกัดไฟล์แนบสะสม (Worst-Case Calculation):** ตัวเลข **4,500 ไฟล์** มาจากการหารพื้นที่ว่างสมมติ 45 GB ด้วย 10 MB และยังไม่หักพื้นที่ของ OS, database, static files และ backup archives
-* **Backup ใช้ดิสก์เดียวกัน**: Full และ Incremental archives อยู่ใน `/var/backups/ticketsolve` บน VPS และมี retention เริ่มต้น 30 วัน จึงต้องรวมในการคำนวณพื้นที่
+* **Backup ใช้ดิสก์เดียวกัน**: Full, Incremental และ 7-Day System Data (No Tickets) archives อยู่ใน `/var/backups/ticketsolve` บน VPS และมี retention เริ่มต้น 30 วัน จึงต้องรวมในการคำนวณพื้นที่
 
 #### 💡 ความจริงของขนาดไฟล์แนบในการใช้งานจริง (Real-World File Size Distribution)
 ในการใช้งานจริง ผู้ใช้อัปโหลดรูปถ่ายหน้าจอ (Screenshot), ไฟล์เอกสาร PDF, หรือ Log Files ซึ่งมีขนาดเฉลี่ยเพียง **300 KB - 1.5 MB** ต่อไฟล์เท่านั้น:

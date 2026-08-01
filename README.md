@@ -2,7 +2,7 @@
 
 **TicketSolve** คือระบบบริหารจัดการตั๋วแจ้งซ่อมและสนับสนุนงานบริการ IT (IT Service Desk & Support Ticket Management System) ในรูปแบบ Multi-Tenant รองรับการทำงานหลายบริษัทในระบบเดียว มีระบบสิทธิ์การใช้งาน 5 ระดับ, ระบบปรับแต่งฟิลด์และหน้าตาตามบริษัท, ระบบแจ้งเตือนทางอีเมลพร้อมสถิติการส่ง, ระบบนำอีเมลเข้าเป็น Ticket, ระบบย้ายสถานะอัตโนมัติ (Status Automation), ระบบรายงานประจำเดือน PDF, และระบบสำรองข้อมูลอัตโนมัติบน AWS VPS ทุก 2 ชั่วโมง
 
-**อัปเดตล่าสุด**: 31 กรกฎาคม 2026
+**อัปเดตล่าสุด**: 2 สิงหาคม 2026
 
 ---
 
@@ -71,6 +71,7 @@ python manage.py process_report_schedules   # ตรวจสอบและส�
 python manage.py process_ticket_automations # ย้ายสถานะ Ticket Open ➔ In Progress ตามเวลาที่ตั้งไว้
 python manage.py run_2hr_backup             # สั่งทำ Backup 2 ชั่วโมงย้อนหลัง (มี Throttling ป้องกันรันซ้ำ)
 python manage.py run_2hr_backup --full      # Full backup รายวัน (มี Throttling ป้องกันรันซ้ำ)
+python manage.py run_weekly_system_backup   # ฐานข้อมูลระบบที่ไม่มี Ticket ทุก 7 วัน
 
 # Systemd เรียกทุก 10 นาทีและคำสั่งตรวจรอบเวลาจากฐานข้อมูล:
 python manage.py process_email_to_tickets   # อ่านอีเมล IMAP ที่ยังไม่อ่านและสร้าง Ticket
@@ -86,7 +87,8 @@ Backup archive เก็บที่ `/var/backups/ticketsolve` บน AWS VPS �
 * จำกัดไฟล์แนบสูงสุด 10 MB ต่อไฟล์, 10 ไฟล์ต่อ request และรวมไม่เกิน 50 MB
 * Production เปิด HTTPS redirect, secure cookies, HSTS, `nosniff` และ referrer policy
 * `SECRET_KEY`, allowed hosts, CSRF origins, SMTP credentials และตำแหน่ง backup กำหนดผ่าน environment file นอก Git checkout
-* หน้า Backup Management แสดง Download เฉพาะ archive ที่มีข้อมูล; รายการขนาด 0 หรือไฟล์หายสามารถลบด้วย **Delete empty record**
+* หน้า Backup Management แสดง Download เฉพาะ archive ที่มีข้อมูล; รายการขนาด 0 หรือไฟล์หายสามารถลบรายรายการด้วย **Delete empty record** หรือลบรายการ 0 MB ทั้งหมดด้วย **Delete all 0 MB**
+* **System Data (No Tickets)** สร้างทุก 7 วัน: เก็บ Users, Companies, roles, SMTP/IMAP, routing, schedules, categories และค่าระบบใน SQLite ที่ล้าง Ticket ออกจากสำเนาแล้ว โดยไม่รวม `media/` และ runtime secrets
 * SMTP Configuration แยกขอบเขตการใช้งานเป็นส่งอีเมล, Email → Ticket หรือทั้งสองฟังก์ชัน โดยมี active configuration แยกตาม feature
 
 ## 📥 Email → Ticket
@@ -96,6 +98,8 @@ Backup archive เก็บที่ `/var/backups/ticketsolve` บน AWS VPS �
 * กด **Scan now** หรือ **Import Now** เพื่อสแกนทันทีโดยไม่รอรอบ
 * เก็บ run log 50 รอบล่าสุด พร้อม trigger/ผู้สั่งรัน, สถานะ, จำนวน mailbox,
   found/imported/skipped/duplicate/failed, ระยะเวลา และรายละเอียดข้อผิดพลาด
+* เก็บ log รายอีเมล 100 รายการล่าสุด พร้อม mailbox, ชื่อ/อีเมลผู้ส่ง, subject, Message-ID, ผล Imported/Skipped/Failed, Ticket ที่สร้าง และเหตุผล
+* Ticket ที่สร้างจากอีเมลจะแสดงการ์ด **Email sender** แยกจาก internal creator เพื่อให้ติดตามผู้แจ้งตัวจริงได้
 * Sender → Assignee routing กำหนดผู้ดูแลตามอีเมลผู้ส่งได้ทุกบริษัท โดย Ticket จะอยู่ในบริษัทของผู้ดูแลเพื่อรักษา tenant isolation; หากไม่มีกฎหรือผู้ดูแลในกฎไม่ active จะใช้ค่า Company/Creator/Default Assignee จาก SMTP
 * Custom subject keywords เป็นคำเพิ่มเติมจากคำมาตรฐาน เช่น `ปัญหา` และ `issue` ไม่ได้แทนที่คำมาตรฐาน
 * อ่านเฉพาะข้อความ `UNSEEN` ย้อนหลังตามจำนวนวันที่กำหนด และจำกัดจำนวนต่อรอบ
@@ -104,6 +108,7 @@ Backup archive เก็บที่ `/var/backups/ticketsolve` บน AWS VPS �
 * เก็บ Message-ID ป้องกัน import ซ้ำ และ mark as read หลังประมวลผลสำเร็จ/ข้ามแล้ว
 * ไฟล์แนบใช้ข้อจำกัดเดียวกับหน้าเว็บ: 10 MB ต่อไฟล์, 10 ไฟล์ และรวม 50 MB
 * ข้ามอีเมลระบบที่ขึ้นต้น `[TicketSolve]` เพื่อป้องกันวงจรส่งแล้วนำกลับเข้า และจำกัด raw email ที่ 55 MB/เนื้อหา 100,000 ตัวอักษร
+* กระดิ่ง **In-App Notifications** แจ้ง Ticket ใหม่, การเปลี่ยนสถานะ และความคิดเห็นใหม่ ผู้ใช้เปิด Ticket หรือ Mark all read ได้ และเห็นเฉพาะแจ้งเตือนของบัญชีตนเอง
 * Microsoft 365 ที่ปิด IMAP ต้องใช้ Graph/OAuth integration เพิ่มเติม; รุ่นนี้ยังไม่ใช้ Basic Auth เพื่อหลีกเลี่ยงการอ้างว่ารองรับบัญชีที่ปิด IMAP
 
 ---

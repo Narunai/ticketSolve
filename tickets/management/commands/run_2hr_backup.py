@@ -11,7 +11,7 @@ class Command(BaseCommand):
         parser.add_argument(
             '--full',
             action='store_true',
-            help='Run a full system backup (db + media + env) instead of 2-hour incremental backup.'
+            help='Run a full system backup (database + media; runtime secrets excluded) instead of 2-hour incremental backup.'
         )
         parser.add_argument(
             '--hours',

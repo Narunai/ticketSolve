@@ -97,6 +97,59 @@
 
     <section class="overflow-hidden rounded-xl border border-slate-800/80 bg-slate-900/40">
         <div class="border-b border-slate-800/80 px-4 py-3">
+            <h2 class="text-sm font-bold text-white">Email import details</h2>
+            <p class="mt-1 text-[10px] text-slate-500">100 อีเมลล่าสุด พร้อมผลการนำเข้าและเหตุผลที่คัดออก</p>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full min-w-[1150px] text-left text-[11px]">
+                <thead class="border-b border-slate-800/80 text-slate-500">
+                    <tr>
+                        <th class="px-3 py-2">Processed</th>
+                        <th class="px-3 py-2">Mailbox</th>
+                        <th class="px-3 py-2">Sender</th>
+                        <th class="px-3 py-2">Subject / Message-ID</th>
+                        <th class="px-3 py-2">Result</th>
+                        <th class="px-3 py-2">Ticket</th>
+                        <th class="px-3 py-2">Reason / details</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800/50 text-slate-300">
+                    {% for receipt in inbound_receipts %}
+                    <tr class="align-top hover:bg-slate-800/20">
+                        <td class="whitespace-nowrap px-3 py-2">{{ receipt.processed_at|date:"Y-m-d H:i:s" }}</td>
+                        <td class="px-3 py-2">{{ receipt.smtp_configuration.name|default:"Deleted mailbox" }}</td>
+                        <td class="px-3 py-2">
+                            <div class="font-medium text-slate-200">{{ receipt.sender_name|default:"(No display name)" }}</div>
+                            <div class="break-all text-[10px] text-slate-500">{{ receipt.sender_email|default:"Unknown" }}</div>
+                        </td>
+                        <td class="max-w-xs px-3 py-2">
+                            <div class="font-medium text-slate-200">{{ receipt.subject|default:"(Subject unavailable)" }}</div>
+                            <div class="truncate text-[9px] text-slate-600" title="{{ receipt.message_id }}">{{ receipt.message_id }}</div>
+                        </td>
+                        <td class="px-3 py-2">
+                            <span class="inline-flex rounded-full border px-2 py-0.5 font-semibold {% if receipt.status == 'IMPORTED' %}border-emerald-500/30 bg-emerald-500/10 text-emerald-400{% elif receipt.status == 'SKIPPED' %}border-amber-500/30 bg-amber-500/10 text-amber-300{% else %}border-rose-500/30 bg-rose-500/10 text-rose-400{% endif %}">
+                                {{ receipt.get_status_display }}
+                            </span>
+                        </td>
+                        <td class="px-3 py-2">
+                            {% if receipt.ticket %}
+                            <a href="{% url 'ticket_detail' receipt.ticket.pk %}" class="font-semibold text-sky-400 hover:underline">#{{ receipt.ticket.pk }}</a>
+                            {% else %}
+                            <span class="text-slate-600">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="max-w-sm px-3 py-2 text-slate-400" title="{{ receipt.details }}">{{ receipt.details|default:"No additional details"|truncatechars:220 }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="7" class="px-3 py-8 text-center text-slate-500">ยังไม่มีประวัติอีเมลที่ระบบตรวจสอบ</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="overflow-hidden rounded-xl border border-slate-800/80 bg-slate-900/40">
+        <div class="border-b border-slate-800/80 px-4 py-3">
             <h2 class="text-sm font-bold text-white">Active inbound mailboxes</h2>
         </div>
         <div class="grid gap-2 p-4 sm:grid-cols-2 lg:grid-cols-3">

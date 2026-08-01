@@ -1878,6 +1878,7 @@ class MultiTenantTicketTests(TestCase):
         log_to_download = BackupLog.objects.first()
         dl_res = self.client.get(reverse('backup_download', args=[log_to_download.id]))
         self.assertIn(dl_res.status_code, [200, 302])
+        dl_res.close()
 
         # 5. Test Delete Backup Log View
         log_to_delete = BackupLog.objects.first()
@@ -1916,6 +1917,196 @@ class MultiTenantTicketTests(TestCase):
         )
         self.assertRedirects(delete_response, reverse('backup_list'))
         self.assertFalse(BackupLog.objects.filter(pk=empty_log.pk).exists())
+
+    def test_system_admin_can_delete_all_zero_mb_backup_records_safely(self):
+        import os
+        import tempfile
+        from unittest import mock
+        from tickets.models import BackupLog
+
+        empty_with_file = BackupLog.objects.create(
+            filename='empty_archive.zip',
+            file_size_bytes=0,
+            backup_type=BackupLog.TYPE_INCREMENTAL,
+            status=BackupLog.STATUS_SUCCESS,
+        )
+        empty_without_file = BackupLog.objects.create(
+            filename='missing_empty_archive.zip',
+            file_size_bytes=0,
+            backup_type=BackupLog.TYPE_INCREMENTAL,
+            status=BackupLog.STATUS_SUCCESS,
+        )
+        non_empty = BackupLog.objects.create(
+            filename='keep_archive.zip',
+            file_size_bytes=1024,
+            backup_type=BackupLog.TYPE_FULL,
+            status=BackupLog.STATUS_SUCCESS,
+        )
+
+        with tempfile.TemporaryDirectory() as backup_dir, mock.patch(
+            'tickets.backup_service.BACKUP_DIR',
+            backup_dir,
+        ):
+            empty_path = os.path.join(backup_dir, empty_with_file.filename)
+            with open(empty_path, 'wb'):
+                pass
+
+            self.client.login(username='system_admin', password='password123')
+            page = self.client.get(reverse('backup_list'))
+            self.assertContains(page, 'Delete all 0 MB (2)')
+            self.assertContains(page, reverse('backup_delete_zero_mb'))
+
+            response = self.client.post(reverse('backup_delete_zero_mb'))
+            self.assertRedirects(response, reverse('backup_list'))
+            self.assertFalse(os.path.exists(empty_path))
+
+        self.assertFalse(BackupLog.objects.filter(pk=empty_with_file.pk).exists())
+        self.assertFalse(BackupLog.objects.filter(pk=empty_without_file.pk).exists())
+        self.assertTrue(BackupLog.objects.filter(pk=non_empty.pk).exists())
+
+        forbidden_record = BackupLog.objects.create(
+            filename='must_remain.zip',
+            file_size_bytes=0,
+            backup_type=BackupLog.TYPE_INCREMENTAL,
+            status=BackupLog.STATUS_SUCCESS,
+        )
+        self.client.logout()
+        self.client.login(username='user_a', password='password123')
+        self.assertEqual(
+            self.client.post(reverse('backup_delete_zero_mb')).status_code,
+            403,
+        )
+        self.assertTrue(BackupLog.objects.filter(pk=forbidden_record.pk).exists())
+
+    def test_system_data_backup_keeps_configuration_and_removes_ticket_rows(self):
+        import json
+        import os
+        import sqlite3
+        import tarfile
+        import tempfile
+        from pathlib import Path
+        from unittest import mock
+        from django.test import override_settings
+        from tickets.backup_service import perform_system_data_backup
+        from tickets.models import BackupLog
+
+        with tempfile.TemporaryDirectory() as base_dir, tempfile.TemporaryDirectory() as backup_dir:
+            source_db = os.path.join(base_dir, 'db.sqlite3')
+            connection = sqlite3.connect(source_db)
+            try:
+                connection.execute('PRAGMA foreign_keys = ON')
+                connection.executescript(
+                    '''
+                    CREATE TABLE tickets_company (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name TEXT NOT NULL
+                    );
+                    CREATE TABLE tickets_ticket (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        title TEXT NOT NULL
+                    );
+                    CREATE TABLE tickets_ticketcomment (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        ticket_id INTEGER NOT NULL REFERENCES tickets_ticket(id) ON DELETE CASCADE,
+                        content TEXT NOT NULL
+                    );
+                    CREATE TABLE tickets_inboundemailreceipt (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        ticket_id INTEGER REFERENCES tickets_ticket(id) ON DELETE SET NULL,
+                        subject TEXT NOT NULL
+                    );
+                    INSERT INTO tickets_company(name) VALUES ('Preserved Company');
+                    INSERT INTO tickets_ticket(title) VALUES ('Must be removed');
+                    INSERT INTO tickets_ticketcomment(ticket_id, content) VALUES (1, 'Must cascade');
+                    INSERT INTO tickets_inboundemailreceipt(ticket_id, subject) VALUES (1, 'Preserved log');
+                    '''
+                )
+                connection.commit()
+            finally:
+                connection.close()
+
+            with override_settings(BASE_DIR=Path(base_dir)), mock.patch(
+                'tickets.backup_service.BACKUP_DIR',
+                backup_dir,
+            ):
+                result = perform_system_data_backup()
+
+            self.assertTrue(result['success'])
+            self.assertEqual(result['removed_ticket_count'], 1)
+            self.assertEqual(result['log'].backup_type, BackupLog.TYPE_SYSTEM)
+
+            extracted_db = os.path.join(base_dir, 'restored-system.sqlite3')
+            with tarfile.open(result['file_path'], 'r:gz') as archive:
+                self.assertIn('db.sqlite3', archive.getnames())
+                self.assertIn('backup_manifest.json', archive.getnames())
+                with open(extracted_db, 'wb') as destination:
+                    destination.write(archive.extractfile('db.sqlite3').read())
+                manifest = json.loads(
+                    archive.extractfile('backup_manifest.json').read().decode('utf-8')
+                )
+
+            restored = sqlite3.connect(extracted_db)
+            try:
+                self.assertEqual(restored.execute('SELECT COUNT(*) FROM tickets_ticket').fetchone()[0], 0)
+                self.assertEqual(restored.execute('SELECT COUNT(*) FROM tickets_ticketcomment').fetchone()[0], 0)
+                self.assertEqual(restored.execute('SELECT name FROM tickets_company').fetchone()[0], 'Preserved Company')
+                self.assertIsNone(
+                    restored.execute('SELECT ticket_id FROM tickets_inboundemailreceipt').fetchone()[0]
+                )
+            finally:
+                restored.close()
+            self.assertEqual(manifest['removed_ticket_count'], 1)
+            self.assertEqual(manifest['backup_type'], 'SYSTEM_DATA_NO_TICKETS')
+
+    def test_weekly_system_backup_throttles_for_seven_days_and_supports_manual_run(self):
+        import datetime
+        from unittest import mock
+        from django.core.management import call_command
+        from tickets.models import BackupLog
+
+        recent_log = BackupLog.objects.create(
+            filename='recent_system_data.tar.gz',
+            file_size_bytes=1024,
+            backup_type=BackupLog.TYPE_SYSTEM,
+            status=BackupLog.STATUS_SUCCESS,
+        )
+        successful_result = {
+            'success': True,
+            'details': 'System data backed up without Tickets.',
+        }
+        with mock.patch(
+            'tickets.management.commands.run_weekly_system_backup.perform_system_data_backup',
+            return_value=successful_result,
+        ) as scheduled_backup:
+            call_command('run_weekly_system_backup', verbosity=0)
+            scheduled_backup.assert_not_called()
+            BackupLog.objects.filter(pk=recent_log.pk).update(
+                created_at=timezone.now() - datetime.timedelta(days=8),
+            )
+            call_command('run_weekly_system_backup', verbosity=0)
+            scheduled_backup.assert_called_once_with()
+            scheduled_backup.reset_mock()
+            call_command('run_weekly_system_backup', '--force', verbosity=0)
+            scheduled_backup.assert_called_once_with()
+
+        self.client.login(username='system_admin', password='password123')
+        backup_page = self.client.get(reverse('backup_list'))
+        self.assertContains(backup_page, 'System Data (No Tickets)')
+        self.assertContains(backup_page, 'System Data (7 Days)')
+        filtered_page = self.client.get(reverse('backup_list'), {'type': 'SYSTEM'})
+        self.assertEqual(filtered_page.status_code, 200)
+        self.assertEqual(filtered_page.context['filtered_count'], 1)
+        with mock.patch(
+            'tickets.views.perform_system_data_backup',
+            return_value=successful_result,
+        ) as manual_backup:
+            response = self.client.post(
+                reverse('backup_trigger'),
+                {'backup_type': 'system'},
+            )
+        self.assertRedirects(response, reverse('backup_list'))
+        manual_backup.assert_called_once_with()
+        self.assertTrue(BackupLog.objects.filter(pk=recent_log.pk).exists())
 
     def test_client_user_can_only_read_own_tickets_and_cannot_update(self):
         coworker_ticket = Ticket.objects.create(
@@ -2121,6 +2312,120 @@ class MultiTenantTicketTests(TestCase):
             backup_dir,
         ):
             self.assertIsNone(get_backup_file_path('../.env'))
+
+    def test_imported_email_sender_is_pinned_to_ticket_and_logged_per_message(self):
+        from .models import InAppNotification, InboundEmailReceipt, SMTPConfiguration
+
+        config = SMTPConfiguration.objects.create(
+            name='Support inbox',
+            provider='GMAIL',
+            username='support@example.com',
+            password='app-password',
+        )
+        imported_ticket = Ticket.objects.create(
+            title='Issue: Cannot sign in',
+            description='Login returns an error.',
+            company=self.company_a,
+            created_by=self.user_a,
+            assigned_to=self.user_a,
+            custom_fields_data={
+                'email_to_ticket': {
+                    'source': 'EMAIL_TO_TICKET',
+                    'sender_name': 'External Customer',
+                    'sender_email': 'customer@example.com',
+                    'message_id': '<imported@example.com>',
+                },
+            },
+        )
+        InboundEmailReceipt.objects.create(
+            smtp_configuration=config,
+            message_id='<imported@example.com>',
+            sender_name='External Customer',
+            sender_email='customer@example.com',
+            subject=imported_ticket.title,
+            status=InboundEmailReceipt.STATUS_IMPORTED,
+            details=f'Imported as Ticket #{imported_ticket.pk}.',
+            ticket=imported_ticket,
+        )
+        InboundEmailReceipt.objects.create(
+            smtp_configuration=config,
+            message_id='<skipped@example.com>',
+            sender_name='Newsletter Robot',
+            sender_email='news@example.com',
+            subject='Weekly newsletter',
+            status=InboundEmailReceipt.STATUS_SKIPPED,
+            details='Skipped because the subject did not match any issue keyword.',
+        )
+
+        self.client.login(username='user_a', password='password123')
+        detail_response = self.client.get(reverse('ticket_detail', args=[imported_ticket.pk]))
+        self.assertContains(detail_response, 'Email sender')
+        self.assertContains(detail_response, 'External Customer')
+        self.assertContains(detail_response, 'customer@example.com')
+        self.assertContains(detail_response, self.user_a.email)
+        self.assertContains(detail_response, self.user_a.get_role_display())
+        self.assertNotContains(detail_response, "'source': 'EMAIL_TO_TICKET'")
+        self.assertTrue(InAppNotification.objects.filter(
+            recipient=self.user_a,
+            ticket=imported_ticket,
+            event_type=InAppNotification.EVENT_TICKET_CREATED,
+        ).exists())
+
+        self.client.logout()
+        self.client.login(username='system_admin', password='password123')
+        timer_response = self.client.get(reverse('email_timer'))
+        self.assertContains(timer_response, 'Email import details')
+        self.assertContains(timer_response, 'Issue: Cannot sign in')
+        self.assertContains(timer_response, 'Weekly newsletter')
+        self.assertContains(timer_response, 'External Customer')
+        self.assertContains(timer_response, 'Newsletter Robot')
+        self.assertContains(timer_response, 'Imported as Ticket')
+        self.assertContains(timer_response, 'did not match any issue keyword')
+
+    def test_notification_bell_is_private_and_marks_notifications_read(self):
+        from .models import InAppNotification
+
+        own_notification = InAppNotification.objects.create(
+            recipient=self.user_a,
+            ticket=self.ticket_a,
+            event_type=InAppNotification.EVENT_STATUS_CHANGED,
+            title='Your private ticket update',
+            message='Ticket is now In Progress',
+        )
+        InAppNotification.objects.create(
+            recipient=self.user_b,
+            event_type=InAppNotification.EVENT_TICKET_CREATED,
+            title='Another tenant private notification',
+            message='Must not be visible to Company A.',
+        )
+
+        self.client.login(username='user_a', password='password123')
+        response = self.client.get(reverse('notification_list'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Your private ticket update')
+        self.assertNotContains(response, 'Another tenant private notification')
+
+        response = self.client.get(reverse('notification_open', args=[own_notification.pk]))
+        self.assertRedirects(response, reverse('ticket_detail', args=[self.ticket_a.pk]))
+        own_notification.refresh_from_db()
+        self.assertTrue(own_notification.is_read)
+        self.assertIsNotNone(own_notification.read_at)
+
+        unread = InAppNotification.objects.create(
+            recipient=self.user_a,
+            event_type=InAppNotification.EVENT_COMMENT_ADDED,
+            title='Another update',
+        )
+        response = self.client.post(reverse('notification_read_all'))
+        self.assertRedirects(response, reverse('notification_list'))
+        unread.refresh_from_db()
+        self.assertTrue(unread.is_read)
+
+        other_notification = InAppNotification.objects.filter(recipient=self.user_b).first()
+        self.assertEqual(
+            self.client.get(reverse('notification_open', args=[other_notification.pk])).status_code,
+            404,
+        )
 
 
 

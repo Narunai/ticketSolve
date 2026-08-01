@@ -173,3 +173,20 @@ def language_processor(request):
         'current_lang': 'en',
         't': translations
     }
+
+
+def notification_processor(request):
+    if not request.user.is_authenticated:
+        return {
+            'header_notifications': [],
+            'unread_notification_count': 0,
+        }
+
+    notifications = request.user.in_app_notifications.select_related(
+        'ticket',
+        'actor',
+    )
+    return {
+        'header_notifications': notifications[:8],
+        'unread_notification_count': notifications.filter(is_read=False).count(),
+    }

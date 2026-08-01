@@ -188,7 +188,7 @@ def _safe_attachment_name(filename):
     return os.path.basename(normalized)[:255] or 'email-attachment'
 
 
-def _create_ticket(config, message):
+def _create_ticket(config, message, matched_keywords=None):
     skipped = []
     accepted = []
     total_bytes = 0
@@ -242,6 +242,7 @@ def _create_ticket(config, message):
         'assignment_source': 'SENDER_RULE' if routing_rule else 'SMTP_DEFAULT',
         'company_source': 'ASSIGNEE_COMPANY' if routing_rule else 'SMTP_DEFAULT',
         'creator_source': creator_source,
+        'matched_keywords': matched_keywords or [],
     }
     with transaction.atomic():
         ticket = Ticket.objects.create(
@@ -273,7 +274,11 @@ def _create_ticket(config, message):
                 'subject': message.subject,
                 'status': InboundEmailReceipt.STATUS_IMPORTED,
                 'details': (
-                    f'Imported {len(accepted)} attachment(s).'
+                    f'Imported as Ticket #{ticket.pk}; '
+                    f'assignee: {assignee.username if assignee else "Unassigned"}; '
+                    f'company: {ticket_company.name}; '
+                    f'matched keywords: {", ".join(matched_keywords or []) or "not required"}; '
+                    f'accepted attachments: {len(accepted)}.'
                     + (f" Skipped: {'; '.join(skipped)}" if skipped else '')
                 ),
                 'ticket': ticket,
@@ -391,7 +396,7 @@ def import_email_to_tickets(config):
                             'Skipped a TicketSolve-generated message to prevent an email loop.'
                         )
                     else:
-                        skip_details = 'Subject did not match issue keywords.'
+                        skip_details = 'Skipped because the subject did not match any issue keyword.'
                     InboundEmailReceipt.objects.update_or_create(
                         smtp_configuration=config,
                         message_id=message.message_id,
@@ -409,7 +414,11 @@ def import_email_to_tickets(config):
                         _mark_seen(client, uid)
                     continue
 
-                ticket, skipped_attachments = _create_ticket(config, message)
+                ticket, skipped_attachments = _create_ticket(
+                    config,
+                    message,
+                    matched_keywords=matched,
+                )
                 result['imported'] += 1
                 logger.info(
                     "Imported IMAP message %s as Ticket #%s (keywords=%s, skipped_attachments=%s)",
