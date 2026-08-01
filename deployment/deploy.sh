@@ -65,13 +65,20 @@ sudo chown root:www-data "$ENV_FILE"
 sudo install -d -m 750 -o ubuntu -g www-data "$BACKUP_DIR"
 
 run_manage() {
-    local manage_args="$*"
-    sudo -u ubuntu -g www-data bash -c \
-        "set -a; source '${ENV_FILE}'; set +a; cd '${PROJECT_DIR}'; exec venv/bin/python manage.py ${manage_args}"
+    local unit_suffix="$1"
+    shift
+    sudo systemd-run --wait --pipe --collect \
+        --unit="ticketsolve-deploy-${unit_suffix}" \
+        -p Type=oneshot \
+        -p User=ubuntu \
+        -p Group=www-data \
+        -p WorkingDirectory="${PROJECT_DIR}" \
+        -p EnvironmentFile="${ENV_FILE}" \
+        "${PROJECT_DIR}/venv/bin/python" manage.py "$@"
 }
 
-run_manage "migrate --noinput"
-run_manage "collectstatic --noinput"
+run_manage migrate migrate --noinput
+run_manage static collectstatic --noinput
 
 sudo cp deployment/gunicorn.service /etc/systemd/system/gunicorn.service
 sudo cp deployment/ticketsolve-scheduler.service /etc/systemd/system/ticketsolve-scheduler.service
