@@ -94,6 +94,7 @@ urlpatterns = [
     # Backup Management URLs
     path('backups/', views.BackupManagementView.as_view(), name='backup_list'),
     path('backups/trigger/', views.TriggerBackupView.as_view(), name='backup_trigger'),
+    path('backups/schedule/', views.BackupScheduleUpdateView.as_view(), name='backup_schedule_update'),
     path('backups/<int:pk>/download/', views.DownloadBackupView.as_view(), name='backup_download'),
     path('backups/<int:pk>/delete/', views.DeleteBackupLogView.as_view(), name='backup_delete'),
     path('backups/delete-zero-mb/', views.DeleteAllZeroMbBackupsView.as_view(), name='backup_delete_zero_mb'),

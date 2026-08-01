@@ -67,16 +67,19 @@
 ---
 
 ### 💾 1.7 ระบบสำรองข้อมูล (AWS VPS Backup)
-* **2-Hour Incremental Backup**: บันทึก Ticket ที่ถูกสร้าง/แก้ไข หรือมี Comments/ไฟล์แนบใหม่ใน 2 ชั่วโมงย้อนหลังเป็น `.zip` ไว้ที่ `/var/backups/ticketsolve`
+* **Configurable Incremental Backup**: บันทึก Ticket ที่ถูกสร้าง/แก้ไข หรือมี Comments/ไฟล์แนบใหม่ตามช่วงที่ตั้ง (1, 2, 4, 6, 12 หรือ 24 ชั่วโมง; ค่าเริ่มต้น 2 ชั่วโมง) เป็น `.zip` ไว้ที่ `/var/backups/ticketsolve`
 * **Full Backup**: ใช้ SQLite Online Backup API สำรองฐานข้อมูลและบีบอัดร่วมกับ `media/` เป็น `.tar.gz` บน AWS VPS โดยไม่รวม secrets
-* **7-Day System Data (No Tickets)**: สำรองฐานข้อมูลส่วน Users, Companies, roles, SMTP/IMAP, routing, schedules, categories และค่าระบบทุก 7 วัน โดยล้าง Ticket/ข้อมูลลูกที่ cascade ออกจากสำเนา และไม่รวม `media/` หรือ runtime secrets; สามารถกด **Run Manually: System Data (No Tickets)** เพื่อสำรองทันทีได้โดย schedule 7 วันยังทำงานตามเดิม
+* **System Data (No Tickets)**: สำรองฐานข้อมูลส่วน Users, Companies, roles, SMTP/IMAP, routing, schedules, categories และค่าระบบตามรอบที่ตั้ง โดยล้าง Ticket/ข้อมูลลูกที่ cascade ออกจากสำเนา และไม่รวม `media/` หรือ runtime secrets
+* **Backup Timer**: System Admin ตั้งรอบและเปิด/ปิด Incremental, Full และ System Data แยกกันได้จากหน้า Backup; จำกัด Incremental ขั้นต่ำ 1 ชั่วโมง และ Full/System Data ขั้นต่ำ 1 วัน พร้อม failure backoff 30 นาที ส่วน System Sub Admin ดูสถานะได้แต่แก้ timer ไม่ได้
 * **Retention**: ลบ archive ที่เก่ากว่า `BACKUP_RETENTION_DAYS` ซึ่งมีค่าเริ่มต้น 30 วัน
 * **Backup Management UI (`/backups/`)**: กดสำรองข้อมูล, ดาวน์โหลด archive, ดูสถิติ และลบทั้ง archive/log; รายการไม่มีข้อมูลหรือไฟล์หายมีปุ่ม **Delete empty record** และปุ่มรวม **Delete all 0 MB**
-* **Access Control**: เฉพาะ `SYSTEM_ADMIN`, `SYSTEM_SUB_ADMIN` และ Django superuser เท่านั้น
+* **Access Control**: `SYSTEM_ADMIN`, `SYSTEM_SUB_ADMIN` และ Django superuser เข้าหน้า Backup ได้ แต่การแก้ Backup Timer จำกัดเฉพาะ `SYSTEM_ADMIN`/superuser และทุกการบันทึกใช้ `POST` + CSRF
 
 ---
 
 ## 🔐 2. ตารางสิทธิ์การใช้งานตามบทบาท (Permissions Matrix)
+
+Sidebar แสดงชื่อผู้ใช้ บริษัท/ส่วนกลาง และบทบาทที่มีผลจริงแยกกัน โดย Django superuser จะแสดงเป็น **System Administrator** แม้ข้อมูลบัญชีรุ่นเก่าจะยังเก็บค่า role เป็น Client User
 
 | ฟีเจอร์ / การกระทำ | SYSTEM_ADMIN | SYSTEM_SUB_ADMIN | CLIENT_ADMIN | CLIENT_STAFF | CLIENT_USER |
 | :--- | :---: | :---: | :---: | :---: | :---: |

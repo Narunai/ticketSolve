@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from .models import (
+    BackupSchedule,
     Company,
     CustomUser,
     InboundEmailReceipt,
@@ -196,6 +197,28 @@ class EmailToTicketScheduleAdmin(admin.ModelAdmin):
 
     def has_add_permission(self, request):
         return not EmailToTicketSchedule.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def save_model(self, request, obj, form, change):
+        obj.updated_by = request.user
+        super().save_model(request, obj, form, change)
+
+
+@admin.register(BackupSchedule)
+class BackupScheduleAdmin(admin.ModelAdmin):
+    list_display = (
+        'incremental_interval_minutes',
+        'full_interval_minutes',
+        'system_interval_minutes',
+        'updated_at',
+        'updated_by',
+    )
+    readonly_fields = ('singleton_key', 'updated_at', 'updated_by')
+
+    def has_add_permission(self, request):
+        return not BackupSchedule.objects.exists()
 
     def has_delete_permission(self, request, obj=None):
         return False

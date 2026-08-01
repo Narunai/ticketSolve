@@ -307,7 +307,7 @@ def perform_system_data_backup():
             file_size = os.path.getsize(archive_path)
             expired_count = cleanup_expired_backups()
             details = (
-                '7-Day System Data Backup without Tickets '
+                'System Data Backup without Tickets '
                 f'({file_size} bytes, removed {removed_ticket_count} Ticket row(s)). '
                 'Includes database configuration/master data; excludes media and runtime secrets. '
                 f'Expired local archives removed: {expired_count}.'
@@ -481,7 +481,7 @@ def perform_incremental_backup(hours=2):
 
             ticket_ids = ", ".join([f"#{t.id}" for t in tickets])
             details = (
-                f"2-Hour Incremental Backup of {tickets.count()} changed ticket(s) "
+                f"{hours}-Hour Incremental Backup of {tickets.count()} changed ticket(s) "
                 f"({ticket_ids}). Stored locally on the AWS VPS. "
                 f"Expired local archives removed: {expired_count}."
             )

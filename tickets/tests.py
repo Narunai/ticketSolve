@@ -287,6 +287,32 @@ class MultiTenantTicketTests(TestCase):
         positions = [navigation.index(marker) for marker in expected_order]
         self.assertEqual(positions, sorted(positions))
 
+    def test_sidebar_identity_shows_name_company_and_effective_admin_role(self):
+        self.client.login(username='system_admin', password='password123')
+        response = self.client.get(reverse('dashboard'))
+        self.assertEqual(response.status_code, 200)
+        page = response.content.decode('utf-8')
+        card_start = page.index('id="sidebarIdentityCard"')
+        admin_card = page[card_start:page.index('<!-- Navigation Links -->', card_start)]
+        self.assertIn('Account Information', admin_card)
+        self.assertIn('system_admin', admin_card)
+        self.assertIn('Central Administration', admin_card)
+        self.assertIn('System Administrator', admin_card)
+        self.assertNotIn('Client User', admin_card)
+
+        self.user_a.first_name = 'Alice'
+        self.user_a.last_name = 'Support'
+        self.user_a.save(update_fields=['first_name', 'last_name'])
+        self.client.logout()
+        self.client.login(username='user_a', password='password123')
+        response = self.client.get(reverse('dashboard'))
+        page = response.content.decode('utf-8')
+        card_start = page.index('id="sidebarIdentityCard"')
+        client_card = page[card_start:page.index('<!-- Navigation Links -->', card_start)]
+        self.assertIn('Alice Support', client_card)
+        self.assertIn('Company A', client_card)
+        self.assertIn('Client User', client_card)
+
     def test_parent_subsidiary_company_hierarchy_and_clean_validation(self):
         from django.core.exceptions import ValidationError
 
@@ -1855,6 +1881,7 @@ class MultiTenantTicketTests(TestCase):
         self.ticket_a.save(update_fields=['status'])
         self.ticket_a.refresh_from_db()
     def test_backup_management_views_and_service(self):
+        from unittest import mock
         from tickets.backup_service import perform_full_backup, perform_incremental_backup
         from tickets.models import BackupLog
 
@@ -1905,8 +1932,16 @@ class MultiTenantTicketTests(TestCase):
         self.assertTrue(res_inc['success'])
         self.assertTrue(BackupLog.objects.filter(backup_type=BackupLog.TYPE_INCREMENTAL).exists())
 
-        post_inc = self.client.post(reverse('backup_trigger'), {'backup_type': 'incremental', 'hours': '2'})
+        with mock.patch(
+            'tickets.views.perform_incremental_backup',
+            return_value={'success': True, 'details': 'Manual incremental complete.'},
+        ) as manual_incremental:
+            post_inc = self.client.post(
+                reverse('backup_trigger'),
+                {'backup_type': 'incremental', 'hours': '168'},
+            )
         self.assertRedirects(post_inc, reverse('backup_list'))
+        manual_incremental.assert_called_once_with(hours=2)
 
         # 3. Test Full Backup Service & Trigger View
         res_full = perform_full_backup()
@@ -2119,11 +2154,15 @@ class MultiTenantTicketTests(TestCase):
             self.assertEqual(manifest['removed_ticket_count'], 1)
             self.assertEqual(manifest['backup_type'], 'SYSTEM_DATA_NO_TICKETS')
 
-    def test_weekly_system_backup_throttles_for_seven_days_and_supports_manual_run(self):
+    def test_system_backup_uses_configured_timer_and_supports_manual_run(self):
         import datetime
         from unittest import mock
         from django.core.management import call_command
-        from tickets.models import BackupLog
+        from tickets.models import BackupLog, BackupSchedule
+
+        schedule = BackupSchedule.get_solo()
+        schedule.system_interval_minutes = 4320
+        schedule.save(update_fields=['system_interval_minutes', 'updated_at'])
 
         recent_log = BackupLog.objects.create(
             filename='recent_system_data.tar.gz',
@@ -2142,19 +2181,23 @@ class MultiTenantTicketTests(TestCase):
             call_command('run_weekly_system_backup', verbosity=0)
             scheduled_backup.assert_not_called()
             BackupLog.objects.filter(pk=recent_log.pk).update(
-                created_at=timezone.now() - datetime.timedelta(days=8),
+                created_at=timezone.now() - datetime.timedelta(days=4),
             )
             call_command('run_weekly_system_backup', verbosity=0)
             scheduled_backup.assert_called_once_with()
+            schedule.system_is_active = False
+            schedule.save(update_fields=['system_is_active', 'updated_at'])
             scheduled_backup.reset_mock()
+            call_command('run_weekly_system_backup', verbosity=0)
+            scheduled_backup.assert_not_called()
             call_command('run_weekly_system_backup', '--force', verbosity=0)
             scheduled_backup.assert_called_once_with()
 
         self.client.login(username='system_admin', password='password123')
         backup_page = self.client.get(reverse('backup_list'))
         self.assertContains(backup_page, 'Run Manually: System Data (No Tickets)')
-        self.assertContains(backup_page, 'the automatic backup continues every 7 days')
-        self.assertContains(backup_page, 'System Data (7 Days)')
+        self.assertContains(backup_page, 'Automatic Backup Timer')
+        self.assertContains(backup_page, 'Every 3 days')
         filtered_page = self.client.get(reverse('backup_list'), {'type': 'SYSTEM'})
         self.assertEqual(filtered_page.status_code, 200)
         self.assertEqual(filtered_page.context['filtered_count'], 1)
@@ -2169,6 +2212,161 @@ class MultiTenantTicketTests(TestCase):
         self.assertRedirects(response, reverse('backup_list'))
         manual_backup.assert_called_once_with()
         self.assertTrue(BackupLog.objects.filter(pk=recent_log.pk).exists())
+
+    def test_backup_timer_settings_are_validated_and_restricted_to_system_admin(self):
+        from tickets.models import BackupSchedule
+
+        schedule = BackupSchedule.get_solo()
+        self.assertEqual(schedule.incremental_interval_minutes, 120)
+        self.assertEqual(schedule.full_interval_minutes, 1440)
+        self.assertEqual(schedule.system_interval_minutes, 10080)
+
+        self.client.login(username='system_admin', password='password123')
+        page = self.client.get(reverse('backup_list'))
+        self.assertContains(page, 'Save Backup Timer Settings')
+        self.assertContains(page, 'Allowed range: 1 hour to 1 day')
+        self.assertContains(page, 'Failed jobs wait 30 minutes before retrying')
+
+        response = self.client.post(reverse('backup_schedule_update'), {
+            'incremental_interval_minutes': '360',
+            'incremental_is_active': 'on',
+            'full_interval_minutes': '4320',
+            'system_interval_minutes': '20160',
+            'system_is_active': 'on',
+        })
+        self.assertRedirects(response, reverse('backup_list'))
+        schedule.refresh_from_db()
+        self.assertEqual(schedule.incremental_interval_minutes, 360)
+        self.assertTrue(schedule.incremental_is_active)
+        self.assertEqual(schedule.full_interval_minutes, 4320)
+        self.assertFalse(schedule.full_is_active)
+        self.assertEqual(schedule.system_interval_minutes, 20160)
+        self.assertTrue(schedule.system_is_active)
+        self.assertEqual(schedule.updated_by, self.system_admin)
+
+        invalid_response = self.client.post(reverse('backup_schedule_update'), {
+            'incremental_interval_minutes': '10',
+            'incremental_is_active': 'on',
+            'full_interval_minutes': '1440',
+            'full_is_active': 'on',
+            'system_interval_minutes': '10080',
+            'system_is_active': 'on',
+        })
+        self.assertRedirects(invalid_response, reverse('backup_list'))
+        schedule.refresh_from_db()
+        self.assertEqual(schedule.incremental_interval_minutes, 360)
+
+        sub_admin = User.objects.create_user(
+            username='backup_sub_admin',
+            email='backup-sub@example.com',
+            password='password123',
+            role=User.SYSTEM_SUB_ADMIN,
+            is_staff=True,
+        )
+        self.client.logout()
+        self.client.login(username=sub_admin.username, password='password123')
+        read_only_page = self.client.get(reverse('backup_list'))
+        self.assertContains(read_only_page, 'Timer settings are read-only')
+        forbidden = self.client.post(reverse('backup_schedule_update'), {
+            'incremental_interval_minutes': '60',
+            'full_interval_minutes': '1440',
+            'system_interval_minutes': '1440',
+        })
+        self.assertEqual(forbidden.status_code, 403)
+        schedule.refresh_from_db()
+        self.assertEqual(schedule.incremental_interval_minutes, 360)
+
+    def test_incremental_backup_command_uses_timer_disable_and_failure_backoff(self):
+        import datetime
+        from unittest import mock
+        from django.core.management import call_command
+        from tickets.models import BackupLog, BackupSchedule
+
+        schedule = BackupSchedule.get_solo()
+        schedule.incremental_interval_minutes = 360
+        schedule.save(update_fields=['incremental_interval_minutes', 'updated_at'])
+        recent_log = BackupLog.objects.create(
+            filename='recent_incremental.zip',
+            file_size_bytes=1024,
+            backup_type=BackupLog.TYPE_INCREMENTAL,
+            status=BackupLog.STATUS_SUCCESS,
+        )
+        successful_result = {'success': True, 'details': 'Incremental complete.'}
+        with mock.patch(
+            'tickets.management.commands.run_2hr_backup.perform_incremental_backup',
+            return_value=successful_result,
+        ) as incremental_backup:
+            call_command('run_2hr_backup', verbosity=0)
+            incremental_backup.assert_not_called()
+
+            BackupLog.objects.filter(pk=recent_log.pk).update(
+                created_at=timezone.now() - datetime.timedelta(hours=7),
+            )
+            call_command('run_2hr_backup', verbosity=0)
+            incremental_backup.assert_called_once_with(hours=6)
+
+            failed_log = BackupLog.objects.create(
+                filename='failed_incremental.zip',
+                file_size_bytes=0,
+                backup_type=BackupLog.TYPE_INCREMENTAL,
+                status=BackupLog.STATUS_FAILED,
+            )
+            incremental_backup.reset_mock()
+            call_command('run_2hr_backup', verbosity=0)
+            incremental_backup.assert_not_called()
+
+            BackupLog.objects.filter(pk=failed_log.pk).update(
+                created_at=timezone.now() - datetime.timedelta(minutes=31),
+            )
+            call_command('run_2hr_backup', verbosity=0)
+            incremental_backup.assert_called_once_with(hours=6)
+
+            incremental_backup.reset_mock()
+            schedule.incremental_is_active = False
+            schedule.save(update_fields=['incremental_is_active', 'updated_at'])
+            call_command('run_2hr_backup', verbosity=0)
+            incremental_backup.assert_not_called()
+
+            call_command('run_2hr_backup', '--force', '--hours', '8', verbosity=0)
+            incremental_backup.assert_called_once_with(hours=8)
+
+    def test_full_backup_command_uses_configured_timer_and_disable_switch(self):
+        import datetime
+        from unittest import mock
+        from django.core.management import call_command
+        from tickets.models import BackupLog, BackupSchedule
+
+        schedule = BackupSchedule.get_solo()
+        schedule.full_interval_minutes = 4320
+        schedule.save(update_fields=['full_interval_minutes', 'updated_at'])
+        recent_log = BackupLog.objects.create(
+            filename='recent_full.tar.gz',
+            file_size_bytes=1024,
+            backup_type=BackupLog.TYPE_FULL,
+            status=BackupLog.STATUS_SUCCESS,
+        )
+        successful_result = {'success': True, 'details': 'Full backup complete.'}
+        with mock.patch(
+            'tickets.management.commands.run_2hr_backup.perform_full_backup',
+            return_value=successful_result,
+        ) as full_backup:
+            call_command('run_2hr_backup', '--full', verbosity=0)
+            full_backup.assert_not_called()
+
+            BackupLog.objects.filter(pk=recent_log.pk).update(
+                created_at=timezone.now() - datetime.timedelta(days=4),
+            )
+            call_command('run_2hr_backup', '--full', verbosity=0)
+            full_backup.assert_called_once_with()
+
+            full_backup.reset_mock()
+            schedule.full_is_active = False
+            schedule.save(update_fields=['full_is_active', 'updated_at'])
+            call_command('run_2hr_backup', '--full', verbosity=0)
+            full_backup.assert_not_called()
+
+            call_command('run_2hr_backup', '--full', '--force', verbosity=0)
+            full_backup.assert_called_once_with()
 
     def test_client_user_can_only_read_own_tickets_and_cannot_update(self):
         coworker_ticket = Ticket.objects.create(

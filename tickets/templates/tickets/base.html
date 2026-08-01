@@ -362,15 +362,26 @@
 
         <!-- Collapsible Content Wrapper (Hidden on mobile by default) -->
         <div id="sidebarMenu" class="hidden md:flex flex-col flex-1 border-t border-slate-800/60 md:border-none">
-            <!-- Tenant / Company Indicator Card -->
-            <div class="p-3 mx-3 my-3 rounded-xl bg-theme-bg border border-theme-border shadow-inner">
-                <span class="text-[9px] text-theme-accent font-semibold tracking-wider uppercase block">{{ t.active_org }}</span>
-                <span class="text-xs font-semibold text-white truncate block">
-                    {% if user.company %}{{ user.company.name }}{% else %}{{ t.central_admin }}{% endif %}
-                </span>
-                <div class="mt-1.5 flex items-center gap-1.5">
+            <!-- Signed-in account / tenant identity -->
+            <div id="sidebarIdentityCard" class="p-3 mx-3 my-3 rounded-xl bg-theme-bg border border-theme-border shadow-inner">
+                <span class="text-[9px] text-theme-accent font-semibold tracking-wider uppercase block">{{ t.account_info }}</span>
+                <dl class="mt-2 space-y-1 text-[10px]">
+                    <div class="flex items-center justify-between gap-2">
+                        <dt class="text-slate-500">{{ t.name_label }}</dt>
+                        <dd class="min-w-0 truncate text-right text-xs font-semibold text-white" title="{{ user.get_full_name|default:user.username }}">
+                            {{ user.get_full_name|default:user.username }}
+                        </dd>
+                    </div>
+                    <div class="flex items-center justify-between gap-2">
+                        <dt class="text-slate-500">{{ t.company_label }}</dt>
+                        <dd class="min-w-0 truncate text-right font-medium text-slate-300" title="{% if user.company %}{{ user.company.name }}{% elif user.is_superuser or user.role == 'SYSTEM_ADMIN' or user.role == 'SYSTEM_SUB_ADMIN' %}{{ t.central_company }}{% else %}{{ t.company_not_assigned }}{% endif %}">
+                            {% if user.company %}{{ user.company.name }}{% elif user.is_superuser or user.role == 'SYSTEM_ADMIN' or user.role == 'SYSTEM_SUB_ADMIN' %}{{ t.central_company }}{% else %}{{ t.company_not_assigned }}{% endif %}
+                        </dd>
+                    </div>
+                </dl>
+                <div class="mt-2 flex items-center gap-1.5 border-t border-slate-700/50 pt-2">
                     <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    <span class="text-[10px] text-slate-400 font-medium">{{ user.get_role_display }}</span>
+                    <span class="text-[10px] text-slate-400 font-medium">{{ user.effective_role_display }}</span>
                 </div>
             </div>
 

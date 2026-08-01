@@ -60,8 +60,8 @@ sudo systemctl restart nginx
 
 ระบบสำรองข้อมูลใน TicketSolve แบ่งออกเป็น 3 ประเภทหลัก:
 
-### 3.1 ⏱️ 2-Hour Incremental Backup (สำรองข้อมูล 2 ชั่วโมงย้อนหลัง)
-* **การทำงาน**: ดึง Ticket ที่ถูกสร้าง/แก้ไข หรือมี Comments/ไฟล์แนบใหม่ใน 2 ชั่วโมงย้อนหลัง
+### 3.1 ⏱️ Incremental Backup (กำหนดรอบได้)
+* **การทำงาน**: ดึง Ticket ที่ถูกสร้าง/แก้ไข หรือมี Comments/ไฟล์แนบใหม่ตามช่วงที่เลือก 1, 2, 4, 6, 12 หรือ 24 ชั่วโมง (ค่าเริ่มต้น 2 ชั่วโมง)
 * **ไฟล์ที่สร้าง**: `incremental_backup_YYYY-MM-DD_HH-MM-SS.zip` (ประกอบด้วย `tickets.json` และโฟลเดอร์ `attachments/`)
 * **ที่จัดเก็บ**: `/var/backups/ticketsolve` บน AWS VPS
 * **Retention**: ลบ archive ที่เก่ากว่า `BACKUP_RETENTION_DAYS` (ค่าเริ่มต้น 30 วัน)
@@ -70,17 +70,24 @@ sudo systemctl restart nginx
 * **การทำงาน**: สำรองฐานข้อมูลผ่าน SQLite Online Backup API แล้วบีบอัดร่วมกับ `media/`
 * **ไฟล์ที่สร้าง**: `full_backup_YYYY-MM-DD_HH-MM-SS.tar.gz`
 * **Secrets**: ไม่รวม `/etc/ticketsolve/ticketsolve.env` ใน archive ต้องสำรอง secrets แยกต่างหาก
-* **ตารางเวลา**: Scheduler เรียกคำสั่งทุกนาที แต่ระบบสร้าง Full Backup สำเร็จไม่เกินวันละหนึ่งครั้ง เว้นแต่ใช้ `--force`
+* **ตารางเวลา**: เลือกได้ทุก 1, 3, 7, 14 หรือ 30 วัน (ค่าเริ่มต้น 1 วัน) และเปิด/ปิดงานอัตโนมัติได้
 
-### 3.3 🧩 7-Day System Data Backup (ไม่รวม Ticket)
+### 3.3 🧩 System Data Backup (ไม่รวม Ticket)
 * **การทำงาน**: ใช้ SQLite Online Backup API สร้างสำเนาฐานข้อมูล จากนั้นลบ Ticket ในสำเนาเท่านั้น โดยให้ foreign-key `CASCADE`/`SET_NULL` จัดการข้อมูลที่สัมพันธ์กัน ฐานข้อมูลจริงไม่ถูกแก้ไข
 * **ข้อมูลที่คงไว้**: Users, Companies, roles, SMTP/IMAP, Email-to-Ticket configuration, routing, schedules, categories และข้อมูลระบบอื่น
 * **ไฟล์ที่สร้าง**: `system_data_no_tickets_YYYY-MM-DD_HH-MM-SS.tar.gz` ภายในมี `db.sqlite3` และ `backup_manifest.json`
 * **ข้อมูลที่ไม่รวม**: Ticket rows, ข้อมูลลูกที่ถูก cascade, `media/` และ `/etc/ticketsolve/ticketsolve.env`
-* **ตารางเวลา**: `run_weekly_system_backup` ตรวจทุกนาทีผ่าน scheduler แต่สร้างสำเร็จไม่เกินหนึ่งครั้งในทุก 7 วัน เว้นแต่ใช้ `--force`
-* **สั่งจากหน้าเว็บ**: System Admin กด **Run Manually: System Data (No Tickets)** เพื่อสร้าง backup ทันทีได้ การกดปุ่มนี้ไม่ยกเลิกหรือเปลี่ยน schedule อัตโนมัติ
+* **ตารางเวลา**: เลือกได้ทุก 1, 3, 7, 14 หรือ 30 วัน (ค่าเริ่มต้น 7 วัน) และเปิด/ปิดงานอัตโนมัติได้
+* **สั่งจากหน้าเว็บ**: ปุ่ม Manual ของทั้งสามประเภทสร้าง backup ทันทีได้โดยไม่เปลี่ยน timer อัตโนมัติ; Incremental Manual ใช้ look-back window ตาม timer ที่ตั้ง
 
-### 3.4 📥 Backup Download และ Delete
+### 3.4 ⏲️ Backup Timer และข้อจำกัดด้านความปลอดภัย
+* Systemd ตรวจงานทุกนาที แต่คำสั่งจะทำงานเฉพาะเมื่อครบ interval ในฐานข้อมูล
+* การแก้ timer จำกัดเฉพาะ `SYSTEM_ADMIN`/Django superuser ผ่าน `POST` + CSRF; `SYSTEM_SUB_ADMIN` ดูสถานะและรอบถัดไปได้แบบ read-only
+* ค่า interval รับเฉพาะตัวเลือกที่กำหนดฝั่ง server เพื่อลดความเสี่ยงจาก Full Backup ที่ถี่เกินไป
+* หากงานล่าสุดล้มเหลว ระบบรอ 30 นาทีก่อน retry เพื่อลด log flood และภาระ disk/CPU
+* Backup ทั้งสามประเภทใช้ lock กลาง ป้องกันการเขียน archive พร้อมกัน และ runtime secrets ไม่ถูกนำเข้า archive
+
+### 3.5 📥 Backup Download และ Delete
 * **การใช้งาน**: สามารถดาวน์โหลดไฟล์ Backup (`.zip` หรือ `.tar.gz`) มาตรวจสอบและดูข้อมูลบนเครื่องของคุณได้ทันทีผ่านปุ่ม **📥 Download** ในหน้าจอ Backup Management (`/backups/`)
 * **Authorization**: ดาวน์โหลดและลบได้เฉพาะ System Staff ที่ยืนยันตัวตนแล้ว
 * **Empty/Missing Archive**: รายการขนาด 0 หรือ archive ที่ไม่มีอยู่จะแสดง **No data file** โดยซ่อน Download และแสดงปุ่ม **Delete empty record**; ปุ่ม **Delete all 0 MB** ลบรายการ 0 MB ทั้งหมดในครั้งเดียว และจะไม่ลบไฟล์จริงหากตรวจพบว่าขนาดบนดิสก์มากกว่า 0
@@ -103,22 +110,22 @@ source /etc/ticketsolve/ticketsolve.env
 set +a
 cd /var/www/ticketSolve
 
-# 1. รัน 2-Hour Incremental Backup (มีระบบป้องกันรันซ้ำซ้อนหากเพิ่งรันไปภายใน 2 ชม.)
+# 1. รัน Incremental Backup เมื่อครบ timer ที่ตั้ง
 runuser -u ubuntu -g www-data --preserve-environment -- venv/bin/python manage.py run_2hr_backup
 
-# 2. บังคับรัน 2-Hour Incremental Backup ทันที (ข้ามตัวป้องกัน)
+# 2. บังคับรัน Incremental ทันที โดยใช้ช่วงย้อนหลังตาม timer
 runuser -u ubuntu -g www-data --preserve-environment -- venv/bin/python manage.py run_2hr_backup --force
 
-# 3. รัน 2-Hour Incremental Backup แบบระบุนานกว่า 2 ชม. (เช่น 6 ชม.)
-runuser -u ubuntu -g www-data --preserve-environment -- venv/bin/python manage.py run_2hr_backup --hours 6
+# 3. บังคับรันทันทีและกำหนดช่วงย้อนหลังเฉพาะครั้งนี้ (เช่น 6 ชม.)
+runuser -u ubuntu -g www-data --preserve-environment -- venv/bin/python manage.py run_2hr_backup --force --hours 6
 
 # 4. รัน Full System Backup (ทั้งระบบ)
 runuser -u ubuntu -g www-data --preserve-environment -- venv/bin/python manage.py run_2hr_backup --full
 
-# 5. บังคับรัน Full Backup แม้มี backup ภายใน 24 ชั่วโมง
+# 5. บังคับรัน Full Backup แม้ timer ยังไม่ครบหรือถูกปิด
 runuser -u ubuntu -g www-data --preserve-environment -- venv/bin/python manage.py run_2hr_backup --full --force
 
-# 6. รัน System Data Backup ที่ไม่มี Ticket (ระบบป้องกันการรันซ้ำภายใน 7 วัน)
+# 6. รัน System Data Backup เมื่อครบ timer ที่ตั้ง
 runuser -u ubuntu -g www-data --preserve-environment -- venv/bin/python manage.py run_weekly_system_backup
 
 # 7. บังคับรัน System Data Backup ทันที

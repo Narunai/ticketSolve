@@ -106,8 +106,21 @@ class CustomUser(AbstractUser):
         related_name='users'
     )
 
+    @property
+    def effective_role_display(self):
+        """Return the security-effective role for account identity displays.
+
+        Legacy superusers can have CLIENT_USER stored in ``role``. Their
+        effective privileges still come from ``is_superuser``, so presenting
+        them as a Client User is misleading even though authorization remains
+        correct.
+        """
+        if self.is_superuser:
+            return dict(self.ROLE_CHOICES)[self.SYSTEM_ADMIN]
+        return self.get_role_display()
+
     def __str__(self):
-        role_display = self.get_role_display()
+        role_display = self.effective_role_display
         company_name = self.company.name if self.company else "No Company"
         return f"{self.username} ({role_display} - {company_name})"
 
@@ -489,7 +502,7 @@ class BackupLog(models.Model):
     TYPE_SYSTEM = 'SYSTEM'
     TYPE_CHOICES = [
         (TYPE_FULL, 'Full Backup'),
-        (TYPE_INCREMENTAL, '2-Hour Incremental'),
+        (TYPE_INCREMENTAL, 'Incremental Backup'),
         (TYPE_SYSTEM, 'System Data (No Tickets)'),
     ]
 
@@ -509,6 +522,128 @@ class BackupLog(models.Model):
     @property
     def file_size_mb(self):
         return round(self.file_size_bytes / (1024 * 1024), 2)
+
+
+class BackupSchedule(models.Model):
+    """Singleton schedule for automatic backups.
+
+    The choices intentionally enforce conservative minimum intervals. The
+    systemd timer may check every minute, but a backup only runs when this
+    schedule is due. Failed jobs use a fixed retry delay to avoid log and disk
+    pressure during an outage.
+    """
+
+    INCREMENTAL_INTERVAL_CHOICES = [
+        (60, 'Every 1 hour'),
+        (120, 'Every 2 hours'),
+        (240, 'Every 4 hours'),
+        (360, 'Every 6 hours'),
+        (720, 'Every 12 hours'),
+        (1440, 'Every 1 day'),
+    ]
+    ARCHIVE_INTERVAL_CHOICES = [
+        (1440, 'Every 1 day'),
+        (4320, 'Every 3 days'),
+        (10080, 'Every 7 days'),
+        (20160, 'Every 14 days'),
+        (43200, 'Every 30 days'),
+    ]
+    FAILURE_RETRY_MINUTES = 30
+
+    singleton_key = models.BooleanField(default=True, unique=True, editable=False)
+    incremental_is_active = models.BooleanField(default=True)
+    incremental_interval_minutes = models.PositiveIntegerField(
+        choices=INCREMENTAL_INTERVAL_CHOICES,
+        default=120,
+    )
+    full_is_active = models.BooleanField(default=True)
+    full_interval_minutes = models.PositiveIntegerField(
+        choices=ARCHIVE_INTERVAL_CHOICES,
+        default=1440,
+    )
+    system_is_active = models.BooleanField(default=True)
+    system_interval_minutes = models.PositiveIntegerField(
+        choices=ARCHIVE_INTERVAL_CHOICES,
+        default=10080,
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='updated_backup_schedules',
+    )
+
+    @classmethod
+    def get_solo(cls):
+        schedule, _ = cls.objects.get_or_create(singleton_key=True)
+        return schedule
+
+    def save(self, *args, **kwargs):
+        self.singleton_key = True
+        super().save(*args, **kwargs)
+
+    def settings_for(self, backup_type):
+        mapping = {
+            BackupLog.TYPE_INCREMENTAL: (
+                self.incremental_is_active,
+                self.incremental_interval_minutes,
+                self.get_incremental_interval_minutes_display(),
+            ),
+            BackupLog.TYPE_FULL: (
+                self.full_is_active,
+                self.full_interval_minutes,
+                self.get_full_interval_minutes_display(),
+            ),
+            BackupLog.TYPE_SYSTEM: (
+                self.system_is_active,
+                self.system_interval_minutes,
+                self.get_system_interval_minutes_display(),
+            ),
+        }
+        if backup_type not in mapping:
+            raise ValueError(f'Unsupported backup type: {backup_type}')
+        return mapping[backup_type]
+
+    def next_run_at(self, backup_type, at=None):
+        is_active, interval_minutes, _ = self.settings_for(backup_type)
+        if not is_active:
+            return None
+
+        at = at or timezone.now()
+        latest_success = BackupLog.objects.filter(
+            backup_type=backup_type,
+            status=BackupLog.STATUS_SUCCESS,
+        ).first()
+        candidate = at
+        if latest_success:
+            candidate = latest_success.created_at + datetime.timedelta(
+                minutes=interval_minutes,
+            )
+
+        latest_failure = BackupLog.objects.filter(
+            backup_type=backup_type,
+            status=BackupLog.STATUS_FAILED,
+        ).first()
+        if latest_failure and (
+            not latest_success or latest_failure.created_at > latest_success.created_at
+        ):
+            candidate = max(
+                candidate,
+                latest_failure.created_at + datetime.timedelta(
+                    minutes=self.FAILURE_RETRY_MINUTES,
+                ),
+            )
+        return max(candidate, at)
+
+    def is_due(self, backup_type, at=None):
+        at = at or timezone.now()
+        next_run = self.next_run_at(backup_type, at=at)
+        return bool(next_run and next_run <= at)
+
+    def __str__(self):
+        return 'Automatic backup schedule'
 
 
 

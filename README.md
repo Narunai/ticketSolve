@@ -61,7 +61,9 @@
 ## ⚡ 4. ระบบเบื้องหลังอัตโนมัติ (Background Services & Schedulers)
 
 งานรายงาน, Ticket automation และ backup ตรวจทุก 1 นาทีผ่าน
-`ticketsolve-scheduler.timer` ส่วน Email → Ticket แยกเป็น
+`ticketsolve-scheduler.timer` โดยรอบ Backup จริงกำหนดแยกจากหน้า **Backup System**
+(Incremental 1 ชั่วโมง–1 วัน, Full/System Data 1–30 วัน และเปิด/ปิดแยกกันได้)
+ส่วน Email → Ticket แยกเป็น
 `ticketsolve-email-to-ticket.timer` ปลุกตัวประมวลผลทุก 10 นาที ส่วนรอบสแกนจริง
 กำหนดจากหน้า **Email Timer** เป็น 10, 20, 30 นาที หรือ 1 ชั่วโมง:
 
@@ -69,9 +71,9 @@
 # คำสั่งที่รันอัตโนมัติใน scheduler service:
 python manage.py process_report_schedules   # ตรวจสอบและส่งรายงาน PDF ประจำเดือน
 python manage.py process_ticket_automations # ย้ายสถานะ Ticket Open ➔ In Progress ตามเวลาที่ตั้งไว้
-python manage.py run_2hr_backup             # สั่งทำ Backup 2 ชั่วโมงย้อนหลัง (มี Throttling ป้องกันรันซ้ำ)
-python manage.py run_2hr_backup --full      # Full backup รายวัน (มี Throttling ป้องกันรันซ้ำ)
-python manage.py run_weekly_system_backup   # ฐานข้อมูลระบบที่ไม่มี Ticket ทุก 7 วัน
+python manage.py run_2hr_backup             # Incremental ตามรอบที่ตั้ง (ค่าเริ่มต้น 2 ชั่วโมง)
+python manage.py run_2hr_backup --full      # Full backup ตามรอบที่ตั้ง (ค่าเริ่มต้น 1 วัน)
+python manage.py run_weekly_system_backup   # System Data ตามรอบที่ตั้ง (ค่าเริ่มต้น 7 วัน)
 
 # Systemd เรียกทุก 10 นาทีและคำสั่งตรวจรอบเวลาจากฐานข้อมูล:
 python manage.py process_email_to_tickets   # อ่านอีเมล IMAP ที่ยังไม่อ่านและสร้าง Ticket

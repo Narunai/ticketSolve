@@ -8,7 +8,7 @@ from django.urls import reverse, reverse_lazy
 
 from django.core.exceptions import PermissionDenied
 from django.http import FileResponse
-from .models import Ticket, CustomUser, Company, EmailLog, TicketAuditLog, ReportViewLog, MonthlyReportSchedule, TicketAutomationConfig, SMTPConfiguration, InboundEmailReceipt, InboundEmailRoutingRule, EmailToTicketSchedule, EmailToTicketRunLog, InAppNotification, get_smtp_connection, get_smtp_from_email, TicketComment, TicketAttachment, CommentAttachment, TicketCategory, ResolutionCategory, ModuleCategory, TicketStatusConfig, CompanyTicketConfig, CompanyTicketField, NotificationConfig, should_send_email_notification, BackupLog
+from .models import Ticket, CustomUser, Company, EmailLog, TicketAuditLog, ReportViewLog, MonthlyReportSchedule, TicketAutomationConfig, SMTPConfiguration, InboundEmailReceipt, InboundEmailRoutingRule, EmailToTicketSchedule, EmailToTicketRunLog, InAppNotification, get_smtp_connection, get_smtp_from_email, TicketComment, TicketAttachment, CommentAttachment, TicketCategory, ResolutionCategory, ModuleCategory, TicketStatusConfig, CompanyTicketConfig, CompanyTicketField, NotificationConfig, should_send_email_notification, BackupLog, BackupSchedule
 from .backup_service import perform_full_backup, perform_incremental_backup, perform_system_data_backup, get_backup_file_path, FileLock
 from .email_to_ticket_scheduler import run_email_to_ticket_cycle
 from .permissions import (
@@ -725,6 +725,36 @@ class EmailToTicketScheduleForm(forms.ModelForm):
                     'h-4 w-4'
                 ),
             }),
+        }
+
+
+class BackupScheduleForm(forms.ModelForm):
+    class Meta:
+        model = BackupSchedule
+        fields = [
+            'incremental_interval_minutes',
+            'incremental_is_active',
+            'full_interval_minutes',
+            'full_is_active',
+            'system_interval_minutes',
+            'system_is_active',
+        ]
+        select_class = (
+            'w-full rounded-lg border border-slate-700 bg-slate-950 '
+            'px-3 py-2.5 text-xs text-white focus:border-indigo-500 '
+            'focus:outline-none focus:ring-1 focus:ring-indigo-500'
+        )
+        checkbox_class = (
+            'h-4 w-4 rounded border-slate-700 bg-slate-950 '
+            'text-indigo-600 focus:ring-indigo-500'
+        )
+        widgets = {
+            'incremental_interval_minutes': forms.Select(attrs={'class': select_class}),
+            'full_interval_minutes': forms.Select(attrs={'class': select_class}),
+            'system_interval_minutes': forms.Select(attrs={'class': select_class}),
+            'incremental_is_active': forms.CheckboxInput(attrs={'class': checkbox_class}),
+            'full_is_active': forms.CheckboxInput(attrs={'class': checkbox_class}),
+            'system_is_active': forms.CheckboxInput(attrs={'class': checkbox_class}),
         }
 
 
@@ -3609,6 +3639,49 @@ class BackupManagementView(LoginRequiredMixin, SystemStaffRequiredMixin, Templat
         context['zero_mb_count'] = all_logs.filter(file_size_bytes=0).count()
         context['last_backup'] = all_logs.first()
 
+        backup_schedule = BackupSchedule.get_solo()
+        context['backup_schedule'] = backup_schedule
+        context['backup_schedule_form'] = BackupScheduleForm(
+            instance=backup_schedule,
+        )
+        context['can_manage_backup_schedule'] = bool(
+            self.request.user.is_superuser
+            or self.request.user.role == CustomUser.SYSTEM_ADMIN
+        )
+        context['incremental_manual_hours'] = max(
+            1,
+            backup_schedule.incremental_interval_minutes // 60,
+        )
+        schedule_rows = []
+        for type_value, name, scope_note in [
+            (
+                BackupLog.TYPE_INCREMENTAL,
+                'Incremental Ticket Backup',
+                'Tickets changed during the configured interval',
+            ),
+            (
+                BackupLog.TYPE_FULL,
+                'Full Backup',
+                'Database and media; runtime secrets excluded',
+            ),
+            (
+                BackupLog.TYPE_SYSTEM,
+                'System Data (No Tickets)',
+                'Configuration and master data; no Tickets or media',
+            ),
+        ]:
+            is_active, _, interval_label = backup_schedule.settings_for(type_value)
+            schedule_rows.append({
+                'type': type_value,
+                'name': name,
+                'scope_note': scope_note,
+                'is_active': is_active,
+                'interval_label': interval_label,
+                'next_run_at': backup_schedule.next_run_at(type_value),
+                'last_log': all_logs.filter(backup_type=type_value).first(),
+            })
+        context['backup_schedule_rows'] = schedule_rows
+
         context['q'] = q
         context['selected_type'] = backup_type
         context['min_size'] = min_size
@@ -3621,14 +3694,15 @@ class TriggerBackupView(LoginRequiredMixin, SystemStaffRequiredMixin, View):
     def post(self, request, *args, **kwargs):
         backup_type = request.POST.get('backup_type', 'full')
         if backup_type == 'incremental':
-            try:
-                hours = int(request.POST.get('hours', 2))
-            except (TypeError, ValueError):
-                hours = 2
-            hours = min(max(hours, 1), 168)
+            schedule = BackupSchedule.get_solo()
+            hours = max(1, schedule.incremental_interval_minutes // 60)
             res = perform_incremental_backup(hours=hours)
             if res.get('success'):
-                messages.success(request, f"✅ 2-Hour Incremental Backup completed! {res.get('details', res.get('message'))}")
+                messages.success(
+                    request,
+                    f"✅ Incremental Backup ({hours}-hour window) completed! "
+                    f"{res.get('details', res.get('message'))}",
+                )
             else:
                 messages.error(request, f"❌ Backup failed: {res.get('error')}")
         elif backup_type == 'system':
@@ -3647,6 +3721,31 @@ class TriggerBackupView(LoginRequiredMixin, SystemStaffRequiredMixin, View):
             else:
                 messages.error(request, f"❌ Backup failed: {res.get('error')}")
 
+        return redirect('backup_list')
+
+
+class BackupScheduleUpdateView(
+    LoginRequiredMixin,
+    SuperuserOrSystemAdminRequiredMixin,
+    View,
+):
+    def post(self, request, *args, **kwargs):
+        schedule = BackupSchedule.get_solo()
+        form = BackupScheduleForm(request.POST, instance=schedule)
+        if not form.is_valid():
+            messages.error(
+                request,
+                'Backup timer settings were not saved. Choose one of the allowed intervals.',
+            )
+            return redirect('backup_list')
+
+        configured_schedule = form.save(commit=False)
+        configured_schedule.updated_by = request.user
+        configured_schedule.save()
+        messages.success(
+            request,
+            'Backup timer settings saved. Manual backup buttons remain available.',
+        )
         return redirect('backup_list')
 
 
