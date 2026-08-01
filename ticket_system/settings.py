@@ -219,6 +219,10 @@ LOGIN_THROTTLE_MAX_FAILURES = int(os.environ.get('LOGIN_THROTTLE_MAX_FAILURES', 
 LOGIN_THROTTLE_WINDOW_SECONDS = int(os.environ.get('LOGIN_THROTTLE_WINDOW_SECONDS', 15 * 60))
 LOGIN_THROTTLE_LOCK_SECONDS = int(os.environ.get('LOGIN_THROTTLE_LOCK_SECONDS', 15 * 60))
 SIMPLE_PASSWORD_LOCK_SECONDS = int(os.environ.get('SIMPLE_PASSWORD_LOCK_SECONDS', 10 * 60))
+PUBLIC_BASE_URL = os.environ.get(
+    'PUBLIC_BASE_URL',
+    'https://tikketsolve-systemoneit.uk' if IS_PRODUCTION else 'http://127.0.0.1:8000',
+).rstrip('/')
 
 # Email Configuration (Supports Console and Real Gmail SMTP Delivery)
 

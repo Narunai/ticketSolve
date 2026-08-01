@@ -9,7 +9,6 @@
     <div class="space-y-2">
         {% for message in messages %}
         <div class="p-4 rounded-xl {% if message.tags == 'success' %}bg-emerald-500/10 border border-emerald-500/20 text-emerald-400{% else %}bg-rose-500/10 border border-rose-500/20 text-rose-400{% endif %} flex items-center gap-3">
-            <span class="text-lg">{% if message.tags == 'success' %}✅{% else %}❌{% endif %}</span>
             <span class="text-sm font-medium">{{ message.message }}</span>
         </div>
         {% endfor %}
@@ -61,19 +60,19 @@
                             <div>
                                 <label for="recipient_user_id" class="block text-xs text-slate-400 mb-1.5 font-medium">Target Recipient:</label>
                                 <select name="recipient_user_id" id="recipient_user_id" class="w-full bg-slate-900 border border-slate-755 text-slate-300 rounded-xl px-4 py-2.5 text-xs font-semibold focus:outline-none focus:border-theme-accent">
-                                    <option value="">📧 Send to All Company Members</option>
+                                    <option value="">Send to all company members</option>
                                     {% for member in company_users %}
-                                    <option value="{{ member.id }}">👤 Specific User: {{ member.username }} ({{ member.email }})</option>
+                                    <option value="{{ member.id }}">Specific user: {{ member.username }} ({{ member.email }})</option>
                                     {% endfor %}
                                 </select>
                             </div>
                             <div>
                                 <label for="smtp_config_id" class="block text-xs text-slate-400 mb-1.5 font-medium">Sender Account (SMTP):</label>
                                 <select name="smtp_config_id" id="smtp_config_id" class="w-full bg-slate-900 border border-slate-755 text-slate-300 rounded-xl px-4 py-2.5 text-xs font-semibold focus:outline-none focus:border-theme-accent">
-                                    <option value="">🌐 Use Default Active System Config</option>
+                                    <option value="">Use default active system configuration</option>
                                     {% for config in smtp_configs %}
                                     <option value="{{ config.id }}">
-                                        📬 {{ config.name }} ({{ config.username|default:"Simulation/Console" }})
+                                        {{ config.name }} ({{ config.username|default:"Simulation/Console" }})
                                     </option>
                                     {% endfor %}
                                 </select>
@@ -92,12 +91,12 @@
                         <div class="flex flex-wrap gap-3 pt-2">
                             <!-- Preview Button -->
                             <a href="{% url 'report_preview' %}{% if selected_company %}?company_id={{ selected_company.id }}{% endif %}" target="_blank" class="px-5 py-3 rounded-xl text-xs font-bold text-white bg-slate-900 border border-slate-700 hover:border-slate-500 transition-all flex items-center gap-2 cursor-pointer">
-                                🔍 PDF Preview
+                                Preview PDF
                             </a>
 
                             <!-- Send Action Button -->
                             <button type="submit" class="px-5 py-3 rounded-xl text-xs font-bold text-white bg-theme-gradient shadow-theme-glow hover:opacity-90 transition-all flex items-center gap-2 cursor-pointer">
-                                ✉️ Dispatch Report Now
+                                Send Report Now
                             </button>
                         </div>
                     </form>
@@ -200,7 +199,7 @@
                 </label>
                 <div class="flex gap-3">
                     <button type="submit" class="px-5 py-3 rounded-xl text-xs font-bold text-white bg-theme-gradient shadow-theme-glow hover:opacity-90 transition-all">
-                        💾 {% if editing_schedule %}{{ t.save }}{% else %}Add Schedule{% endif %}
+                        {% if editing_schedule %}{{ t.save }}{% else %}Add Schedule{% endif %}
                     </button>
                     {% if editing_schedule %}
                     <a href="{% url 'monthly_report' %}{% if selected_company %}?company_id={{ selected_company.id }}{% endif %}" class="px-5 py-3 rounded-xl text-xs font-bold text-slate-300 bg-slate-900 border border-slate-700">{{ t.cancel }}</a>

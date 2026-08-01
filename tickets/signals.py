@@ -1,9 +1,10 @@
 from django.db.models.signals import pre_save, post_save, post_migrate
 from django.dispatch import receiver
-from django.core.mail import EmailMessage, send_mail
+from django.core.mail import EmailMultiAlternatives, send_mail
 from django.conf import settings
 from django.utils import timezone
 import uuid
+from .email_formatting import build_formal_email
 from .models import (
     Ticket,
     TicketComment,
@@ -38,7 +39,7 @@ def create_in_app_notifications(recipients, event_type, title, message, ticket, 
         for recipient_id in recipient_ids
     ])
 
-def log_and_send_email(subject, message, recipient_list, action_type, ticket=None, new_status=None):
+def log_and_send_email(subject, message, recipient_list, action_type, ticket=None, new_status=None, html_message=None):
     """
     Saves EmailLog to database for auditing and statistics, and sends emails to recipients individually
     to prevent invalid emails from blocking delivery to other recipients.
@@ -72,6 +73,7 @@ def log_and_send_email(subject, message, recipient_list, action_type, ticket=Non
             kwargs = {
                 'subject': subject,
                 'message': message,
+                'html_message': html_message,
                 'from_email': from_email,
                 'recipient_list': [email],
                 'fail_silently': False
@@ -97,7 +99,7 @@ def log_and_send_email(subject, message, recipient_list, action_type, ticket=Non
         )
 
 
-def send_status_change_email(ticket, subject, message):
+def send_status_change_email(ticket, subject, message, html_message=None):
     """Send one status email: ticket creator in To and assignee in CC."""
     delivery_group = uuid.uuid4()
     candidates = []
@@ -143,7 +145,7 @@ def send_status_change_email(ticket, subject, message):
     success = False
     error_message = ''
     try:
-        email_message = EmailMessage(
+        email_message = EmailMultiAlternatives(
             subject=subject,
             body=message,
             from_email=from_email,
@@ -151,6 +153,8 @@ def send_status_change_email(ticket, subject, message):
             cc=cc_recipients,
             connection=connection,
         )
+        if html_message:
+            email_message.attach_alternative(html_message, 'text/html')
         sent_count = email_message.send(fail_silently=False)
         if sent_count <= 0:
             raise RuntimeError('SMTP did not confirm email delivery (sent 0).')
@@ -223,20 +227,20 @@ def send_ticket_notifications(sender, instance, created, **kwargs):
             instance,
         )
 
-        subject = f"[TicketSolve] New Support Ticket Created: Ticket #{instance.id} - {instance.title}"
-        message = (
-            f"Dear {instance.created_by.username},\n\n"
-            f"We have successfully received your support ticket. Here are the details:\n"
-            f"----------------------------------------\n"
-            f"📌 Ticket ID: #{instance.id}\n"
-            f"📌 Title: {instance.title}\n"
-            f"📌 Priority: {instance.get_priority_display()}\n"
-            f"📌 Organization: {instance.company.name if instance.company else 'Central'}\n"
-            f"📌 Description: {instance.description}\n"
-            f"----------------------------------------\n\n"
-            f"Our team will review your request and begin working on a resolution shortly.\n"
-            f"Best regards,\n"
-            f"TicketSolve Support Team"
+        subject = f"[TicketSolve] Ticket Created | #{instance.id} - {instance.title}"
+        message, html_message = build_formal_email(
+            heading='Support Ticket Confirmation',
+            greeting=f'Dear {instance.created_by.username},',
+            introduction='Your support request has been registered successfully. The service desk will review the request and provide updates through TicketSolve.',
+            details=[
+                ('Ticket reference', f'#{instance.id}'),
+                ('Subject', instance.title),
+                ('Priority', instance.get_priority_display()),
+                ('Organization', instance.company.name if instance.company else 'Central Administration'),
+                ('Description', instance.description or 'No description provided'),
+            ],
+            action_label='View ticket details',
+            action_url=f'{settings.PUBLIC_BASE_URL}/ticket/{instance.id}/',
         )
         
         recipients = set()
@@ -251,7 +255,10 @@ def send_ticket_notifications(sender, instance, created, **kwargs):
             if admin.email:
                 recipients.add(admin.email)
                 
-        log_and_send_email(subject, message, list(recipients), EmailLog.ACTION_TICKET_CREATED, ticket=instance)
+        log_and_send_email(
+            subject, message, list(recipients), EmailLog.ACTION_TICKET_CREATED,
+            ticket=instance, html_message=html_message,
+        )
     else:
         previous_status = getattr(instance, '_previous_status', None)
         if previous_status == instance.status:
@@ -270,40 +277,41 @@ def send_ticket_notifications(sender, instance, created, **kwargs):
 
         # Action 2: Send status change email notifications
         if instance.status == Ticket.STATUS_DEPLOYMENT_REQUESTED:
-            confirm_url = f"http://127.0.0.1:8000/ticket/{instance.id}/confirm-deployment/"
-            subject = f"[TicketSolve Approval Required] Production Deployment Request: Ticket #{instance.id} - {instance.title}"
-            message = (
-                f"Dear Admin / Stakeholder,\n\n"
-                f"A deployment to production has been requested for Ticket #{instance.id}.\n\n"
-                f"----------------------------------------\n"
-                f"📌 Ticket ID: #{instance.id}\n"
-                f"📌 Title: {instance.title}\n"
-                f"📌 Priority: {instance.get_priority_display()}\n"
-                f"📌 Company: {instance.company.name if instance.company else 'Central'}\n"
-                f"📌 Assignee: {instance.assigned_to.username if instance.assigned_to else 'Not Assigned'}\n"
-                f"----------------------------------------\n\n"
-                f"Please review and approve the deployment request using the following link:\n"
-                f"👉 {confirm_url}\n\n"
-                f"Once confirmed, the ticket status will be automatically updated to 'Ready to Deploy'.\n\n"
-                f"Best regards,\n"
-                f"TicketSolve Support Team"
+            confirm_url = f"{settings.PUBLIC_BASE_URL}/ticket/{instance.id}/confirm-deployment/"
+            subject = f"[TicketSolve] Approval Required | Production Deployment - Ticket #{instance.id}"
+            message, html_message = build_formal_email(
+                heading='Production Deployment Approval Required',
+                greeting='Dear Administrator or Stakeholder,',
+                introduction=f'A production deployment has been requested for Ticket #{instance.id}. Review the request before granting approval.',
+                details=[
+                    ('Ticket reference', f'#{instance.id}'),
+                    ('Subject', instance.title),
+                    ('Priority', instance.get_priority_display()),
+                    ('Organization', instance.company.name if instance.company else 'Central Administration'),
+                    ('Assignee', instance.assigned_to.username if instance.assigned_to else 'Unassigned'),
+                ],
+                paragraphs=["After approval, the ticket status will be updated to Ready to Deploy."],
+                action_label='Review deployment request',
+                action_url=confirm_url,
             )
         else:
-            subject = f"[TicketSolve] Status Update: Ticket #{instance.id} - {instance.title}"
-            message = (
-                f"Dear {instance.created_by.username},\n\n"
-                f"Your Ticket #{instance.id} has been updated in the system:\n\n"
-                f"----------------------------------------\n"
-                f"📌 Latest Status: {instance.get_status_display()}\n"
-                f"📌 Priority: {instance.get_priority_display()}\n"
-                f"📌 Assignee: {instance.assigned_to.username if instance.assigned_to else 'Not Assigned'}\n"
-                f"----------------------------------------\n\n"
-                f"You can log in to your dashboard to track details.\n\n"
-                f"Best regards,\n"
-                f"TicketSolve Support Team"
+            subject = f"[TicketSolve] Ticket Status Update | #{instance.id} - {instance.title}"
+            message, html_message = build_formal_email(
+                heading='Ticket Status Update',
+                greeting=f'Dear {instance.created_by.username},',
+                introduction=f'The status of Ticket #{instance.id} has been updated.',
+                details=[
+                    ('Ticket reference', f'#{instance.id}'),
+                    ('Subject', instance.title),
+                    ('Current status', instance.get_status_display()),
+                    ('Priority', instance.get_priority_display()),
+                    ('Assignee', instance.assigned_to.username if instance.assigned_to else 'Unassigned'),
+                ],
+                action_label='View ticket details',
+                action_url=f'{settings.PUBLIC_BASE_URL}/ticket/{instance.id}/',
             )
                   
-        send_status_change_email(instance, subject, message)
+        send_status_change_email(instance, subject, message, html_message=html_message)
 
 
 @receiver(post_save, sender=TicketComment)
@@ -366,22 +374,26 @@ def send_user_welcome_email(sender, instance, created, **kwargs):
     Action 3: Send welcome email and save EmailLog when admin creates a new user account
     """
     if created and instance.email:
-        subject = f"[TicketSolve] Welcome! Your New Account Details"
-        message = (
-            f"Dear {instance.username},\n\n"
-            f"Welcome to TicketSolve! Your user account has been successfully created. Here are your account details:\n"
-            f"----------------------------------------\n"
-            f"👤 Username: {instance.username}\n"
-            f"📧 Email: {instance.email}\n"
-            f"🔑 Role: {instance.get_role_display()}\n"
-            f"🏢 Company: {instance.company.name if instance.company else 'Central (System Admin)'}\n"
-            f"----------------------------------------\n\n"
-            f"Please log in using the credentials provided by your system administrator.\n"
-            f"If you have any questions, please contact your organization administrator.\n\n"
-            f"Best regards,\n"
-            f"TicketSolve System Administrator"
+        subject = '[TicketSolve] Account Registration Confirmation'
+        message, html_message = build_formal_email(
+            heading='Your TicketSolve Account Is Ready',
+            greeting=f'Dear {instance.username},',
+            introduction='Your TicketSolve user account has been created successfully.',
+            details=[
+                ('Username', instance.username),
+                ('Email address', instance.email),
+                ('Access role', instance.effective_role_display),
+                ('Organization', instance.company.name if instance.company else 'Central Administration'),
+            ],
+            paragraphs=['Use the credentials supplied by your administrator to sign in. Contact your organization administrator if you require assistance.'],
+            action_label='Open TicketSolve',
+            action_url=f'{settings.PUBLIC_BASE_URL}/login/',
+            closing='TicketSolve System Administration',
         )
-        log_and_send_email(subject, message, [instance.email], EmailLog.ACTION_WELCOME_USER)
+        log_and_send_email(
+            subject, message, [instance.email], EmailLog.ACTION_WELCOME_USER,
+            html_message=html_message,
+        )
 
 
 @receiver(post_save, sender=Company)
@@ -395,15 +407,21 @@ def send_company_registration_email(sender, instance, created, **kwargs):
         ).exclude(email='').values_list('email', flat=True)
 
         if system_admins:
-            subject = f"[TicketSolve Log] New Company Registered Successfully: {instance.name}"
-            message = (
-                f"Dear System Administrator,\n\n"
-                f"A new tenant company has been registered in the system:\n"
-                f"----------------------------------------\n"
-                f"🏢 Company Name: {instance.name}\n"
-                f"🆔 Company ID: {instance.id}\n"
-                f"----------------------------------------\n\n"
-                f"You can review and manage this company's users through the custom Admin Dashboard.\n"
-                f"TicketSolve System Log"
+            subject = f"[TicketSolve] Company Registration Notice | {instance.name}"
+            message, html_message = build_formal_email(
+                heading='Company Registration Notice',
+                greeting='Dear System Administrator,',
+                introduction='A new tenant organization has been registered in TicketSolve.',
+                details=[
+                    ('Organization', instance.name),
+                    ('Company ID', instance.id),
+                ],
+                paragraphs=["Review the organization profile and user access assignments in the administration area."],
+                action_label='Manage organizations',
+                action_url=f'{settings.PUBLIC_BASE_URL}/companies/',
+                closing='TicketSolve System Administration',
             )
-            log_and_send_email(subject, message, system_admins, EmailLog.ACTION_COMPANY_REGISTERED)
+            log_and_send_email(
+                subject, message, system_admins, EmailLog.ACTION_COMPANY_REGISTERED,
+                html_message=html_message,
+            )

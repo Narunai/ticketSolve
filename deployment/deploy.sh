@@ -59,6 +59,9 @@ fi
 if ! sudo grep -q '^CSRF_TRUSTED_ORIGINS=' "$ENV_FILE"; then
     echo "CSRF_TRUSTED_ORIGINS=https://tikketsolve-systemoneit.uk,https://www.tikketsolve-systemoneit.uk" | sudo tee -a "$ENV_FILE" >/dev/null
 fi
+if ! sudo grep -q '^PUBLIC_BASE_URL=' "$ENV_FILE"; then
+    echo "PUBLIC_BASE_URL=https://tikketsolve-systemoneit.uk" | sudo tee -a "$ENV_FILE" >/dev/null
+fi
 if ! sudo grep -q '^BACKUP_DIR=' "$ENV_FILE"; then
     echo "BACKUP_DIR=${BACKUP_DIR}" | sudo tee -a "$ENV_FILE" >/dev/null
 fi

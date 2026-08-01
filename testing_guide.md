@@ -14,8 +14,8 @@
 2. **Role-Based Access Control (RBAC)**: ตรวจสอบสิทธิ์การเข้าถึง URL และการทำรายการของผู้ใช้ทั้ง 5 บทบาท รวมถึงลำดับกลุ่มเมนู sidebar และการแสดงชื่อ/บริษัท/effective role ที่ถูกต้องแม้บัญชี superuser รุ่นเก่าจะมีค่า role ไม่ตรง
 3. **Ticket Lifecycle & Custom Fields**: ทดสอบการสร้าง, แก้ไข, เปลี่ยนสถานะ, บันทึก Note, และการแสดงผล Custom Fields
 4. **Ticket Status Automation**: ทดสอบการย้ายสถานะอัตโนมัติจาก Open ➔ In Progress เมื่อเวลาผ่านไปตามกำหนด
-5. **Notification Config & Email Dispatch**: ทดสอบการสร้างจดหมายแจ้งเตือนและการบันทึก `EmailLog`
-6. **Monthly PDF Report Generation & Schedule**: ทดสอบการออกรายงาน PDF และคำสั่งส่งรายงานประจำเดือน
+5. **Notification Config & Email Dispatch**: ทดสอบการสร้างอีเมลทางการแบบ HTML + plain text, การส่งตามกฎแจ้งเตือน และการบันทึก `EmailLog`
+6. **Monthly PDF Report Generation & Schedule**: ทดสอบ PDF รูปแบบเอกสารผู้บริหาร, เลขอ้างอิงรายงาน, ไฟล์แนบ, อีเมล HTML และคำสั่งส่งรายงานประจำเดือน
 7. **Backup System & Management Views**: ทดสอบ Full, Incremental และ System Data (No Tickets), timer ที่กำหนดรอบ/เปิดปิดแยกกัน, interval allowlist, สิทธิ์แก้ไขเฉพาะ System Admin, failure backoff, manual override, เนื้อหา SQLite/manifest, `BackupLog` และการลบรายการ 0 MB อย่างปลอดภัย
 8. **Authorization Regression**: ทดสอบ `CLIENT_USER` เห็นเฉพาะ Ticket ของตน, `CLIENT_STAFF` แก้ไข Ticket ใน tenant ได้, การป้องกัน superuser และการดาวน์โหลดไฟล์แนบแบบ authenticated
 9. **Backup Security Regression**: ทดสอบ path traversal, incremental backup เมื่อ Ticket เก่ามี comment ใหม่ และการลบรายการ backup ที่ไม่มี archive

@@ -53,7 +53,8 @@ try:
     from xhtml2pdf import pisa
 except Exception:
     pisa = None
-from django.core.mail import EmailMessage, send_mail
+from django.core.mail import EmailMultiAlternatives, send_mail
+from .email_formatting import build_formal_email
 
 from django.utils import timezone
 from django.views import View
@@ -1497,18 +1498,19 @@ class TicketDetailView(LoginRequiredMixin, DetailView):
         if not recipients:
             return
             
-        subject = f"[TicketSolve] New Comment on Ticket #{ticket.id}: {ticket.title}"
-        message_body = (
-            f"Hello,\n\n"
-            f"A new comment has been added to Ticket #{ticket.id} ({ticket.title})\n\n"
-            f"By: {comment.author.username} ({comment.author.get_role_display()})\n"
-            f"Message:\n"
-            f"----------------------------------------\n"
-            f"{comment.content}\n"
-            f"----------------------------------------\n\n"
-            f"You can view the details and reply at: http://127.0.0.1:8000/ticket/{ticket.id}/\n\n"
-            f"Best regards,\n"
-            f"TicketSolve System"
+        subject = f"[TicketSolve] New Comment | Ticket #{ticket.id} - {ticket.title}"
+        message_body, html_message = build_formal_email(
+            heading='New Ticket Comment',
+            greeting='Dear Ticket Participant,',
+            introduction=f'A new comment has been added to Ticket #{ticket.id}.',
+            details=[
+                ('Ticket reference', f'#{ticket.id}'),
+                ('Subject', ticket.title),
+                ('Commented by', f'{comment.author.username} ({comment.author.effective_role_display})'),
+                ('Comment', comment.content),
+            ],
+            action_label='View ticket and reply',
+            action_url=f'{settings.PUBLIC_BASE_URL}/ticket/{ticket.id}/',
         )
         
         connection = get_smtp_connection()
@@ -1536,6 +1538,7 @@ class TicketDetailView(LoginRequiredMixin, DetailView):
                 kwargs = {
                     'subject': subject,
                     'message': message_body,
+                    'html_message': html_message,
                     'from_email': from_email,
                     'recipient_list': [email],
                     'fail_silently': False
@@ -1911,7 +1914,14 @@ class ResendEmailView(LoginRequiredMixin, SystemStaffRequiredMixin, View):
         sent_count = 0
         err_msg = ""
         try:
-            email = EmailMessage(
+            _, resend_html = build_formal_email(
+                heading=email_log.subject.removeprefix('[TicketSolve] ').strip(),
+                greeting='Dear Recipient,',
+                introduction='This TicketSolve notification is being resent following an earlier delivery failure.',
+                paragraphs=[email_log.message],
+                notice='This is a resent service notification. Please retain it according to your organization\'s information-handling requirements.',
+            )
+            email = EmailMultiAlternatives(
                 subject=email_log.subject,
                 body=email_log.message,
                 from_email=from_email,
@@ -1919,6 +1929,7 @@ class ResendEmailView(LoginRequiredMixin, SystemStaffRequiredMixin, View):
                 cc=cc_recipients,
                 connection=connection,
             )
+            email.attach_alternative(resend_html, 'text/html')
             sent_count = email.send(fail_silently=False)
         except Exception as e:
             print(f"[Resend Email Error] {e}")
@@ -2412,16 +2423,16 @@ def get_report_context(user, company_id=None):
     else:
         selected_company = user.company
 
-    tickets = Ticket.objects.all()
+    tickets = Ticket.objects.select_related('created_by', 'assigned_to', 'company').all()
     if selected_company:
         sub_ids = selected_company.get_all_subsidiary_ids()
         tickets = tickets.filter(company_id__in=sub_ids)
 
 
     # Filter to current month
-    now = timezone.now()
+    now = timezone.localtime()
     start_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    tickets = tickets.filter(created_at__gte=start_of_month)
+    tickets = tickets.filter(created_at__gte=start_of_month).order_by('id')
 
     # Stats
     tickets_count = tickets.count()
@@ -2447,6 +2458,8 @@ def get_report_context(user, company_id=None):
         "July", "August", "September", "October", "November", "December"
     ]
     month_name = f"{english_months[now.month - 1]} {now.year}"
+    scope_code = f'C{selected_company.pk}' if selected_company else 'ALL'
+    report_reference = f'TS-MR-{now:%Y%m}-{scope_code}'
 
     font_regular_path = "file:///" + os.path.join(settings.BASE_DIR, 'tickets', 'static', 'fonts', 'Sarabun-Regular.ttf').replace('\\', '/')
     font_bold_path = "file:///" + os.path.join(settings.BASE_DIR, 'tickets', 'static', 'fonts', 'Sarabun-Bold.ttf').replace('\\', '/')
@@ -2467,9 +2480,13 @@ def get_report_context(user, company_id=None):
         'company_name': selected_company.name if selected_company else "All Companies (System Wide)",
         'selected_company': selected_company,
         'month_name': month_name,
-        'current_date': now.strftime("%d/%m/%Y %H:%M"),
+        'current_date': now.strftime("%d %B %Y, %H:%M"),
+        'generated_at': now.strftime("%d %B %Y, %H:%M %Z"),
+        'period_start': start_of_month.strftime("%d %B %Y"),
+        'period_end': now.strftime("%d %B %Y"),
+        'report_reference': report_reference,
         'actor_name': user.username,
-        'actor_role': user.get_role_display(),
+        'actor_role': user.effective_role_display,
         'theme_color': theme_color,
         'font_regular_path': font_regular_path,
         'font_bold_path': font_bold_path,
@@ -2479,16 +2496,25 @@ def get_report_context(user, company_id=None):
 
 def _monthly_report_email_content(context):
     subject = f"[TicketSolve] Monthly Ticket Summary Report - {context['company_name']}"
-    body = (
-        f"Dear {context['company_name']} Team,\n\n"
-        f"The TicketSolve system has compiled the monthly ticket summary report for {context['month_name']}.\n"
-        f"Report generated by: {context['actor_name']} ({context['actor_role']})\n"
-        f"Total tickets this month: {context['tickets_count']} (Resolved: {context['done_count']})\n\n"
-        f"Please find the detailed PDF summary report attached to this email.\n\n"
-        f"Best regards,\n"
-        f"TicketSolve Support Team"
+    body, html_body = build_formal_email(
+        heading='Monthly Ticket Summary Report',
+        greeting=f"Dear {context['company_name']} Team,",
+        introduction=f"The formal TicketSolve service report for {context['month_name']} is attached for your review.",
+        details=[
+            ('Report reference', context['report_reference']),
+            ('Reporting scope', context['company_name']),
+            ('Reporting period', f"{context['period_start']} to {context['period_end']}"),
+            ('Total tickets', context['tickets_count']),
+            ('Resolved or closed', context['done_count']),
+            ('Resolution rate', f"{context['resolution_rate']}%"),
+            ('Prepared by', f"{context['actor_name']} ({context['actor_role']})"),
+        ],
+        paragraphs=['Please review the attached PDF for ticket-level details, status distribution, and priority information.'],
+        action_label='Open TicketSolve reports',
+        action_url=f"{settings.PUBLIC_BASE_URL}/report/",
+        notice='This report may contain confidential operational information. Distribute it only to authorized recipients.',
     )
-    return subject, body
+    return subject, body, html_body
 
 
 def _smtp_delivery_options(smtp_config=None):
@@ -2535,9 +2561,9 @@ def send_scheduled_monthly_report(schedule):
     if not recipient_emails:
         raise ValueError('Report schedule does not have any primary recipients with emails.')
 
-    subject, body = _monthly_report_email_content(context)
+    subject, body, html_body = _monthly_report_email_content(context)
     connection, from_email = _smtp_delivery_options(schedule.smtp_configuration)
-    email = EmailMessage(
+    email = EmailMultiAlternatives(
         subject=subject,
         body=body,
         from_email=from_email,
@@ -2545,6 +2571,7 @@ def send_scheduled_monthly_report(schedule):
         cc=cc_emails,
         connection=connection,
     )
+    email.attach_alternative(html_body, 'text/html')
     filename = f"Monthly_Report_{context['month_name'].replace(' ', '_')}_{context['company_name'].replace(' ', '_')}.pdf"
     email.attach(filename, pdf_bytes, 'application/pdf')
     delivery_group = uuid.uuid4()
@@ -2738,7 +2765,7 @@ class SendMonthlyReportView(LoginRequiredMixin, AdminRequiredMixin, View):
             messages.error(request, f"ไม่พบอีเมลผู้ใช้งานของ {target_label} สำหรับการจัดส่งรายงาน")
             return redirect('monthly_report')
 
-        subject, body = _monthly_report_email_content(context)
+        subject, body, html_body = _monthly_report_email_content(context)
 
         # Resolve SMTP configuration dynamically based on user selection in request
         smtp_config_id = request.POST.get('smtp_config_id')
@@ -2772,13 +2799,14 @@ class SendMonthlyReportView(LoginRequiredMixin, AdminRequiredMixin, View):
             connection = get_smtp_connection()
             from_email = get_smtp_from_email(settings.DEFAULT_FROM_EMAIL)
 
-        email = EmailMessage(
+        email = EmailMultiAlternatives(
             subject,
             body,
             from_email,
             recipient_emails,
             cc=cc_emails,
         )
+        email.attach_alternative(html_body, 'text/html')
         
         # Attach PDF
         filename = f"Monthly_Report_{context['month_name'].replace(' ', '_')}_{context['company_name'].replace(' ', '_')}.pdf"

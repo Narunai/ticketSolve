@@ -1,5 +1,8 @@
 from django.core.management.base import BaseCommand
 from django.core.mail import send_mail
+from django.conf import settings
+from django.utils import timezone
+from tickets.email_formatting import build_formal_email
 from tickets.models import Company, Ticket, CustomUser
 
 class Command(BaseCommand):
@@ -31,26 +34,33 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.WARNING(f"  - No Client Admin emails found for {company.name} (skipping)"))
                 continue
 
-            # Build report message in English
-            subject = f"[TicketSolve] Monthly Ticket Summary Report: {company.name}"
-            message = f"Dear {company.name} Administrator (Client Admin),\n\n" \
-                      f"Please find below the monthly summary report of all support tickets for your company:\n" \
-                      f"--------------------------------------------------\n" \
-                      f"- Total Tickets: {total_tickets}\n" \
-                      f"- Open Status: {open_count}\n" \
-                      f"- In Progress Status: {in_progress_count}\n" \
-                      f"- Resolved Status: {resolved_count}\n" \
-                      f"- Closed Status: {closed_count}\n" \
-                      f"--------------------------------------------------\n\n" \
-                      f"You can log in to your dashboard to monitor status updates at any time.\n\n" \
-                      f"Best regards,\nTicketSolve Support Team"
+            subject = f"[TicketSolve] Monthly Ticket Summary Report - {company.name}"
+            report_month = timezone.localtime().strftime('%B %Y')
+            message, html_message = build_formal_email(
+                heading='Monthly Ticket Summary Report',
+                greeting=f'Dear {company.name} Administrator,',
+                introduction=f'The TicketSolve ticket summary for {report_month} is available for management review.',
+                details=[
+                    ('Organization', company.name),
+                    ('Total tickets', total_tickets),
+                    ('Open', open_count),
+                    ('In progress', in_progress_count),
+                    ('Resolved', resolved_count),
+                    ('Closed', closed_count),
+                ],
+                paragraphs=['Sign in to TicketSolve to review current ticket information and service progress.'],
+                action_label='Open monthly reports',
+                action_url=f'{settings.PUBLIC_BASE_URL}/report/',
+                notice='This summary may contain confidential operational information. Distribute it only to authorized recipients.',
+            )
 
             # Send Email
             try:
                 send_mail(
                     subject=subject,
                     message=message,
-                    from_email='reports@ticketsolve.com',
+                    html_message=html_message,
+                    from_email=settings.DEFAULT_FROM_EMAIL,
                     recipient_list=recipient_list,
                     fail_silently=False
                 )

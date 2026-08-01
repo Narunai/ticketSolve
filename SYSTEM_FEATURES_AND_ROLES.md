@@ -38,6 +38,7 @@
 
 ### 📧 1.4 ระบบแจ้งเตือนทางอีเมลและการตั้งค่า SMTP (Email Notifications & Log)
 * **Event Notifications**: แจ้งเตือนเมื่อมีการสร้าง Ticket ใหม่, อัปเดตสถานะ, หรือเพิ่มความคิดเห็น
+* **Formal Email Template**: อีเมลผู้ใช้ทุกประเภทมีทั้ง HTML และ plain text ใช้โครงสร้างหัวเรื่อง ตารางรายละเอียด ปุ่มไปยัง production และข้อความรักษาความลับที่สม่ำเสมอ โดยไม่พึ่ง emoji/ไอคอนตกแต่ง
 * **Multi-SMTP Support**: สามารถตั้งค่าการเชื่อมต่อ SMTP Server ได้หลายตัว และเลือกเปิดใช้งาน (Active) ตัวหลักได้
 * **Email Delivery Logs & Resend**:
   * บันทึกประวัติการส่งอีเมลทุกฉบับ (To, CC, Subject, Event Type, Timestamp, Status)
@@ -61,7 +62,7 @@
 ---
 
 ### 📊 1.6 ระบบรายงานประจำเดือน PDF (Monthly PDF Reports)
-* **PDF Generation**: ออกรายงานสรุปสถิติ Ticket ประจำเดือนในรูปแบบ PDF สวยงาม (ภาพรวม Ticket, อัตราการแก้ไขสำเร็จ, กราฟสถิติ, และตารางสรุป)
+* **PDF Generation**: ออกรายงาน PDF รูปแบบเอกสารผู้บริหาร พร้อมเลขอ้างอิง ขอบเขต/ช่วงเวลา ผู้จัดทำ Executive Summary, Status/Priority Breakdown, Ticket Register, หลักเกณฑ์คำนวณ และข้อความรักษาความลับ
 * **Automated Monthly Schedule**: ตั้งเวลาส่งรายงานสรุปเข้าอีเมลผู้บริหาร/ผู้ดูแลระบบอัตโนมัติในวันและเวลาที่กำหนด
 
 ---

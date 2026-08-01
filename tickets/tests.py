@@ -85,6 +85,9 @@ class MultiTenantTicketTests(TestCase):
         # Verify custom signal triggered email sending (at least to creator and admins)
         self.assertTrue(len(mail.outbox) > 0)
         self.assertIn("Billing Query", mail.outbox[0].subject)
+        self.assertNotIn("📌", mail.outbox[0].body)
+        self.assertTrue(mail.outbox[0].alternatives)
+        self.assertIn('Support Ticket Confirmation', mail.outbox[0].alternatives[0][0])
         all_to = [to_addr for m in mail.outbox for to_addr in m.to]
         self.assertIn(self.user_a.email, all_to)
 
@@ -196,6 +199,8 @@ class MultiTenantTicketTests(TestCase):
         self.assertIsNotNone(report_email)
         self.assertIn("Monthly Ticket Summary Report", report_email.subject)
         self.assertIn("Company A", report_email.body)
+        self.assertTrue(report_email.alternatives)
+        self.assertIn('Service Management System', report_email.alternatives[0][0])
 
     def test_user_welcome_email_notification(self):
         mail.outbox = []
@@ -209,8 +214,9 @@ class MultiTenantTicketTests(TestCase):
         # Check that welcome email was generated
         welcome_email = next((m for m in mail.outbox if "new_emp@company-a.com" in m.to), None)
         self.assertIsNotNone(welcome_email)
-        self.assertIn("Welcome! Your New Account Details", welcome_email.subject)
+        self.assertIn("Account Registration Confirmation", welcome_email.subject)
         self.assertIn("new_employee", welcome_email.body)
+        self.assertTrue(welcome_email.alternatives)
 
     def test_company_registration_email_notification(self):
         mail.outbox = []
@@ -622,11 +628,20 @@ class MultiTenantTicketTests(TestCase):
         self.assertEqual(comment.attachments.count(), 2)
 
     def test_report_preview_pdf_generation(self):
+        from django.template.loader import get_template
+        from .views import get_report_context
+
         self.client.login(username="admin_a", password="password123")
         response = self.client.get(reverse('report_preview'))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], 'application/pdf')
-        self.assertTrue(len(response.content) > 0)
+        self.assertTrue(response.content.startswith(b'%PDF-'))
+
+        context = get_report_context(self.admin_a)
+        report_html = get_template('tickets/report_pdf_template.html').render(context)
+        self.assertIn('Executive Summary', report_html)
+        self.assertIn(context['report_reference'], report_html)
+        self.assertNotIn('📌', report_html)
 
     def test_send_monthly_report_action(self):
         from .models import EmailLog
@@ -640,6 +655,9 @@ class MultiTenantTicketTests(TestCase):
         self.assertTrue(len(mail.outbox) > 0)
         report_email = mail.outbox[0]
         self.assertIn("Monthly Ticket Summary Report", report_email.subject)
+        self.assertIn('Report reference:', report_email.body)
+        self.assertTrue(report_email.alternatives)
+        self.assertIn('Monthly Ticket Summary Report', report_email.alternatives[0][0])
         
         # Verify PDF attachment
         self.assertEqual(len(report_email.attachments), 1)
@@ -1619,7 +1637,7 @@ class MultiTenantTicketTests(TestCase):
         )
         schedule.recipients.add(self.admin_a)
 
-        with patch('tickets.views.EmailMessage.send', return_value=0):
+        with patch('tickets.views.EmailMultiAlternatives.send', return_value=0):
             call_command('process_report_schedules', '--schedule-id', schedule.id, '--force')
 
         schedule.refresh_from_db()

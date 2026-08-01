@@ -1,323 +1,309 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <style>
         @page {
             size: A4;
-            margin: 1.5cm;
+            margin: 1.35cm 1.35cm 1.45cm;
         }
 
         @font-face {
             font-family: Sarabun;
-            src: url('/static/fonts/Sarabun-Regular.ttf');
+            src: url('{{ font_regular_path }}');
         }
         @font-face {
             font-family: Sarabun;
-            src: url('/static/fonts/Sarabun-Bold.ttf');
+            src: url('{{ font_bold_path }}');
             font-weight: bold;
         }
 
         body {
+            margin: 0;
             font-family: Sarabun, Helvetica, Arial, sans-serif;
-            color: #0f172a;
-            line-height: 1.5;
-            font-size: 10pt;
+            color: #172033;
+            font-size: 9pt;
+            line-height: 1.42;
         }
 
-        .header {
-            border-bottom: 2px solid {{ theme_color }};
-            padding-bottom: 15px;
-            margin-bottom: 25px;
+        table {
+            width: 100%;
+            border-collapse: collapse;
         }
 
-        .title {
-            font-size: 20pt;
+        .masthead {
+            background-color: #172554;
+            color: #ffffff;
+            padding: 16px 18px;
+            border-bottom: 4px solid #2563eb;
+        }
+
+        .brand {
+            font-size: 17pt;
             font-weight: bold;
-            color: #0f172a;
             margin: 0;
         }
 
-        .subtitle {
-            font-size: 11pt;
+        .brand-subtitle {
+            margin: 3px 0 0;
+            color: #bfdbfe;
+            font-size: 7.5pt;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .classification {
+            text-align: right;
+            vertical-align: middle;
+            color: #dbeafe;
+            font-size: 7.5pt;
+            text-transform: uppercase;
+        }
+
+        .document-title {
+            margin: 22px 0 4px;
+            color: #172033;
+            font-size: 20pt;
+            font-weight: bold;
+        }
+
+        .document-subtitle {
+            margin: 0 0 18px;
+            color: #64748b;
+            font-size: 10pt;
+        }
+
+        .control-table {
+            margin-bottom: 20px;
+            border: 1px solid #cbd5e1;
+        }
+
+        .control-table th {
+            width: 20%;
+            padding: 7px 9px;
+            background-color: #f1f5f9;
+            border: 1px solid #cbd5e1;
             color: #475569;
-            margin: 5px 0 0 0;
+            font-size: 7.5pt;
+            text-align: left;
+            text-transform: uppercase;
+        }
+
+        .control-table td {
+            width: 30%;
+            padding: 7px 9px;
+            border: 1px solid #cbd5e1;
+            color: #172033;
         }
 
         .section-title {
-            font-size: 13pt;
+            margin: 20px 0 8px;
+            padding-bottom: 5px;
+            border-bottom: 1px solid #94a3b8;
+            color: #172554;
+            font-size: 12pt;
             font-weight: bold;
-            color: #1e293b;
-            margin-top: 25px;
-            margin-bottom: 10px;
-            border-left: 4px solid {{ theme_color }};
-            padding-left: 8px;
         }
 
-        /* Stats Grid */
-        .stats-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 20px;
+        .summary-table {
+            margin-bottom: 14px;
+            border: 1px solid #cbd5e1;
         }
 
-        .stats-card {
-            background-color: #f8fafc;
-            border: 1px solid #e2e8f0;
-            padding: 12px;
+        .summary-table td {
+            width: 20%;
+            padding: 10px 7px;
+            border-right: 1px solid #cbd5e1;
             text-align: center;
-            border-radius: 6px;
         }
 
-        .stats-label {
-            font-size: 9pt;
+        .metric-label {
             color: #64748b;
+            font-size: 7pt;
             text-transform: uppercase;
-            margin-bottom: 5px;
         }
 
-        .stats-value {
-            font-size: 18pt;
+        .metric-value {
+            margin-top: 3px;
+            color: #172033;
+            font-size: 16pt;
             font-weight: bold;
-            color: #0f172a;
         }
 
-        /* Table styles */
         .data-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 10px;
-            margin-bottom: 20px;
+            margin-bottom: 14px;
+            border: 1px solid #cbd5e1;
         }
 
         .data-table th {
-            background-color: #f1f5f9;
+            padding: 7px 8px;
+            background-color: #e8eef7;
             border: 1px solid #cbd5e1;
-            padding: 8px 10px;
+            color: #172554;
+            font-size: 7.5pt;
             font-weight: bold;
             text-align: left;
-            font-size: 9pt;
-            color: #334155;
+            text-transform: uppercase;
         }
 
         .data-table td {
-            border: 1px solid #e2e8f0;
-            padding: 8px 10px;
-            font-size: 9pt;
+            padding: 7px 8px;
+            border: 1px solid #dbe3ee;
             vertical-align: top;
         }
 
-        .data-table tr:nth-child(even) {
+        .data-table tr.even {
             background-color: #f8fafc;
         }
 
-        /* Badges */
-        .badge {
-            display: inline-block;
-            padding: 2px 6px;
-            font-size: 8pt;
-            font-weight: bold;
-            border-radius: 4px;
-            text-align: center;
+        .align-right {
+            text-align: right;
         }
 
-        .badge-open { background-color: #dbeafe; color: #1e40af; }
-        .badge-progress { background-color: #fef3c7; color: #92400e; }
-        .badge-resolved { background-color: #d1fae5; color: #065f46; }
-        .badge-closed { background-color: #f1f5f9; color: #334155; }
+        .status-text {
+            font-weight: bold;
+            color: #334155;
+        }
 
-        .badge-high { background-color: #fee2e2; color: #991b1b; }
-        .badge-medium { background-color: #ffedd5; color: #9a3412; }
-        .badge-low { background-color: #e0f2fe; color: #075985; }
+        .muted {
+            color: #64748b;
+            font-size: 7.5pt;
+        }
+
+        .note-box {
+            margin-top: 18px;
+            padding: 10px 12px;
+            border-left: 3px solid #2563eb;
+            background-color: #f8fafc;
+            color: #475569;
+            font-size: 8pt;
+        }
 
         .footer {
-            margin-top: 40px;
-            font-size: 8pt;
-            color: #94a3b8;
-            text-align: center;
-            border-top: 1px solid #e2e8f0;
-            padding-top: 15px;
+            margin-top: 24px;
+            padding-top: 9px;
+            border-top: 1px solid #cbd5e1;
+            color: #64748b;
+            font-size: 7pt;
         }
     </style>
 </head>
 <body>
-
-    <!-- Header -->
-    <div class="header">
-        <table style="width: 100%;">
+    <div class="masthead">
+        <table>
             <tr>
-                <td style="vertical-align: middle;">
-                    <h1 class="title">Monthly Ticket Summary Report</h1>
-                    <p class="subtitle">Reporting Cycle: {{ month_name }} | Generated on {{ current_date }}</p>
+                <td>
+                    <div class="brand">TicketSolve</div>
+                    <div class="brand-subtitle">Service Management System</div>
                 </td>
-                <td style="text-align: right; vertical-align: middle; width: 120px;">
-                    <div style="font-weight: bold; font-size: 14pt; color: {{ theme_color }};">TicketSolve</div>
-                    <div style="font-size: 8pt; color: #64748b;">Multi-tenant System</div>
+                <td class="classification">
+                    Confidential<br>Management Report
                 </td>
             </tr>
         </table>
     </div>
 
-    <!-- Company Meta -->
-    <table style="width: 100%; background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 10px; margin-bottom: 20px; border-radius: 6px;">
+    <h1 class="document-title">Monthly Ticket Summary Report</h1>
+    <p class="document-subtitle">Service activity, workload distribution, and ticket-level information</p>
+
+    <table class="control-table">
         <tr>
-            <td>
-                <strong>Company/Organization:</strong> {{ company_name }}
-            </td>
-            <td style="text-align: right;">
-                <strong>Generated By:</strong> {{ actor_name }} ({{ actor_role }})
-            </td>
+            <th>Report reference</th>
+            <td>{{ report_reference }}</td>
+            <th>Reporting period</th>
+            <td>{{ period_start }} to {{ period_end }}</td>
+        </tr>
+        <tr>
+            <th>Organization</th>
+            <td>{{ company_name }}</td>
+            <th>Generated at</th>
+            <td>{{ generated_at }}</td>
+        </tr>
+        <tr>
+            <th>Prepared by</th>
+            <td>{{ actor_name }}</td>
+            <th>Role</th>
+            <td>{{ actor_role }}</td>
         </tr>
     </table>
 
-    <!-- Statistics Summary Grid -->
-    <div class="section-title">Monthly Ticket Statistics</div>
-    <table class="stats-table">
+    <div class="section-title">Executive Summary</div>
+    <table class="summary-table">
         <tr>
-            <td style="padding-right: 10px; width: 25%;">
-                <div class="stats-card" style="border-top: 3px solid #3b82f6;">
-                    <div class="stats-label">Open</div>
-                    <div class="stats-value">{{ open_count }}</div>
-                </div>
-            </td>
-            <td style="padding-right: 10px; width: 25%;">
-                <div class="stats-card" style="border-top: 3px solid #f59e0b;">
-                    <div class="stats-label">In Progress</div>
-                    <div class="stats-value">{{ in_progress_count }}</div>
-                </div>
-            </td>
-            <td style="padding-right: 10px; width: 25%;">
-                <div class="stats-card" style="border-top: 3px solid #10b981;">
-                    <div class="stats-label">Resolved</div>
-                    <div class="stats-value">{{ resolved_count }}</div>
-                </div>
-            </td>
-            <td style="width: 25%;">
-                <div class="stats-card" style="border-top: 3px solid #64748b;">
-                    <div class="stats-label">Closed</div>
-                    <div class="stats-value">{{ closed_count }}</div>
-                </div>
-            </td>
+            <td><div class="metric-label">Total tickets</div><div class="metric-value">{{ tickets_count }}</div></td>
+            <td><div class="metric-label">Active</div><div class="metric-value">{{ active_count }}</div></td>
+            <td><div class="metric-label">Resolved / closed</div><div class="metric-value">{{ done_count }}</div></td>
+            <td><div class="metric-label">Resolution rate</div><div class="metric-value">{{ resolution_rate }}%</div></td>
+            <td><div class="metric-label">High priority</div><div class="metric-value">{{ high_priority_count }}</div></td>
         </tr>
     </table>
 
-    <div class="section-title">Priority Breakdown</div>
     <table class="data-table">
         <thead>
             <tr>
-                <th>Priority Level</th>
-                <th style="text-align: right;">Count</th>
+                <th>Status</th>
+                <th class="align-right">Ticket count</th>
+                <th>Priority</th>
+                <th class="align-right">Ticket count</th>
             </tr>
         </thead>
         <tbody>
             <tr>
-                <td><span class="badge badge-high">High</span></td>
-                <td style="text-align: right;">{{ high_priority_count }}</td>
+                <td>Open</td><td class="align-right">{{ open_count }}</td>
+                <td>High</td><td class="align-right">{{ high_priority_count }}</td>
+            </tr>
+            <tr class="even">
+                <td>In Progress</td><td class="align-right">{{ in_progress_count }}</td>
+                <td>Medium</td><td class="align-right">{{ medium_priority_count }}</td>
             </tr>
             <tr>
-                <td><span class="badge badge-medium">Medium</span></td>
-                <td style="text-align: right;">{{ medium_priority_count }}</td>
+                <td>Resolved</td><td class="align-right">{{ resolved_count }}</td>
+                <td>Low</td><td class="align-right">{{ low_priority_count }}</td>
             </tr>
-            <tr>
-                <td><span class="badge badge-low">Low</span></td>
-                <td style="text-align: right;">{{ low_priority_count }}</td>
-            </tr>
-            <tr style="font-weight: bold; background-color: #f1f5f9;">
-                <td>Total Tickets</td>
-                <td style="text-align: right;">{{ tickets_count }}</td>
+            <tr class="even">
+                <td>Closed</td><td class="align-right">{{ closed_count }}</td>
+                <td>Total</td><td class="align-right">{{ tickets_count }}</td>
             </tr>
         </tbody>
     </table>
 
-    <div class="section-title">Resolution Performance KPI</div>
-    <table class="data-table">
+    <div class="section-title">Ticket Register</div>
+    <table class="data-table" repeat="1">
         <thead>
             <tr>
-                <th>Key Performance Indicator</th>
-                <th style="text-align: right;">Metric</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr>
-                <td>Resolution Rate</td>
-                <td style="text-align: right;">{{ resolution_rate }}%</td>
-            </tr>
-            <tr>
-                <td>Active Tickets (Pending)</td>
-                <td style="text-align: right;">{{ active_count }}</td>
-            </tr>
-            <tr>
-                <td>Resolved & Closed Tickets</td>
-                <td style="text-align: right;">{{ done_count }}</td>
-            </tr>
-        </tbody>
-    </table>
-
-    <!-- Ticket Details List Table -->
-    <div class="section-title">All Tickets List for this Month</div>
-    <table class="data-table">
-        <thead>
-            <tr>
-                <th style="width: 8%;">ID</th>
-                <th style="width: 40%;">Ticket Title</th>
-                <th style="width: 15%;">Priority</th>
-                <th style="width: 15%;">Status</th>
-                <th style="width: 22%;">Assignee</th>
+                <th style="width:8%;">Reference</th>
+                <th style="width:37%;">Subject and reporter</th>
+                <th style="width:13%;">Priority</th>
+                <th style="width:15%;">Status</th>
+                <th style="width:27%;">Assignee</th>
             </tr>
         </thead>
         <tbody>
             {% for ticket in tickets %}
-            <tr>
+            <tr class="{% cycle '' 'even' %}">
                 <td>#{{ ticket.id }}</td>
                 <td>
-                    <strong>{{ ticket.title }}</strong>
-                    <div style="font-size: 7.5pt; color: #64748b; margin-top: 3px;">
-                        Created by: {{ ticket.created_by.username }} on {{ ticket.created_at|date:"Y-m-d" }}
-                    </div>
+                    <strong>{{ ticket.title }}</strong><br>
+                    <span class="muted">Reported by {{ ticket.created_by.username }} on {{ ticket.created_at|date:"d M Y, H:i" }}</span>
                 </td>
-                <td>
-                    {% if ticket.priority == 'HIGH' %}
-                        <span class="badge badge-high">High</span>
-                    {% elif ticket.priority == 'MEDIUM' %}
-                        <span class="badge badge-medium">Medium</span>
-                    {% else %}
-                        <span class="badge badge-low">Low</span>
-                    {% endif %}
-                </td>
-                <td>
-                    {% if ticket.status == 'OPEN' %}
-                        <span class="badge badge-open">Open</span>
-                    {% elif ticket.status == 'IN_PROGRESS' %}
-                        <span class="badge badge-progress">In Progress</span>
-                    {% elif ticket.status == 'RESOLVED' %}
-                        <span class="badge badge-resolved">Resolved</span>
-                    {% else %}
-                        <span class="badge badge-closed">Closed</span>
-                    {% endif %}
-                </td>
-                <td>
-                    {% if ticket.assigned_to %}
-                        {{ ticket.assigned_to.username }}
-                    {% else %}
-                        <span style="color: #94a3b8; font-style: italic;">Unassigned</span>
-                    {% endif %}
-                </td>
+                <td>{{ ticket.get_priority_display }}</td>
+                <td><span class="status-text">{{ ticket.get_status_display }}</span></td>
+                <td>{% if ticket.assigned_to %}{{ ticket.assigned_to.username }}{% else %}<span class="muted">Unassigned</span>{% endif %}</td>
             </tr>
             {% empty %}
             <tr>
-                <td colspan="5" style="text-align: center; color: #94a3b8; padding: 20px;">
-                    No ticket records reported for this month.
-                </td>
+                <td colspan="5" style="padding:18px;text-align:center;color:#64748b;">No tickets were registered during this reporting period.</td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
 
-    <!-- Footer -->
-    <div class="footer">
-        This document is automatically generated by the TicketSolve system. <br/>
-        All information is confidential and protected by multi-tenant data isolation constraints.
+    <div class="note-box">
+        <strong>Reporting note:</strong> Statistics include tickets created from the first day of the reporting month through the generation time shown above. Resolution rate represents tickets currently marked Resolved or Closed divided by total tickets in scope.
     </div>
 
+    <div class="footer">
+        This document was generated automatically by TicketSolve. It may contain confidential operational information and must be distributed only to authorized recipients. Tenant isolation rules apply to the report scope.
+    </div>
 </body>
 </html>

@@ -102,6 +102,8 @@ Backup archive เก็บที่ `/var/backups/ticketsolve` บน AWS VPS �
 * หน้า Backup Management แสดง Download เฉพาะ archive ที่มีข้อมูล; รายการขนาด 0 หรือไฟล์หายสามารถลบรายรายการด้วย **Delete empty record** หรือลบรายการ 0 MB ทั้งหมดด้วย **Delete all 0 MB**
 * **System Data (No Tickets)** สร้างทุก 7 วัน: เก็บ Users, Companies, roles, SMTP/IMAP, routing, schedules, categories และค่าระบบใน SQLite ที่ล้าง Ticket ออกจากสำเนาแล้ว โดยไม่รวม `media/` และ runtime secrets; System Admin สามารถสั่งทันทีด้วยปุ่ม **Run Manually: System Data (No Tickets)** โดยไม่กระทบรอบอัตโนมัติ
 * SMTP Configuration แยกขอบเขตการใช้งานเป็นส่งอีเมล, Email → Ticket หรือทั้งสองฟังก์ชัน โดยมี active configuration แยกตาม feature
+* อีเมลแจ้งเตือนใช้แม่แบบทางการแบบ multipart (HTML + plain text) ร่วมกันทั้ง Ticket, Status, Deployment Approval, Comment, Account, Company และ Monthly Report พร้อมลิงก์ production ที่กำหนดผ่าน `PUBLIC_BASE_URL`
+* Monthly PDF Report ใช้รูปแบบเอกสารผู้บริหาร มีเลขอ้างอิง ขอบเขตและช่วงเวลารายงาน Executive Summary, Status/Priority Breakdown, Ticket Register และข้อความกำกับความลับ โดยลดไอคอนและสีที่ไม่จำเป็น
 
 ## 📥 Email → Ticket
 
