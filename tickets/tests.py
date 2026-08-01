@@ -2010,6 +2010,19 @@ class MultiTenantTicketTests(TestCase):
                         ticket_id INTEGER NOT NULL REFERENCES tickets_ticket(id) ON DELETE CASCADE,
                         content TEXT NOT NULL
                     );
+                    CREATE TABLE tickets_commentattachment (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        comment_id INTEGER NOT NULL REFERENCES tickets_ticketcomment(id) ON DELETE CASCADE
+                    );
+                    CREATE TABLE tickets_ticketauditlog (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        ticket_id INTEGER NOT NULL REFERENCES tickets_ticket(id) ON DELETE CASCADE
+                    );
+                    CREATE TABLE tickets_inappnotification (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        ticket_id INTEGER REFERENCES tickets_ticket(id) ON DELETE SET NULL,
+                        title TEXT NOT NULL
+                    );
                     CREATE TABLE tickets_inboundemailreceipt (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         ticket_id INTEGER REFERENCES tickets_ticket(id) ON DELETE SET NULL,
@@ -2018,6 +2031,9 @@ class MultiTenantTicketTests(TestCase):
                     INSERT INTO tickets_company(name) VALUES ('Preserved Company');
                     INSERT INTO tickets_ticket(title) VALUES ('Must be removed');
                     INSERT INTO tickets_ticketcomment(ticket_id, content) VALUES (1, 'Must cascade');
+                    INSERT INTO tickets_commentattachment(comment_id) VALUES (1);
+                    INSERT INTO tickets_ticketauditlog(ticket_id) VALUES (1);
+                    INSERT INTO tickets_inappnotification(ticket_id, title) VALUES (1, 'Ticket alert');
                     INSERT INTO tickets_inboundemailreceipt(ticket_id, subject) VALUES (1, 'Preserved log');
                     '''
                 )
@@ -2049,6 +2065,9 @@ class MultiTenantTicketTests(TestCase):
             try:
                 self.assertEqual(restored.execute('SELECT COUNT(*) FROM tickets_ticket').fetchone()[0], 0)
                 self.assertEqual(restored.execute('SELECT COUNT(*) FROM tickets_ticketcomment').fetchone()[0], 0)
+                self.assertEqual(restored.execute('SELECT COUNT(*) FROM tickets_commentattachment').fetchone()[0], 0)
+                self.assertEqual(restored.execute('SELECT COUNT(*) FROM tickets_ticketauditlog').fetchone()[0], 0)
+                self.assertEqual(restored.execute('SELECT COUNT(*) FROM tickets_inappnotification').fetchone()[0], 0)
                 self.assertEqual(restored.execute('SELECT name FROM tickets_company').fetchone()[0], 'Preserved Company')
                 self.assertIsNone(
                     restored.execute('SELECT ticket_id FROM tickets_inboundemailreceipt').fetchone()[0]

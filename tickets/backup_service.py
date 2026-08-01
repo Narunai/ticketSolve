@@ -229,16 +229,38 @@ def perform_system_data_backup():
                 removed_ticket_count = sanitized_connection.execute(
                     'SELECT COUNT(*) FROM tickets_ticket'
                 ).fetchone()[0]
-                with sanitized_connection:
-                    # SQLite applies each model's CASCADE/SET_NULL policy in the
-                    # cloned database. The live database is never modified.
-                    sanitized_connection.execute('DELETE FROM tickets_ticket')
-                    sanitized_connection.execute(
-                        "DELETE FROM sqlite_sequence WHERE name IN ("
-                        "'tickets_ticket', 'tickets_ticketcomment', "
-                        "'tickets_ticketattachment', 'tickets_commentattachment', "
-                        "'tickets_ticketauditlog')"
+                table_names = {
+                    row[0]
+                    for row in sanitized_connection.execute(
+                        "SELECT name FROM sqlite_master WHERE type='table'"
                     )
+                }
+                with sanitized_connection:
+                    # Django applies on_delete behavior through its ORM; the
+                    # generated SQLite foreign keys use NO ACTION. Reproduce
+                    # those policies explicitly in the cloned database only.
+                    if 'tickets_inboundemailreceipt' in table_names:
+                        sanitized_connection.execute(
+                            'UPDATE tickets_inboundemailreceipt SET ticket_id = NULL'
+                        )
+                    if 'tickets_inappnotification' in table_names:
+                        sanitized_connection.execute('DELETE FROM tickets_inappnotification')
+                    for dependent_table in (
+                        'tickets_commentattachment',
+                        'tickets_ticketcomment',
+                        'tickets_ticketattachment',
+                        'tickets_ticketauditlog',
+                    ):
+                        if dependent_table in table_names:
+                            sanitized_connection.execute(f'DELETE FROM {dependent_table}')
+                    sanitized_connection.execute('DELETE FROM tickets_ticket')
+                    if 'sqlite_sequence' in table_names:
+                        sanitized_connection.execute(
+                            "DELETE FROM sqlite_sequence WHERE name IN ("
+                            "'tickets_ticket', 'tickets_ticketcomment', "
+                            "'tickets_ticketattachment', 'tickets_commentattachment', "
+                            "'tickets_ticketauditlog', 'tickets_inappnotification')"
+                        )
 
                 remaining_ticket_count = sanitized_connection.execute(
                     'SELECT COUNT(*) FROM tickets_ticket'
