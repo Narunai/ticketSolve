@@ -38,6 +38,49 @@ if [ ! -f "$ENV_FILE" ]; then
     fi
 fi
 
+# Keep a root-only recovery copy before changing any production secret. This
+# protects encrypted database fields from an accidental key replacement.
+ENV_BACKUP_TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+sudo install -m 600 -o root -g root \
+    "$ENV_FILE" "${ENV_FILE}.predeploy.${ENV_BACKUP_TIMESTAMP}"
+
+EXISTING_FIELD_KEYS="$(sudo sed -n 's/^FIELD_ENCRYPTION_KEYS=//p' "$ENV_FILE" | head -n 1)"
+HAS_ENCRYPTED_FIELD_VALUES="$(venv/bin/python - <<'PY'
+import os
+import sqlite3
+
+db_path = os.path.join(os.getcwd(), 'db.sqlite3')
+if not os.path.isfile(db_path):
+    print('no')
+else:
+    connection = sqlite3.connect(db_path)
+    try:
+        table_exists = connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' "
+            "AND name='tickets_smtpconfiguration'"
+        ).fetchone()
+        encrypted_exists = bool(table_exists and connection.execute(
+            "SELECT 1 FROM tickets_smtpconfiguration "
+            "WHERE password LIKE 'enc:v1:%' LIMIT 1"
+        ).fetchone())
+        print('yes' if encrypted_exists else 'no')
+    finally:
+        connection.close()
+PY
+)"
+
+if [ -z "$EXISTING_FIELD_KEYS" ] && [ "$HAS_ENCRYPTED_FIELD_VALUES" = "yes" ]; then
+    echo "Refusing deployment: encrypted SMTP/IMAP values exist but FIELD_ENCRYPTION_KEYS is missing."
+    echo "Restore the previous key from ${ENV_FILE}.predeploy.${ENV_BACKUP_TIMESTAMP} or the approved secret store."
+    exit 1
+fi
+
+if [ -z "$EXISTING_FIELD_KEYS" ]; then
+    GENERATED_FIELD_KEY="$(venv/bin/python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')"
+    echo "FIELD_ENCRYPTION_KEYS=${GENERATED_FIELD_KEY}" | sudo tee -a "$ENV_FILE" >/dev/null
+    echo "Generated an independent field-encryption key. Back it up in the approved secret store."
+fi
+
 EXISTING_SECRET="$(sudo sed -n 's/^SECRET_KEY=//p' "$ENV_FILE" | head -n 1)"
 if [ "${#EXISTING_SECRET}" -lt 50 ] || [[ "$EXISTING_SECRET" == django-insecure-* ]]; then
     GENERATED_SECRET="$(venv/bin/python -c 'import secrets; print(secrets.token_urlsafe(64))')"
@@ -47,11 +90,6 @@ if [ "${#EXISTING_SECRET}" -lt 50 ] || [[ "$EXISTING_SECRET" == django-insecure-
         echo "SECRET_KEY=${GENERATED_SECRET}" | sudo tee -a "$ENV_FILE" >/dev/null
     fi
     echo "Generated a strong production SECRET_KEY."
-fi
-if ! sudo grep -qE '^FIELD_ENCRYPTION_KEYS=.+$' "$ENV_FILE"; then
-    GENERATED_FIELD_KEY="$(venv/bin/python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')"
-    echo "FIELD_ENCRYPTION_KEYS=${GENERATED_FIELD_KEY}" | sudo tee -a "$ENV_FILE" >/dev/null
-    echo "Generated an independent field-encryption key. Back it up in the approved secret store."
 fi
 if ! sudo grep -qE '^ALLOWED_HOSTS=.+$' "$ENV_FILE"; then
     echo "ALLOWED_HOSTS=tikketsolve-systemoneit.uk,www.tikketsolve-systemoneit.uk" | sudo tee -a "$ENV_FILE" >/dev/null

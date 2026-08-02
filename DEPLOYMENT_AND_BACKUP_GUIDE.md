@@ -235,6 +235,8 @@ sudo systemctl list-timers ticketsolve-email-to-ticket.timer
 สคริปต์ deploy จะสร้าง `FIELD_ENCRYPTION_KEYS` แบบ Fernet แยกจาก `SECRET_KEY` เมื่อยังไม่มีค่า
 key นี้ใช้ถอดรหัส SMTP/IMAP password ในฐานข้อมูล จึงต้องสำรองไว้ใน secret manager ที่ได้รับอนุมัติ
 และห้ามรวมใน Git หรือ backup archive หาก key สูญหายจะไม่สามารถกู้ credential ที่เข้ารหัสไว้ได้
+ก่อนเปลี่ยน secret สคริปต์จะสร้างสำเนา environment แบบ root-only (`0600`) และตรวจฐานข้อมูลแบบ raw;
+หากพบ ciphertext แต่ไม่มี `FIELD_ENCRYPTION_KEYS` จะหยุด deploy ทันทีแทนการสร้าง key ใหม่ที่ถอดข้อมูลเดิมไม่ได้
 
 * Nginx ให้บริการเฉพาะ `/static/`; `/media/` ตอบ `404`
 * Ticket และ Comment attachments ต้องดาวน์โหลดผ่าน authenticated Django endpoints ซึ่งตรวจ tenant/Ticket visibility ก่อนทุกครั้ง

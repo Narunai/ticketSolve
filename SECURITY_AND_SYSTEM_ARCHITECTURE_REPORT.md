@@ -138,7 +138,7 @@ flowchart TD
 | Reverse proxy | upload 110 MB, ไม่มี login limit | upload 60 MB, login limit, timeouts, hide server version | `deployment/nginx.conf` |
 | Runtime | systemd hardening บางส่วน | ProtectSystem/Home/kernel/control groups, private devices, no capabilities | `deployment/gunicorn.service` |
 | Supply chain | dependency ranges | pin direct versions; Argon2/cryptography explicit; audit dependencies | `requirements.txt` |
-| Deployment | สร้างเฉพาะ SECRET_KEY | สร้าง FIELD_ENCRYPTION_KEYS และ HSTS preload; permission 0640 | `deployment/deploy.sh`, `.env.example` |
+| Deployment | สร้างเฉพาะ SECRET_KEY | แยก FIELD_ENCRYPTION_KEYS, สำรอง env แบบ root-only และหยุดก่อนเปลี่ยน key เมื่อพบ ciphertext ที่ไม่มี key; HSTS preload; permission 0640 | `deployment/deploy.sh`, `.env.example` |
 
 Migration `0030_security_baseline` ทำสามอย่างแบบอัตโนมัติ: สร้างตาราง throttle, สร้าง security audit table และแปลง SMTP password เดิมเป็น ciphertext การ rollback ไม่ถอดรหัสกลับเป็น plaintext เพื่อไม่ลดระดับความปลอดภัย
 
