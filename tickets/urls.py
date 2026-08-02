@@ -92,6 +92,9 @@ urlpatterns = [
     path('email-timer/run/', views.EmailToTicketTimerRunView.as_view(), name='email_timer_run'),
     path('email-timer/routing/save/', views.InboundEmailRoutingRuleSaveView.as_view(), name='email_routing_rule_save'),
     path('email-timer/routing/<int:pk>/delete/', views.InboundEmailRoutingRuleDeleteView.as_view(), name='email_routing_rule_delete'),
+    path('email-timer/pending/<int:pk>/approve/', views.InboundEmailApproveView.as_view(), name='inbound_email_approve'),
+    path('email-timer/pending/<int:pk>/reject/', views.InboundEmailRejectView.as_view(), name='inbound_email_reject'),
+    path('email-timer/pending-attachments/<int:pk>/download/', views.InboundEmailAttachmentDownloadView.as_view(), name='inbound_email_attachment_download'),
 
     # Backup Management URLs
     path('backups/', views.BackupManagementView.as_view(), name='backup_list'),

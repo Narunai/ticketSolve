@@ -46,11 +46,13 @@
 * **Feature Scope**: บัญชีแต่ละรายการเลือกใช้สำหรับส่งอีเมล, Email → Ticket หรือทั้งสองฟังก์ชันได้
 
 ### 📥 1.5 Email → Ticket
-* อ่านอีเมลที่ยังไม่อ่านผ่าน IMAP SSL แล้วสร้าง Ticket ใน company ที่กำหนด
+* อ่านอีเมลที่ยังไม่อ่านผ่าน IMAP SSL แล้วเก็บใน Approval queue ก่อนสร้าง Ticket ใน company ที่กำหนด
 * เลือก ticket creator/default assignee และกรอง subject ด้วย keyword ไทย/อังกฤษ
-* ป้องกันการสร้างซ้ำด้วย Message-ID และมี import receipts สำหรับ Imported/Skipped/Failed
+* ป้องกันการสร้างซ้ำด้วย Message-ID และมี import receipts สำหรับ Pending/Imported/Rejected/Skipped/Failed
+* System Admin ตรวจเนื้อหาและไฟล์แนบผ่าน authenticated download แล้ว Approve เพื่อสร้าง Ticket ทันที หรือ Reject พร้อมเหตุผล; อีเมล Pending ไม่อยู่ใน Dashboard/รายงาน
+* เก็บสมุดรายชื่อผู้ส่งอัตโนมัติแยก mailbox พร้อม display name, จำนวนข้อความ, first/last seen และ subject ล่าสุด
 * แสดงชื่อ/อีเมลผู้ส่งจริงบน Ticket และมีตาราง receipt รายอีเมล 100 รายการล่าสุดพร้อมเหตุผลที่นำเข้าหรือคัดออก
-* Email import details และ Execution logs อยู่ในการ์ดเดียวกันและเลือกดูผ่านแท็บที่รองรับคีย์บอร์ด
+* Approval queue, Email import details, Execution logs และ Email contacts อยู่ในการ์ดเดียวกันและเลือกดูผ่านแท็บที่รองรับคีย์บอร์ด
 * รองรับไฟล์แนบภายใต้ขีดจำกัด 10 MB ต่อไฟล์, 10 ไฟล์ และรวม 50 MB
 * หน้า Email Timer แยกสำหรับเปิด/ปิดและเลือกรอบ 10, 20, 30 นาที (ครึ่งชั่วโมง) หรือ 1 ชั่วโมง
 * กด **Scan now** หรือ **Import Now** เพื่อสแกนทันที พร้อมเก็บ execution log ของทุกครั้งที่ทำงานจริง
@@ -63,6 +65,7 @@
 
 ### 📊 1.6 ระบบรายงานประจำเดือน PDF (Monthly PDF Reports)
 * **PDF Generation**: ออกรายงาน PDF รูปแบบเอกสารผู้บริหาร พร้อมเลขอ้างอิง ขอบเขต/ช่วงเวลา ผู้จัดทำ Executive Summary, Status/Priority Breakdown, Ticket Register, หลักเกณฑ์คำนวณ และข้อความรักษาความลับ
+* **Thai font embedding**: ฝัง Sarabun Regular/Bold และบังคับใช้ทุก element เพื่อให้ชื่อบริษัท ผู้ส่ง หัวข้อ และรายละเอียดภาษาไทยไม่กลายเป็นสี่เหลี่ยม
 * **Automated Monthly Schedule**: ตั้งเวลาส่งรายงานสรุปเข้าอีเมลผู้บริหาร/ผู้ดูแลระบบอัตโนมัติในวันและเวลาที่กำหนด
 
 ---

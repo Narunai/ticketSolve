@@ -5,6 +5,8 @@ from .models import (
     Company,
     CustomUser,
     InboundEmailReceipt,
+    InboundEmailAttachment,
+    InboundEmailContact,
     InboundEmailRoutingRule,
     EmailToTicketRunLog,
     EmailToTicketSchedule,
@@ -153,12 +155,35 @@ class InboundEmailReceiptAdmin(admin.ModelAdmin):
         'sender_name',
         'sender_email',
         'subject',
+        'body',
+        'matched_keywords',
         'status',
         'details',
         'ticket',
+        'decided_by',
+        'decided_at',
         'processed_at',
         'created_at',
     )
+
+    def has_add_permission(self, request):
+        return False
+
+
+@admin.register(InboundEmailContact)
+class InboundEmailContactAdmin(admin.ModelAdmin):
+    list_display = (
+        'email', 'display_name', 'smtp_configuration', 'message_count', 'last_seen_at',
+    )
+    list_filter = ('smtp_configuration',)
+    search_fields = ('email', 'display_name', 'last_subject')
+    readonly_fields = ('message_count', 'first_seen_at', 'last_seen_at')
+
+
+@admin.register(InboundEmailAttachment)
+class InboundEmailAttachmentAdmin(admin.ModelAdmin):
+    list_display = ('filename', 'receipt', 'file_size', 'created_at')
+    readonly_fields = ('receipt', 'file', 'filename', 'file_size', 'created_at')
 
     def has_add_permission(self, request):
         return False
@@ -236,6 +261,7 @@ class EmailToTicketRunLogAdmin(admin.ModelAdmin):
         'status',
         'mailbox_count',
         'found_count',
+        'pending_count',
         'imported_count',
         'failed_count',
         'duration_ms',
@@ -249,6 +275,7 @@ class EmailToTicketRunLogAdmin(admin.ModelAdmin):
         'actor',
         'mailbox_count',
         'found_count',
+        'pending_count',
         'imported_count',
         'skipped_count',
         'duplicate_count',

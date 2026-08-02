@@ -16,11 +16,12 @@
 - เปลี่ยน logout เป็น `POST` พร้อม CSRF และปิด open redirect จาก `next`/`Referer`
 - เข้ารหัส SMTP/IMAP password ในฐานข้อมูลด้วย Fernet โดย key แยกจากฐานข้อมูล, Git และ backup
 - ตรวจไฟล์แนบด้วย allowlist + file signature ทุกช่องทาง รวม Ticket, Comment และ Email → Ticket พร้อมป้องกัน Office macro/zip bomb เบื้องต้น
+- เพิ่ม approval gate ก่อนอีเมลภายนอกมีสิทธิ์สร้าง Ticket พร้อม private staged attachments, authenticated download, audit ผู้ตัดสินใจ และลบไฟล์ชั่วคราวเมื่อจบการพิจารณา
 - เพิ่ม Security Audit Log โดยไม่เก็บ username/IP ของ anonymous login เป็นข้อความตรง แต่เก็บ HMAC fingerprint
 - เพิ่ม Simple Password แบบ admin-approved สำหรับผู้สูงอายุหรือผู้ใช้ที่ไม่ถนัดเทคโนโลยี: อนุญาตรหัสอย่าง `123456` เฉพาะบัญชีที่ได้รับอนุมัติ, เก็บเป็น Argon2 hash, ใช้ต่อเนื่องได้ และ lock 10 นาทีหลังผิดครบ 5 ครั้ง โดยไม่เปิดทางให้ดึงรหัสเดิมย้อนหลัง
 - เพิ่ม security headers, HSTS preload, authenticated-page no-store และ hardening ของ Nginx/Gunicorn service
 - ตรึงเวอร์ชัน production dependencies และตรวจพบ **0 known vulnerabilities** ด้วย `pip-audit` ณ วันที่รายงาน
-- เพิ่ม security regression tests และ Simple Password regression tests; ชุดทดสอบรวม 97 รายการ
+- เพิ่ม security regression tests, Simple Password, Email approval/RBAC และ PDF ภาษาไทย; ชุดทดสอบรวม 98 รายการ
 
 ## 2. มาตรฐานอ้างอิงและเป้าหมาย
 
@@ -41,10 +42,10 @@
 4. Custom ticket design: หมวดหมู่, module, resolution, prefix และ custom fields รายบริษัท
 5. Comments/attachments: ความคิดเห็นและไฟล์แนบหลายไฟล์ พร้อม authenticated download
 6. Notification: อีเมลตาม event/rule และ in-app notification ส่วนตัว
-7. Email → Ticket: อ่าน IMAP ตาม timer, กรองหัวข้อ, ป้องกัน Message-ID ซ้ำ, บันทึกชื่อ/อีเมลผู้ส่ง และ route ผู้ดูแลตาม sender
+7. Email → Ticket: อ่าน IMAP ตาม timer, กรองหัวข้อ, ป้องกัน Message-ID ซ้ำ, เก็บสมุดรายชื่อ, รออนุมัติก่อนสร้าง Ticket และ route ผู้ดูแลตาม sender
 8. Outbound SMTP: แยก scope ส่งอีเมล/นำอีเมลเข้า/ทั้งสอง และ simulation mode
 9. Automation: เปลี่ยนสถานะ Ticket ตามเวลา และ scheduler สำหรับงานระบบ
-10. Monthly PDF report: preview, ส่งทันที, To/CC และ schedule รายเดือน
+10. Monthly PDF report: preview, ส่งทันที, To/CC, schedule รายเดือน และฝังฟอนต์ Sarabun สำหรับภาษาไทย
 11. Audit/logs: Ticket audit, email delivery, email import details, execution log, backup log และ security audit
 12. Backup บน AWS VPS: incremental, full และ system data without tickets พร้อม schedule/manual/download/delete/retention
 13. Operations: Nginx TLS, Gunicorn, systemd services/timers และ deployment script
@@ -60,8 +61,10 @@ flowchart LR
     D --> M[(Private media files)]
     D --> SMTP[SMTP provider]
     IMAP[IMAP mailbox] --> E[Email-to-Ticket worker]
-    E --> DB
-    E --> M
+    E --> Q[Approval queue + contacts]
+    Q -->|Approve| DB
+    Q -->|Private staged files| M
+    Q -->|Reject / cleanup| M
     T1[systemd scheduler timer] --> S[Report / Automation / Backup jobs]
     T2[Email timer] --> E
     S --> DB

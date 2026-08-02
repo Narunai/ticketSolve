@@ -8,21 +8,21 @@
 
 ## 📌 1. ภาพรวมชุดทดสอบ (Test Suite Overview)
 
-ชุดทดสอบอยู่ใน `tickets/tests.py` ปัจจุบันมี test methods 97 รายการ ครอบคลุม:
+ชุดทดสอบอยู่ใน `tickets/tests.py` ปัจจุบันมี test methods 98 รายการ ครอบคลุม:
 
 1. **Multi-Tenant Data Isolation**: ตรวจสอบว่าพนักงาน/ผู้บริหารแต่ละบริษัทเห็นเฉพาะ Ticket ในบริษัทตนเองเท่านั้น
 2. **Role-Based Access Control (RBAC)**: ตรวจสอบสิทธิ์การเข้าถึง URL และการทำรายการของผู้ใช้ทั้ง 5 บทบาท รวมถึงลำดับกลุ่มเมนู sidebar และการแสดงชื่อ/บริษัท/effective role ที่ถูกต้องแม้บัญชี superuser รุ่นเก่าจะมีค่า role ไม่ตรง
 3. **Ticket Lifecycle & Custom Fields**: ทดสอบการสร้าง, แก้ไข, เปลี่ยนสถานะ, บันทึก Note, และการแสดงผล Custom Fields
 4. **Ticket Status Automation**: ทดสอบการย้ายสถานะอัตโนมัติจาก Open ➔ In Progress เมื่อเวลาผ่านไปตามกำหนด
 5. **Notification Config & Email Dispatch**: ทดสอบการสร้างอีเมลทางการแบบ HTML + plain text, การส่งตามกฎแจ้งเตือน และการบันทึก `EmailLog`
-6. **Monthly PDF Report Generation & Schedule**: ทดสอบ PDF รูปแบบเอกสารผู้บริหาร, เลขอ้างอิงรายงาน, ไฟล์แนบ, อีเมล HTML และคำสั่งส่งรายงานประจำเดือน
+6. **Monthly PDF Report Generation & Schedule**: ทดสอบ PDF รูปแบบเอกสารผู้บริหาร, การฝัง Sarabun และอ่านข้อความไทยจาก PDF จริง, เลขอ้างอิงรายงาน, ไฟล์แนบ, อีเมล HTML และคำสั่งส่งรายงานประจำเดือน
 7. **Backup System & Management Views**: ทดสอบ Full, Incremental และ System Data (No Tickets), timer ที่กำหนดรอบ/เปิดปิดแยกกัน, interval allowlist, สิทธิ์แก้ไขเฉพาะ System Admin, failure backoff, manual override, เนื้อหา SQLite/manifest, `BackupLog` และการลบรายการ 0 MB อย่างปลอดภัย
 8. **Authorization Regression**: ทดสอบ `CLIENT_USER` เห็นเฉพาะ Ticket ของตน, `CLIENT_STAFF` แก้ไข Ticket ใน tenant ได้, การป้องกัน superuser และการดาวน์โหลดไฟล์แนบแบบ authenticated
 9. **Backup Security Regression**: ทดสอบ path traversal, incremental backup เมื่อ Ticket เก่ามี comment ใหม่ และการลบรายการ backup ที่ไม่มี archive
 10. **Security Baseline Regression**: login throttling, POST-only logout, security audit, SMTP encryption at rest, file-signature validation, security headers และ open-redirect protection
 11. **Simple Password**: approval scope, persistent password อย่าง `123456`, one-time display ของรหัสที่สุ่มใหม่, Argon2 storage, System Sub-Admin restrictions, tenant isolation, owner reset, การห้ามบัญชีที่ไม่ได้รับอนุมัติใช้รหัสง่าย และ lock 10 นาที
-10. **Email → Ticket**: ทดสอบ SMTP feature scope, การสร้าง Ticket/ไฟล์แนบจาก IMAP, การติดชื่อผู้ส่งบน Ticket, log รายอีเมล Imported/Skipped/Failed, container แบบแท็บร่วมกับ Execution logs, Message-ID deduplication, built-in/custom keywords, Sender → Assignee routing ข้ามบริษัทแบบเปลี่ยน tenant context พร้อม default fallback, สิทธิ์ Import Now, หน้า Email Timer, interval gating และ run log
-11. **In-App Notifications**: ทดสอบกระดิ่งแจ้งเตือน, การเปิด Ticket/ทำเครื่องหมายอ่านแล้ว, Mark all read และป้องกันการอ่านแจ้งเตือนข้ามผู้ใช้หรือข้าม tenant
+12. **Email → Ticket**: ทดสอบ Approval queue, Approve/Reject, การไม่สร้าง Ticket ก่อนอนุมัติ, staged attachment authenticated download/cleanup, RBAC, contact directory, Message-ID deduplication, sender routing, timer gating และ run log ที่มี pending count
+13. **In-App Notifications**: ทดสอบกระดิ่งแจ้งเตือน, การเปิด Ticket/ทำเครื่องหมายอ่านแล้ว, Mark all read และป้องกันการอ่านแจ้งเตือนข้ามผู้ใช้หรือข้าม tenant
 
 ---
 
@@ -45,7 +45,7 @@ python manage.py test tickets.tests.MultiTenantTicketTests.test_backup_managemen
 python manage.py test tickets.tests.MultiTenantTicketTests.test_empty_backup_record_has_delete_button_and_can_be_deleted
 
 # รัน regression test สำหรับ Email → Ticket
-python manage.py test tickets.tests.MultiTenantTicketTests.test_email_to_ticket_import_creates_ticket_and_prevents_duplicate
+python manage.py test tickets.tests.MultiTenantTicketTests.test_email_to_ticket_import_requires_approval_and_prevents_duplicate tickets.tests.MultiTenantTicketTests.test_pending_email_approval_rejection_and_attachment_rbac
 
 # รัน regression test สำหรับชื่อผู้ส่ง/log รายอีเมลและกระดิ่งแจ้งเตือน
 python manage.py test tickets.tests.MultiTenantTicketTests.test_imported_email_sender_is_pinned_to_ticket_and_logged_per_message tickets.tests.MultiTenantTicketTests.test_notification_bell_is_private_and_marks_notifications_read
@@ -63,8 +63,8 @@ pytest
 ผลที่ยืนยันล่าสุดวันที่ 2 สิงหาคม 2026:
 
 ```text
-Found 97 test(s).
-Ran 97 tests in 29.219s
+Found 98 test(s).
+Ran 98 tests in 63.665s
 OK
 System check identified no issues (0 silenced).
 ```

@@ -34,7 +34,9 @@
 | **`TicketAutomationConfig`** | การตั้งค่าระยะเวลาย้ายสถานะ Ticket จาก Open ➔ In Progress อัตโนมัติ |
 | **`MonthlyReportSchedule`** | การตั้งค่าการส่งรายงานสรุป Ticket ประจำเดือนแบบ PDF |
 | **`SMTPConfiguration`** | ตั้งค่าการเชื่อมต่อเมลเซิร์ฟเวอร์ SMTP |
-| **`InboundEmailReceipt`** | บันทึก Message-ID และผลการนำอีเมลเข้าเป็น Ticket เพื่อป้องกันการสร้างซ้ำ |
+| **`InboundEmailReceipt`** | เก็บอีเมลรออนุมัติ, เนื้อหาที่ sanitize แล้ว, Message-ID, ผู้อนุมัติ/ปฏิเสธ และผลการนำเข้า |
+| **`InboundEmailAttachment`** | เก็บไฟล์แนบชั่วคราวแบบ private ระหว่างรออนุมัติ และลบเมื่ออนุมัติ/ปฏิเสธ |
+| **`InboundEmailContact`** | สมุดรายชื่อผู้ส่งแยกตาม mailbox พร้อมชื่อ จำนวนข้อความ และเวลาที่พบล่าสุด |
 | **`InboundEmailRoutingRule`** | จับคู่อีเมลผู้ส่งกับผู้ดูแล Ticket โดยแยกตาม mailbox |
 | **`EmailToTicketSchedule`** | ตั้งค่าเปิด/ปิดและรอบสแกน Email → Ticket |
 | **`EmailToTicketRunLog`** | สรุปผลการทำงานแต่ละรอบ พร้อมจำนวนรายการและระยะเวลา |
@@ -79,7 +81,7 @@ python manage.py run_2hr_backup --full      # Full backup ตามรอบท�
 python manage.py run_weekly_system_backup   # System Data ตามรอบที่ตั้ง (ค่าเริ่มต้น 7 วัน)
 
 # Systemd เรียกทุก 10 นาทีและคำสั่งตรวจรอบเวลาจากฐานข้อมูล:
-python manage.py process_email_to_tickets   # อ่านอีเมล IMAP ที่ยังไม่อ่านและสร้าง Ticket
+python manage.py process_email_to_tickets   # อ่าน IMAP และส่งอีเมลใหม่เข้าคิวอนุมัติก่อนสร้าง Ticket
 ```
 
 Backup archive เก็บที่ `/var/backups/ticketsolve` บน AWS VPS และลบไฟล์ที่เก่ากว่า 30 วันโดยอัตโนมัติ ค่า production secrets เก็บแยกที่ `/etc/ticketsolve/ticketsolve.env` และไม่รวมอยู่ใน archive
@@ -104,16 +106,20 @@ Backup archive เก็บที่ `/var/backups/ticketsolve` บน AWS VPS �
 * SMTP Configuration แยกขอบเขตการใช้งานเป็นส่งอีเมล, Email → Ticket หรือทั้งสองฟังก์ชัน โดยมี active configuration แยกตาม feature
 * อีเมลแจ้งเตือนใช้แม่แบบทางการแบบ multipart (HTML + plain text) ร่วมกันทั้ง Ticket, Status, Deployment Approval, Comment, Account, Company และ Monthly Report พร้อมลิงก์ production ที่กำหนดผ่าน `PUBLIC_BASE_URL`
 * Monthly PDF Report ใช้รูปแบบเอกสารผู้บริหาร มีเลขอ้างอิง ขอบเขตและช่วงเวลารายงาน Executive Summary, Status/Priority Breakdown, Ticket Register และข้อความกำกับความลับ โดยลดไอคอนและสีที่ไม่จำเป็น
+* Monthly PDF ฝังฟอนต์ Sarabun Regular/Bold โดยบังคับใช้กับทุก element เพื่อรองรับชื่อบริษัท ชื่อผู้ส่ง หัวข้อและรายละเอียดภาษาไทยบน Windows/Linux
 
 ## 📥 Email → Ticket
 
 * รองรับ Gmail/Google Workspace และ Outlook ที่เปิด IMAP SSL
 * หน้า **Email Timer** แยกสำหรับเปิด/ปิดและเลือกรอบ 10, 20, 30 นาที (ครึ่งชั่วโมง) หรือ 1 ชั่วโมง
 * กด **Scan now** หรือ **Import Now** เพื่อสแกนทันทีโดยไม่รอรอบ
+* อีเมลที่ผ่านตัวกรองจะเข้า **Approval queue** ก่อนและยังไม่ปรากฏใน Dashboard/รายงาน ผู้มีสิทธิ์จึงกด Approve เพื่อสร้าง Ticket หรือ Reject พร้อมเหตุผลได้
+* ไฟล์แนบระหว่างรอถูกเก็บใน private media และดาวน์โหลดผ่าน authenticated view เท่านั้น; เมื่ออนุมัติจะย้ายเข้า Ticket และเมื่อปฏิเสธจะลบออก
 * เก็บ run log 50 รอบล่าสุด พร้อม trigger/ผู้สั่งรัน, สถานะ, จำนวน mailbox,
-  found/imported/skipped/duplicate/failed, ระยะเวลา และรายละเอียดข้อผิดพลาด
-* เก็บ log รายอีเมล 100 รายการล่าสุด พร้อม mailbox, ชื่อ/อีเมลผู้ส่ง, subject, Message-ID, ผล Imported/Skipped/Failed, Ticket ที่สร้าง และเหตุผล
-* หน้า Email Timer รวม log รายอีเมลและ execution log ไว้ใน container เดียว โดยสลับดูผ่านแท็บและจำแท็บล่าสุดใน browser
+  found/pending/imported/skipped/duplicate/failed, ระยะเวลา และรายละเอียดข้อผิดพลาด
+* เก็บ log รายอีเมล 100 รายการล่าสุด พร้อม mailbox, ชื่อ/อีเมลผู้ส่ง, subject, Message-ID, ผล Pending/Imported/Rejected/Skipped/Failed, Ticket ที่สร้าง และเหตุผล
+* หน้า Email Timer รวม Approval queue, log รายอีเมล, execution log และสมุดรายชื่อผู้ส่งไว้ใน container เดียว โดยสลับดูผ่านแท็บและจำแท็บล่าสุดใน browser
+* สมุดรายชื่อบันทึกชื่อและอีเมลผู้ส่งอัตโนมัติแยกตาม mailbox ค้นหาด้วยชื่อ/อีเมล/subject ได้ และ Message-ID ที่สแกนซ้ำไม่เพิ่มจำนวนข้อความ
 * Ticket ที่สร้างจากอีเมลจะแสดงการ์ด **Email sender** แยกจาก internal creator เพื่อให้ติดตามผู้แจ้งตัวจริงได้
 * Sender → Assignee routing กำหนดผู้ดูแลตามอีเมลผู้ส่งได้ทุกบริษัท โดย Ticket จะอยู่ในบริษัทของผู้ดูแลเพื่อรักษา tenant isolation; หากไม่มีกฎหรือผู้ดูแลในกฎไม่ active จะใช้ค่า Company/Creator/Default Assignee จาก SMTP
 * Custom subject keywords เป็นคำเพิ่มเติมจากคำมาตรฐาน เช่น `ปัญหา` และ `issue` ไม่ได้แทนที่คำมาตรฐาน

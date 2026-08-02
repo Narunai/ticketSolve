@@ -281,11 +281,17 @@ timer จะปลุกตัวประมวลผลตามนาที `
 **Import Now** และคำสั่ง `--force` จะเรียกทันทีโดยไม่ต้องรอรอบถัดไป
 
 หน้า Email Timer แสดง execution log 50 รอบล่าสุด โดยเก็บ trigger/ผู้สั่งรัน,
-สถานะ, จำนวน mailbox และอีเมลที่ found/imported/skipped/duplicate/failed,
+สถานะ, จำนวน mailbox และอีเมลที่ found/pending/imported/skipped/duplicate/failed,
 ระยะเวลา และรายละเอียด error
 พร้อมตารางรายละเอียดอีเมล 100 รายการล่าสุดที่แสดง mailbox, ผู้ส่ง, subject,
-Message-ID, ผล Imported/Skipped/Failed, Ticket ที่สร้าง และเหตุผลของผลลัพธ์
-โดย Email import details และ execution log อยู่ใน container เดียวกันและสลับดูผ่านแท็บ
+Message-ID, ผล Pending/Imported/Rejected/Skipped/Failed, Ticket ที่สร้าง และเหตุผลของผลลัพธ์
+โดย Approval queue, Email import details, execution log และ Email contacts อยู่ใน container เดียวกันและสลับดูผ่านแท็บ
+
+อีเมลที่ผ่าน keyword filter จะถูกเก็บเป็น **Pending approval** ก่อน จึงยังไม่ปรากฏ
+ใน Dashboard, รายงาน หรือ Ticket list จนกว่า System Admin จะกด Approve การกด Reject
+จะบันทึกผู้ตัดสินใจ/เหตุผลและลบ staged attachment ส่วนการ Approve จะสร้าง Ticket
+พร้อม routing ปัจจุบันและย้ายไฟล์แนบเข้า authenticated Ticket attachment สมุดรายชื่อผู้ส่ง
+จะอัปเดตอัตโนมัติจาก Message-ID ใหม่แยกตาม mailbox
 
 ส่วน **Sender → Assignee routing** ใช้จับคู่อีเมลผู้ส่งกับผู้ดูแล Ticket ได้ทุกบริษัท
 เมื่อเลือกผู้ดูแลต่างจาก Target Company ระบบจะสร้าง Ticket ในบริษัทของผู้ดูแลและใช้

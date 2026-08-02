@@ -628,14 +628,29 @@ class MultiTenantTicketTests(TestCase):
         self.assertEqual(comment.attachments.count(), 2)
 
     def test_report_preview_pdf_generation(self):
+        from io import BytesIO
+        from pypdf import PdfReader
         from django.template.loader import get_template
         from .views import get_report_context
 
+        thai_subject = 'ปัญหาการใช้งานภาษาไทย'
+        Ticket.objects.create(
+            title=thai_subject,
+            description='รายละเอียดและชื่อผู้ส่งภาษาไทยต้องอ่านได้',
+            company=self.company_a,
+            created_by=self.user_a,
+        )
         self.client.login(username="admin_a", password="password123")
         response = self.client.get(reverse('report_preview'))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], 'application/pdf')
         self.assertTrue(response.content.startswith(b'%PDF-'))
+        self.assertIn(b'Sarabun', response.content)
+        extracted_text = '\n'.join(
+            page.extract_text() or ''
+            for page in PdfReader(BytesIO(response.content)).pages
+        )
+        self.assertIn(thai_subject, extracted_text)
 
         context = get_report_context(self.admin_a)
         report_html = get_template('tickets/report_pdf_template.html').render(context)
@@ -795,7 +810,7 @@ class MultiTenantTicketTests(TestCase):
         self.assertFalse(inbound.is_active)
         self.assertTrue(both.is_active)
 
-    def test_email_to_ticket_import_creates_ticket_and_prevents_duplicate(self):
+    def test_email_to_ticket_import_requires_approval_and_prevents_duplicate(self):
         import tempfile
         from email.message import EmailMessage as RawEmailMessage
         from unittest import mock
@@ -803,10 +818,12 @@ class MultiTenantTicketTests(TestCase):
         from .email_to_ticket import (
             InboundMessage,
             _create_ticket,
+            approve_inbound_email,
             _is_issue_message,
             import_email_to_tickets,
         )
         from .models import (
+            InboundEmailContact,
             InboundEmailReceipt,
             InboundEmailRoutingRule,
             SMTPConfiguration,
@@ -879,6 +896,17 @@ class MultiTenantTicketTests(TestCase):
                 mock.patch('tickets.email_to_ticket.imaplib.IMAP4_SSL', return_value=imap_client):
             first = import_email_to_tickets(config)
             second = import_email_to_tickets(config)
+            pending_receipt = InboundEmailReceipt.objects.get(
+                smtp_configuration=config,
+                message_id='<email-to-ticket-1@example.com>',
+            )
+            self.assertEqual(pending_receipt.status, InboundEmailReceipt.STATUS_PENDING)
+            self.assertIsNone(pending_receipt.ticket)
+            self.assertEqual(pending_receipt.attachments.count(), 1)
+            imported_ticket, _ = approve_inbound_email(
+                pending_receipt.pk,
+                self.system_admin,
+            )
             fallback_ticket, _ = _create_ticket(
                 config,
                 InboundMessage(
@@ -891,10 +919,11 @@ class MultiTenantTicketTests(TestCase):
             )
 
         self.assertTrue(first['success'])
-        self.assertEqual(first['imported'], 1)
+        self.assertEqual(first['pending'], 1)
+        self.assertEqual(first['imported'], 0)
         self.assertEqual(second['duplicates'], 1)
         self.assertEqual(Ticket.objects.count(), ticket_count + 2)
-        imported_ticket = Ticket.objects.get(title='Issue: VPN connection failed')
+        imported_ticket.refresh_from_db()
         self.assertEqual(imported_ticket.company, self.company_b)
         self.assertEqual(imported_ticket.created_by, self.user_b)
         self.assertEqual(imported_ticket.assigned_to, self.user_b)
@@ -932,6 +961,22 @@ class MultiTenantTicketTests(TestCase):
         )
         self.assertEqual(receipt.status, InboundEmailReceipt.STATUS_IMPORTED)
         self.assertEqual(receipt.ticket, imported_ticket)
+        self.assertEqual(receipt.decided_by, self.system_admin)
+        self.assertIsNotNone(receipt.decided_at)
+        self.assertEqual(receipt.attachments.count(), 0)
+        contact = InboundEmailContact.objects.get(
+            smtp_configuration=config,
+            email='external@example.com',
+        )
+        self.assertEqual(contact.display_name, 'External User')
+        self.assertEqual(contact.message_count, 1)
+        self.client.login(username='system_admin', password='password123')
+        contact_response = self.client.get(
+            reverse('email_timer'),
+            {'contact_q': 'external@example.com'},
+        )
+        self.assertContains(contact_response, 'External User')
+        self.assertContains(contact_response, 'external@example.com')
 
     def test_email_to_ticket_manual_import_requires_system_admin(self):
         from unittest import mock
@@ -999,16 +1044,22 @@ class MultiTenantTicketTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Email → Ticket Timer')
         self.assertContains(response, 'id="emailLogTabsContainer"', count=1)
+        self.assertContains(response, 'data-email-log-tab="approval"', count=1)
         self.assertContains(response, 'data-email-log-tab="import"', count=1)
         self.assertContains(response, 'data-email-log-tab="execution"', count=1)
+        self.assertContains(response, 'data-email-log-tab="contacts"', count=1)
+        self.assertContains(response, 'id="emailApprovalTabPanel"', count=1)
         self.assertContains(response, 'id="emailImportTabPanel"', count=1)
         self.assertContains(response, 'id="executionLogTabPanel"', count=1)
+        self.assertContains(response, 'id="emailContactsTabPanel"', count=1)
         rendered_page = response.content.decode('utf-8')
         log_container_start = rendered_page.index('id="emailLogTabsContainer"')
         log_container_end = rendered_page.index('</section>', log_container_start)
         log_container = rendered_page[log_container_start:log_container_end]
+        self.assertIn('id="emailApprovalTabPanel"', log_container)
         self.assertIn('id="emailImportTabPanel"', log_container)
         self.assertIn('id="executionLogTabPanel"', log_container)
+        self.assertIn('id="emailContactsTabPanel"', log_container)
 
         response = self.client.post(
             url,
@@ -1069,6 +1120,101 @@ class MultiTenantTicketTests(TestCase):
         self.assertEqual(rule.sender_email, 'customer@example.com')
         self.assertEqual(rule.assignee, self.user_b)
 
+    def test_pending_email_approval_rejection_and_attachment_rbac(self):
+        import tempfile
+        from unittest import mock
+        from django.test import override_settings
+        from .email_to_ticket import InboundMessage, _queue_email_for_approval
+        from .models import InboundEmailReceipt, SMTPConfiguration
+
+        config = SMTPConfiguration.objects.create(
+            name='Approval mailbox',
+            provider='GMAIL',
+            username='approval@example.com',
+            password='app-password',
+            feature_scope=SMTPConfiguration.FEATURE_EMAIL_TO_TICKET,
+            incoming_host='imap.gmail.com',
+            email_to_ticket_company=self.company_a,
+            email_to_ticket_creator=self.user_a,
+            email_to_ticket_assignee=self.user_a,
+            is_active=True,
+        )
+        first_message = InboundMessage(
+            uid=b'201',
+            message_id='<approval-201@example.com>',
+            subject='ปัญหา: เปิดระบบไม่ได้',
+            body='ผู้ส่งแจ้งรายละเอียดภาษาไทย',
+            sender_name='ลูกค้าทดสอบ',
+            sender_email='thai.customer@example.com',
+            attachments=[{
+                'filename': 'details.txt',
+                'content': b'safe attachment',
+                'size': 15,
+            }],
+        )
+        second_message = InboundMessage(
+            uid=b'202',
+            message_id='<approval-202@example.com>',
+            subject='Issue: reject this email',
+            body='Not a valid support request.',
+            sender_email='reject@example.com',
+            attachments=[{
+                'filename': 'reject.txt',
+                'content': b'reject attachment',
+                'size': 17,
+            }],
+        )
+
+        with tempfile.TemporaryDirectory() as media_root, tempfile.TemporaryDirectory() as backup_dir, \
+                override_settings(MEDIA_ROOT=media_root), \
+                mock.patch('tickets.backup_service.BACKUP_DIR', backup_dir):
+            pending, _ = _queue_email_for_approval(config, first_message, ['ปัญหา'])
+            pending_attachment = pending.attachments.get()
+            download_url = reverse(
+                'inbound_email_attachment_download',
+                args=[pending_attachment.pk],
+            )
+            approve_url = reverse('inbound_email_approve', args=[pending.pk])
+
+            self.client.login(username='admin_a', password='password123')
+            self.assertEqual(self.client.get(download_url).status_code, 403)
+            self.assertEqual(self.client.post(approve_url).status_code, 403)
+
+            self.client.logout()
+            self.client.login(username='system_admin', password='password123')
+            download_response = self.client.get(download_url)
+            self.assertEqual(download_response.status_code, 200)
+            self.assertEqual(b''.join(download_response.streaming_content), b'safe attachment')
+
+            ticket_count = Ticket.objects.count()
+            response = self.client.post(approve_url)
+            self.assertRedirects(response, reverse('email_timer'))
+            pending.refresh_from_db()
+            self.assertEqual(pending.status, InboundEmailReceipt.STATUS_IMPORTED)
+            self.assertIsNotNone(pending.ticket)
+            self.assertEqual(pending.ticket.title, first_message.subject)
+            self.assertEqual(Ticket.objects.count(), ticket_count + 1)
+
+            self.client.post(approve_url)
+            self.assertEqual(Ticket.objects.count(), ticket_count + 1)
+
+            rejected, _ = _queue_email_for_approval(config, second_message, ['issue'])
+            rejected_attachment = rejected.attachments.get()
+            rejected_file_path = rejected_attachment.file.path
+            self.assertTrue(os.path.exists(rejected_file_path))
+            reject_url = reverse('inbound_email_reject', args=[rejected.pk])
+            response = self.client.post(reject_url, {'reason': 'Not a support request'})
+            self.assertRedirects(response, reverse('email_timer'))
+            rejected.refresh_from_db()
+            self.assertEqual(rejected.status, InboundEmailReceipt.STATUS_REJECTED)
+            self.assertIsNone(rejected.ticket)
+            self.assertFalse(os.path.exists(rejected_file_path))
+
+            timer_response = self.client.get(reverse('email_timer'))
+            self.assertContains(timer_response, 'Approval queue')
+            self.assertContains(timer_response, 'Email contacts')
+            self.assertContains(timer_response, first_message.subject)
+
     def test_email_timer_command_respects_interval_and_creates_run_log(self):
         import tempfile
         from unittest import mock
@@ -1097,7 +1243,8 @@ class MultiTenantTicketTests(TestCase):
         result = {
             'success': True,
             'found': 3,
-            'imported': 1,
+            'pending': 1,
+            'imported': 0,
             'skipped': 1,
             'duplicates': 1,
             'failed': 0,
@@ -1119,7 +1266,8 @@ class MultiTenantTicketTests(TestCase):
         self.assertEqual(run_log.status, EmailToTicketRunLog.STATUS_SUCCESS)
         self.assertEqual(run_log.mailbox_count, 1)
         self.assertEqual(run_log.found_count, 3)
-        self.assertEqual(run_log.imported_count, 1)
+        self.assertEqual(run_log.pending_count, 1)
+        self.assertEqual(run_log.imported_count, 0)
         self.assertEqual(run_log.skipped_count, 1)
         self.assertEqual(run_log.duplicate_count, 1)
         schedule.refresh_from_db()

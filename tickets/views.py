@@ -10,9 +10,10 @@ from django.urls import reverse, reverse_lazy
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.http import FileResponse
 from django.views.decorators.http import require_POST
-from .models import Ticket, CustomUser, Company, EmailLog, TicketAuditLog, SecurityAuditLog, ReportViewLog, MonthlyReportSchedule, TicketAutomationConfig, SMTPConfiguration, InboundEmailReceipt, InboundEmailRoutingRule, EmailToTicketSchedule, EmailToTicketRunLog, InAppNotification, get_smtp_connection, get_smtp_from_email, TicketComment, TicketAttachment, CommentAttachment, TicketCategory, ResolutionCategory, ModuleCategory, TicketStatusConfig, CompanyTicketConfig, CompanyTicketField, NotificationConfig, should_send_email_notification, BackupLog, BackupSchedule
+from .models import Ticket, CustomUser, Company, EmailLog, TicketAuditLog, SecurityAuditLog, ReportViewLog, MonthlyReportSchedule, TicketAutomationConfig, SMTPConfiguration, InboundEmailReceipt, InboundEmailAttachment, InboundEmailContact, InboundEmailRoutingRule, EmailToTicketSchedule, EmailToTicketRunLog, InAppNotification, get_smtp_connection, get_smtp_from_email, TicketComment, TicketAttachment, CommentAttachment, TicketCategory, ResolutionCategory, ModuleCategory, TicketStatusConfig, CompanyTicketConfig, CompanyTicketField, NotificationConfig, should_send_email_notification, BackupLog, BackupSchedule
 from .backup_service import perform_full_backup, perform_incremental_backup, perform_system_data_backup, get_backup_file_path, FileLock
 from .email_to_ticket_scheduler import run_email_to_ticket_cycle
+from .email_to_ticket import approve_inbound_email, reject_inbound_email
 from .permissions import (
     can_approve_simple_password,
     can_manage_simple_password,
@@ -2343,23 +2344,32 @@ def link_callback(uri, rel):
 
 # Helper to convert HTML to PDF
 def generate_pdf(template_src, context):
-    # Programmatically register Sarabun font to avoid xhtml2pdf font parsing/loading issues on Windows/Linux
+    # Use a unique ReportLab/CSS family name so xhtml2pdf never falls back to
+    # Helvetica (which renders Thai characters as square glyphs).
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
-    
-    try:
-        pdfmetrics.getFont('Sarabun')
-    except Exception:
-        font_regular_path = os.path.join(settings.BASE_DIR, 'tickets', 'static', 'fonts', 'Sarabun-Regular.ttf')
-        font_bold_path = os.path.join(settings.BASE_DIR, 'tickets', 'static', 'fonts', 'Sarabun-Bold.ttf')
-        if os.path.exists(font_regular_path):
-            pdfmetrics.registerFont(TTFont('Sarabun', font_regular_path))
-        if os.path.exists(font_bold_path):
-            pdfmetrics.registerFont(TTFont('Sarabun-Bold', font_bold_path))
+
+    font_regular_path = os.path.join(
+        settings.BASE_DIR, 'tickets', 'static', 'fonts', 'Sarabun-Regular.ttf',
+    )
+    font_bold_path = os.path.join(
+        settings.BASE_DIR, 'tickets', 'static', 'fonts', 'Sarabun-Bold.ttf',
+    )
+    if not os.path.exists(font_regular_path) or not os.path.exists(font_bold_path):
+        return None
+    for font_name, font_path in (
+        ('SarabunPDF', font_regular_path),
+        ('SarabunPDF-Bold', font_bold_path),
+    ):
         try:
-            pdfmetrics.registerFontFamily('Sarabun', normal='Sarabun', bold='Sarabun-Bold')
-        except Exception:
-            pass
+            pdfmetrics.getFont(font_name)
+        except KeyError:
+            pdfmetrics.registerFont(TTFont(font_name, font_path))
+    pdfmetrics.registerFontFamily(
+        'SarabunPDF',
+        normal='SarabunPDF',
+        bold='SarabunPDF-Bold',
+    )
 
     template = get_template(template_src)
     html = template.render(context)
@@ -2461,8 +2471,8 @@ def get_report_context(user, company_id=None):
     scope_code = f'C{selected_company.pk}' if selected_company else 'ALL'
     report_reference = f'TS-MR-{now:%Y%m}-{scope_code}'
 
-    font_regular_path = "file:///" + os.path.join(settings.BASE_DIR, 'tickets', 'static', 'fonts', 'Sarabun-Regular.ttf').replace('\\', '/')
-    font_bold_path = "file:///" + os.path.join(settings.BASE_DIR, 'tickets', 'static', 'fonts', 'Sarabun-Bold.ttf').replace('\\', '/')
+    font_regular_path = f"{settings.STATIC_URL}fonts/Sarabun-Regular.ttf"
+    font_bold_path = f"{settings.STATIC_URL}fonts/Sarabun-Bold.ttf"
 
     context = {
         'tickets': tickets,
@@ -2947,7 +2957,29 @@ class EmailToTicketTimerView(
         context['inbound_receipts'] = InboundEmailReceipt.objects.select_related(
             'smtp_configuration',
             'ticket',
+            'decided_by',
         )[:100]
+        context['pending_emails'] = InboundEmailReceipt.objects.filter(
+            status=InboundEmailReceipt.STATUS_PENDING,
+        ).select_related(
+            'smtp_configuration',
+        ).prefetch_related('attachments')[:100]
+        context['pending_email_count'] = InboundEmailReceipt.objects.filter(
+            status=InboundEmailReceipt.STATUS_PENDING,
+        ).count()
+        contact_query = (self.request.GET.get('contact_q') or '').strip()[:100]
+        email_contacts = InboundEmailContact.objects.select_related(
+            'smtp_configuration',
+            'smtp_configuration__email_to_ticket_company',
+        )
+        if contact_query:
+            email_contacts = email_contacts.filter(
+                models.Q(email__icontains=contact_query)
+                | models.Q(display_name__icontains=contact_query)
+                | models.Q(last_subject__icontains=contact_query)
+            )
+        context['contact_query'] = contact_query
+        context['email_contacts'] = email_contacts[:250]
         context['mailboxes'] = SMTPConfiguration.objects.filter(
             is_active=True,
             feature_scope__in=[
@@ -3076,6 +3108,86 @@ class InboundEmailRoutingRuleDeleteView(
         return redirect('email_timer')
 
 
+class InboundEmailApproveView(
+    LoginRequiredMixin,
+    SuperuserOrSystemAdminRequiredMixin,
+    View,
+):
+    def post(self, request, pk, *args, **kwargs):
+        receipt = get_object_or_404(InboundEmailReceipt, pk=pk)
+        try:
+            ticket, skipped = approve_inbound_email(receipt.pk, request.user)
+        except (ValueError, ValidationError) as exc:
+            messages.error(request, str(exc))
+        else:
+            write_security_audit(
+                request,
+                'INBOUND_EMAIL_APPROVED',
+                SecurityAuditLog.OUTCOME_SUCCESS,
+                actor=request.user,
+                target_type='InboundEmailReceipt',
+                target_id=receipt.pk,
+                details=f'Created Ticket #{ticket.pk}',
+            )
+            message = f'Email approved and imported as Ticket #{ticket.pk}.'
+            if skipped:
+                message += f' {len(skipped)} attachment(s) were rejected by safety checks.'
+            messages.success(request, message)
+        return redirect('email_timer')
+
+
+class InboundEmailRejectView(
+    LoginRequiredMixin,
+    SuperuserOrSystemAdminRequiredMixin,
+    View,
+):
+    def post(self, request, pk, *args, **kwargs):
+        receipt = get_object_or_404(InboundEmailReceipt, pk=pk)
+        reason = (request.POST.get('reason') or '').strip()[:500]
+        try:
+            reject_inbound_email(receipt.pk, request.user, reason)
+        except ValueError as exc:
+            messages.error(request, str(exc))
+        else:
+            write_security_audit(
+                request,
+                'INBOUND_EMAIL_REJECTED',
+                SecurityAuditLog.OUTCOME_SUCCESS,
+                actor=request.user,
+                target_type='InboundEmailReceipt',
+                target_id=receipt.pk,
+                details=reason or 'No rejection reason supplied.',
+            )
+            messages.success(request, 'Email rejected. It was not added to the ticket list.')
+        return redirect('email_timer')
+
+
+class InboundEmailAttachmentDownloadView(
+    LoginRequiredMixin,
+    SuperuserOrSystemAdminRequiredMixin,
+    View,
+):
+    def get(self, request, pk, *args, **kwargs):
+        attachment = get_object_or_404(
+            InboundEmailAttachment.objects.select_related('receipt'),
+            pk=pk,
+            receipt__status=InboundEmailReceipt.STATUS_PENDING,
+        )
+        if not attachment.file:
+            raise Http404('Attachment file not found.')
+        try:
+            response = FileResponse(
+                attachment.file.open('rb'),
+                as_attachment=True,
+                filename=attachment.filename,
+            )
+        except (FileNotFoundError, OSError):
+            raise Http404('Attachment file not found.')
+        response['X-Content-Type-Options'] = 'nosniff'
+        response['Cache-Control'] = 'no-store, private'
+        return response
+
+
 class EmailToTicketTimerRunView(
     LoginRequiredMixin,
     SuperuserOrSystemAdminRequiredMixin,
@@ -3098,7 +3210,8 @@ class EmailToTicketTimerRunView(
             request,
             (
                 f'Email scan finished with status {run_log.get_status_display()}: '
-                f'found {run_log.found_count}, imported {run_log.imported_count}, '
+                f'found {run_log.found_count}, pending {run_log.pending_count}, '
+                f'imported {run_log.imported_count}, '
                 f'skipped {run_log.skipped_count}, failed {run_log.failed_count}.'
             ),
         )
@@ -3183,6 +3296,7 @@ class SMTPImportEmailView(LoginRequiredMixin, SuperuserOrSystemAdminRequiredMixi
             result = {
                 'success': False,
                 'found': 0,
+                'pending': 0,
                 'imported': 0,
                 'skipped': 0,
                 'duplicates': 0,
@@ -3190,7 +3304,8 @@ class SMTPImportEmailView(LoginRequiredMixin, SuperuserOrSystemAdminRequiredMixi
                 'error': run_log.details,
             }
         summary = (
-            f"Found {result['found']}, imported {result['imported']}, "
+            f"Found {result['found']}, pending approval {result.get('pending', 0)}, "
+            f"imported {result['imported']}, "
             f"skipped {result['skipped']}, duplicate {result['duplicates']}, "
             f"failed {result['failed']}."
         )

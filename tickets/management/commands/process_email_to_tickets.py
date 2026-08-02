@@ -28,7 +28,8 @@ class Command(BaseCommand):
         run_log = outcome['log']
         summary = (
             f"status={run_log.status} mailboxes={run_log.mailbox_count} "
-            f"found={run_log.found_count} imported={run_log.imported_count} "
+            f"found={run_log.found_count} pending={run_log.pending_count} "
+            f"imported={run_log.imported_count} "
             f"skipped={run_log.skipped_count} duplicates={run_log.duplicate_count} "
             f"failed={run_log.failed_count} duration_ms={run_log.duration_ms}"
         )

@@ -26,6 +26,7 @@ def _result_summary(config, result):
     error = result.get('error') or ''
     summary = (
         f"{config.name}: found={result.get('found', 0)} "
+        f"pending={result.get('pending', 0)} "
         f"imported={result.get('imported', 0)} "
         f"skipped={result.get('skipped', 0)} "
         f"duplicates={result.get('duplicates', 0)} "
@@ -81,6 +82,7 @@ def run_email_to_ticket_cycle(*, trigger, actor=None, config=None):
         run_log.mailbox_count = len(results)
         for _, result in results:
             run_log.found_count += result.get('found', 0)
+            run_log.pending_count += result.get('pending', 0)
             run_log.imported_count += result.get('imported', 0)
             run_log.skipped_count += result.get('skipped', 0)
             run_log.duplicate_count += result.get('duplicates', 0)
@@ -117,6 +119,7 @@ def run_email_to_ticket_cycle(*, trigger, actor=None, config=None):
             'status',
             'mailbox_count',
             'found_count',
+            'pending_count',
             'imported_count',
             'skipped_count',
             'duplicate_count',

@@ -1,4 +1,4 @@
-from django.db.models.signals import pre_save, post_save, post_migrate
+from django.db.models.signals import pre_save, post_save, post_delete, post_migrate
 from django.dispatch import receiver
 from django.core.mail import EmailMultiAlternatives, send_mail
 from django.conf import settings
@@ -12,10 +12,18 @@ from .models import (
     Company,
     EmailLog,
     InAppNotification,
+    InboundEmailAttachment,
     get_smtp_connection,
     get_smtp_from_email,
     should_send_email_notification,
 )
+
+
+@receiver(post_delete, sender=InboundEmailAttachment)
+def delete_inbound_email_attachment_file(sender, instance, **kwargs):
+    """Pending email files are private and must not outlive their DB record."""
+    if instance.file and instance.file.name:
+        instance.file.storage.delete(instance.file.name)
 
 
 def create_in_app_notifications(recipients, event_type, title, message, ticket, actor=None):

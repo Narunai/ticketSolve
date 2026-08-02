@@ -4,6 +4,7 @@ from django.conf import settings
 from django.utils import timezone
 import calendar
 import datetime
+import os
 from zoneinfo import ZoneInfo
 from .security import EncryptedCharField
 
@@ -1230,11 +1231,15 @@ def get_smtp_from_email(default_from_email):
 
 
 class InboundEmailReceipt(models.Model):
+    STATUS_PENDING = 'PENDING'
     STATUS_IMPORTED = 'IMPORTED'
+    STATUS_REJECTED = 'REJECTED'
     STATUS_SKIPPED = 'SKIPPED'
     STATUS_FAILED = 'FAILED'
     STATUS_CHOICES = [
+        (STATUS_PENDING, 'Pending approval'),
         (STATUS_IMPORTED, 'Imported'),
+        (STATUS_REJECTED, 'Rejected'),
         (STATUS_SKIPPED, 'Skipped'),
         (STATUS_FAILED, 'Failed'),
     ]
@@ -1250,6 +1255,8 @@ class InboundEmailReceipt(models.Model):
     sender_name = models.CharField(max_length=255, blank=True, default='')
     sender_email = models.EmailField(blank=True, default='')
     subject = models.CharField(max_length=255, blank=True, default='')
+    body = models.TextField(blank=True, default='')
+    matched_keywords = models.JSONField(default=list, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES)
     details = models.TextField(blank=True, default='')
     ticket = models.ForeignKey(
@@ -1259,6 +1266,14 @@ class InboundEmailReceipt(models.Model):
         blank=True,
         related_name='inbound_email_receipts',
     )
+    decided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='decided_inbound_email_receipts',
+    )
+    decided_at = models.DateTimeField(null=True, blank=True)
     processed_at = models.DateTimeField(auto_now=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -1273,6 +1288,63 @@ class InboundEmailReceipt(models.Model):
 
     def __str__(self):
         return f"{self.subject or self.message_id} ({self.status})"
+
+
+def inbound_email_attachment_upload_to(instance, filename):
+    safe_name = os.path.basename(filename or 'email-attachment')[:255]
+    return f'inbound_email_pending/{timezone.now():%Y/%m/%d}/{safe_name}'
+
+
+class InboundEmailAttachment(models.Model):
+    receipt = models.ForeignKey(
+        InboundEmailReceipt,
+        on_delete=models.CASCADE,
+        related_name='attachments',
+    )
+    file = models.FileField(upload_to=inbound_email_attachment_upload_to)
+    filename = models.CharField(max_length=255)
+    file_size = models.PositiveBigIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['id']
+
+    def __str__(self):
+        return self.filename
+
+
+class InboundEmailContact(models.Model):
+    smtp_configuration = models.ForeignKey(
+        SMTPConfiguration,
+        on_delete=models.CASCADE,
+        related_name='inbound_email_contacts',
+    )
+    email = models.EmailField()
+    display_name = models.CharField(max_length=255, blank=True, default='')
+    message_count = models.PositiveIntegerField(default=1)
+    last_subject = models.CharField(max_length=255, blank=True, default='')
+    first_seen_at = models.DateTimeField(default=timezone.now)
+    last_seen_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['-last_seen_at', 'email']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['smtp_configuration', 'email'],
+                name='unique_inbound_contact_per_smtp',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['email'], name='inbound_contact_email_idx'),
+            models.Index(fields=['-last_seen_at'], name='inbound_contact_seen_idx'),
+        ]
+
+    def save(self, *args, **kwargs):
+        self.email = (self.email or '').strip().casefold()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.display_name or self.email
 
 
 class InboundEmailRoutingRule(models.Model):
@@ -1436,6 +1508,7 @@ class EmailToTicketRunLog(models.Model):
     )
     mailbox_count = models.PositiveIntegerField(default=0)
     found_count = models.PositiveIntegerField(default=0)
+    pending_count = models.PositiveIntegerField(default=0)
     imported_count = models.PositiveIntegerField(default=0)
     skipped_count = models.PositiveIntegerField(default=0)
     duplicate_count = models.PositiveIntegerField(default=0)
