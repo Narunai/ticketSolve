@@ -1666,3 +1666,80 @@ def should_send_email_notification(recipient_email, ticket=None, event_type=None
             return False
 
     return True
+
+
+def get_ticket_default_recipients(ticket, action_type=None):
+    """
+    Calculate default recipient metadata list for a ticket email notification.
+    Returns list of dicts: [{'email': ..., 'name': ..., 'role': ..., 'is_checked': True, 'is_system': True}]
+    """
+    recipients = []
+    seen = set()
+
+    if not ticket:
+        return recipients
+
+    # 1. Creator / Reporter
+    if ticket.created_by and ticket.created_by.email:
+        email = ticket.created_by.email.strip()
+        email_key = email.lower()
+        if email_key not in seen:
+            seen.add(email_key)
+            recipients.append({
+                'email': email,
+                'name': ticket.created_by.username,
+                'role': 'Reporter / Creator',
+                'is_checked': True,
+                'is_system': True,
+            })
+
+    # 2. Assignee
+    if ticket.assigned_to and ticket.assigned_to.email:
+        email = ticket.assigned_to.email.strip()
+        email_key = email.lower()
+        if email_key not in seen:
+            seen.add(email_key)
+            recipients.append({
+                'email': email,
+                'name': ticket.assigned_to.username,
+                'role': 'Assignee',
+                'is_checked': True,
+                'is_system': True,
+            })
+
+    # 3. Original Email Sender (if created from email)
+    raw_source = (ticket.custom_fields_data or {}).get('email_to_ticket') or {}
+    if isinstance(raw_source, dict) and raw_source.get('sender_email'):
+        sender_email = raw_source['sender_email'].strip()
+        sender_name = raw_source.get('sender_name') or sender_email
+        email_key = sender_email.lower()
+        if email_key not in seen:
+            seen.add(email_key)
+            recipients.append({
+                'email': sender_email,
+                'name': sender_name,
+                'role': 'Original Email Sender',
+                'is_checked': True,
+                'is_system': True,
+            })
+
+    # 4. NotificationConfig targets for company
+    if ticket.company:
+        configs = NotificationConfig.objects.filter(company=ticket.company)
+        for cfg in configs:
+            for u in cfg.target_users.filter(is_active=True):
+                if u.email:
+                    email = u.email.strip()
+                    email_key = email.lower()
+                    if email_key not in seen:
+                        seen.add(email_key)
+                        recipients.append({
+                            'email': email,
+                            'name': u.username,
+                            'role': f'Notification Rule ({cfg.name})',
+                            'is_checked': True,
+                            'is_system': True,
+                        })
+
+    return recipients
+

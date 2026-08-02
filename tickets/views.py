@@ -1355,7 +1355,22 @@ class TicketUpdateView(LoginRequiredMixin, TicketStaffRequiredMixin, UpdateView)
             raise PermissionDenied("You do not have permission to edit this ticket.")
         return obj
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from .models import get_ticket_default_recipients
+        context['default_recipients'] = get_ticket_default_recipients(self.object)
+        return context
+
     def form_valid(self, form):
+        selected_recipients = self.request.POST.getlist('selected_recipients')
+        extra_recipients_raw = self.request.POST.get('extra_recipients', '')
+        extra_emails = [e.strip() for e in extra_recipients_raw.replace(';', ',').split(',') if e.strip() and '@' in e]
+
+        if 'selected_recipients' in self.request.POST or extra_recipients_raw:
+            custom_recipients = list(set([e for e in selected_recipients + extra_emails if e]))
+            self.object._custom_recipient_emails = custom_recipients
+            form.instance._custom_recipient_emails = custom_recipients
+
         old_ticket = Ticket.objects.get(pk=self.object.pk)
         old_status = old_ticket.status
         old_priority = old_ticket.priority
@@ -1387,7 +1402,6 @@ class TicketUpdateView(LoginRequiredMixin, TicketStaffRequiredMixin, UpdateView)
         return response
 
 class TicketDetailView(LoginRequiredMixin, DetailView):
-    model = Ticket
     template_name = 'tickets/ticket_detail.html'
     context_object_name = 'ticket'
 
@@ -1424,11 +1438,12 @@ class TicketDetailView(LoginRequiredMixin, DetailView):
             for key, value in (self.object.custom_fields_data or {}).items()
             if key != 'email_to_ticket'
         }
-        from .models import EmailLog
+        from .models import EmailLog, get_ticket_default_recipients
         context['email_logs'] = EmailLog.objects.filter(
             models.Q(subject__icontains=f"Ticket #{self.object.id}") |
             models.Q(message__icontains=f"Ticket #{self.object.id}")
         ).order_by('-sent_at')
+        context['default_recipients'] = get_ticket_default_recipients(self.object)
         return context
 
 
@@ -1436,6 +1451,14 @@ class TicketDetailView(LoginRequiredMixin, DetailView):
         self.object = self.get_object()
         content = request.POST.get('content', '').strip()
         files = request.FILES.getlist('attachments') or request.FILES.getlist('comment_attachments')
+
+        selected_recipients = request.POST.getlist('selected_recipients')
+        extra_recipients_raw = request.POST.get('extra_recipients', '')
+        extra_emails = [e.strip() for e in extra_recipients_raw.replace(';', ',').split(',') if e.strip() and '@' in e]
+
+        custom_recipients = None
+        if 'selected_recipients' in request.POST or extra_recipients_raw:
+            custom_recipients = list(set([e for e in selected_recipients + extra_emails if e]))
 
         max_size = 10 * 1024 * 1024  # 10 MB
         if len(files) > 10:
@@ -1467,6 +1490,7 @@ class TicketDetailView(LoginRequiredMixin, DetailView):
             )
 
             from .models import CommentAttachment
+            from filelock import FileLock
             with FileLock("system_backup.lock", timeout=30):
                 for f in files:
                     CommentAttachment.objects.create(
@@ -1476,25 +1500,24 @@ class TicketDetailView(LoginRequiredMixin, DetailView):
                         file_size=f.size
                     )
             # Send email notifications to stakeholders
-            self.send_comment_notifications(comment)
+            self.send_comment_notifications(comment, custom_recipients=custom_recipients)
             messages.success(request, "Comment posted and files attached successfully.")
         else:
             messages.success(request, "Comment posted successfully.")
         return redirect('ticket_detail', pk=self.object.pk)
 
-    def send_comment_notifications(self, comment):
+    def send_comment_notifications(self, comment, custom_recipients=None):
         from django.core.mail import send_mail
         
         ticket = comment.ticket
-        recipients = set()
-        
-        # Add creator if not comment author
-        if ticket.created_by.email and ticket.created_by != comment.author:
-            recipients.add(ticket.created_by.email)
-            
-        # Add assignee if assigned and not comment author
-        if ticket.assigned_to and ticket.assigned_to.email and ticket.assigned_to != comment.author:
-            recipients.add(ticket.assigned_to.email)
+        if custom_recipients is not None:
+            recipients = set([e for e in custom_recipients if e])
+        else:
+            recipients = set()
+            if ticket.created_by.email and ticket.created_by != comment.author:
+                recipients.add(ticket.created_by.email)
+            if ticket.assigned_to and ticket.assigned_to.email and ticket.assigned_to != comment.author:
+                recipients.add(ticket.assigned_to.email)
             
         if not recipients:
             return
@@ -1863,6 +1886,13 @@ class ConfirmDeploymentView(LoginRequiredMixin, TicketStaffRequiredMixin, View):
         )
         user = request.user
 
+        selected_recipients = request.POST.getlist('selected_recipients')
+        extra_recipients_raw = request.POST.get('extra_recipients', '')
+        extra_emails = [e.strip() for e in extra_recipients_raw.replace(';', ',').split(',') if e.strip() and '@' in e]
+        if 'selected_recipients' in request.POST or extra_recipients_raw:
+            custom_recipients = list(set([e for e in selected_recipients + extra_emails if e]))
+            ticket._custom_recipient_emails = custom_recipients
+
         if ticket.status == Ticket.STATUS_DEPLOYMENT_REQUESTED:
             old_status = ticket.status
             ticket.status = Ticket.STATUS_READY_TO_DEPLOY
@@ -1880,7 +1910,6 @@ class ConfirmDeploymentView(LoginRequiredMixin, TicketStaffRequiredMixin, View):
             messages.info(request, f"Ticket #{ticket.id} is already in Ready to Deploy status.")
         else:
             messages.warning(request, f"Ticket #{ticket.id} is not in Production Deployment Request status (current: '{ticket.get_status_display()}')")
-
 
         return redirect('ticket_detail', pk=ticket.id)
 

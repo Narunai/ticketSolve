@@ -94,7 +94,6 @@ def log_and_send_email(subject, message, recipient_list, action_type, ticket=Non
             err_msg = str(e)
             sent_count = 0
 
-
         EmailLog.objects.create(
             recipient=email,
             recipient_type=EmailLog.RECIPIENT_TO,
@@ -107,8 +106,23 @@ def log_and_send_email(subject, message, recipient_list, action_type, ticket=Non
         )
 
 
+
+
 def send_status_change_email(ticket, subject, message, html_message=None):
-    """Send one status email: ticket creator in To and assignee in CC."""
+    """Send one status email: custom override recipients (if specified for this action) or ticket creator in To and assignee in CC."""
+    custom_recipients = getattr(ticket, '_custom_recipient_emails', None)
+    if custom_recipients is not None:
+        log_and_send_email(
+            subject=subject,
+            message=message,
+            recipient_list=custom_recipients,
+            action_type=EmailLog.ACTION_TICKET_UPDATED,
+            ticket=ticket,
+            new_status=ticket.status,
+            html_message=html_message
+        )
+        return
+
     delivery_group = uuid.uuid4()
     candidates = []
     creator = ticket.created_by
@@ -194,6 +208,7 @@ def remember_previous_ticket_status(sender, instance, **kwargs):
     ).values_list('status', flat=True).first()
     if instance._previous_status != instance.status:
         instance.status_changed_at = timezone.now()
+
 
 @receiver(post_save, sender=Ticket)
 def send_ticket_notifications(sender, instance, created, **kwargs):

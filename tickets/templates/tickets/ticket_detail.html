@@ -1,4 +1,5 @@
 {% extends 'tickets/base.html' %}
+{% load ticket_extras %}
 
 {% block title %}{{ t.ticket_details }} #{{ ticket.id }} - TicketSolve{% endblock %}
 {% block header_title %}{{ t.ticket_details }} #{{ ticket.id }}{% endblock %}
@@ -80,8 +81,8 @@
             <!-- Problem Description Card -->
             <div class="glass-panel p-6 rounded-2xl border border-slate-800/80 space-y-4">
                 <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">{{ t.description }}</h3>
-                <div class="text-slate-200 text-sm leading-relaxed whitespace-pre-wrap font-sans bg-slate-900/60 p-4 rounded-xl border border-slate-800">
-                    {{ ticket.description }}
+                <div class="text-slate-200 text-sm leading-relaxed font-sans bg-slate-900/60 p-4 rounded-xl border border-slate-800">
+                    {{ ticket.description|render_ticket_description }}
                 </div>
 
                 <!-- Render Dynamic Custom Fields if present -->
@@ -209,6 +210,38 @@
                         <div class="flex items-center justify-between text-[11px] text-slate-400">
                             <span id="comment-upload-speed-text">Speed: -- MB/s</span>
                             <span>Please wait, do not close or navigate away from this page</span>
+                        </div>
+                    </div>
+
+                    <!-- Email Recipients Notification Preview Panel -->
+                    <div class="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-3 my-3">
+                        <div class="flex items-center justify-between">
+                            <label class="block text-xs font-bold uppercase tracking-wider text-indigo-300 flex items-center gap-1.5">
+                                <span>📧</span>
+                                <span>จะส่งแจ้งเตือนทางอีเมลหาใครบ้าง (Email Recipients Preview)</span>
+                            </label>
+                            <span class="text-[10px] text-indigo-400/80 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20 font-medium">การตั้งค่าผู้รับนี้จะมีผลเฉพาะการตอบครั้งนี้เท่านั้น</span>
+                        </div>
+
+                        <!-- Default recipients checkboxes -->
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                            {% for rec in default_recipients %}
+                            <label class="flex items-center gap-2 p-2.5 rounded-lg bg-slate-950/40 border border-slate-800 hover:border-slate-700 transition-colors cursor-pointer">
+                                <input type="checkbox" name="selected_recipients" value="{{ rec.email }}" {% if rec.is_checked %}checked{% endif %} class="rounded bg-slate-900 border-slate-700 text-indigo-500 focus:ring-indigo-500 h-4 w-4">
+                                <div class="min-w-0 flex-1">
+                                    <div class="font-semibold text-slate-200 truncate">{{ rec.name }} <span class="text-[10px] text-indigo-400 font-normal">({{ rec.role }})</span></div>
+                                    <div class="text-[10px] text-slate-400 font-mono truncate">{{ rec.email }}</div>
+                                </div>
+                            </label>
+                            {% empty %}
+                            <div class="text-xs text-slate-500 italic col-span-2">ไม่มีอีเมลผู้รับตามค่าเริ่มต้น</div>
+                            {% endfor %}
+                        </div>
+
+                        <!-- Extra Email Input -->
+                        <div>
+                            <label class="block text-[11px] font-medium text-slate-400 mb-1">➕ เพิ่มอีเมลผู้รับเพิ่มเติมสำหรับการตอบครั้งนี้ (ถ้ามี):</label>
+                            <input type="text" name="extra_recipients" placeholder="ระบุอีเมลเพิ่มเติม คั่นด้วยเครื่องหมายจุลภาค (เช่น manager@company.com, cc@company.com)" class="w-full bg-slate-950/60 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono">
                         </div>
                     </div>
 

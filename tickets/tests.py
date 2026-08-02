@@ -2633,6 +2633,69 @@ class MultiTenantTicketTests(TestCase):
         self.ticket_a.refresh_from_db()
         self.assertEqual(self.ticket_a.status, Ticket.STATUS_DEPLOYMENT_REQUESTED)
 
+    def test_render_ticket_description_formatting(self):
+        from tickets.templatetags.ticket_extras import render_ticket_description
+
+        raw_desc = (
+            "ตัดโล[https://res.public.onedcn.static.microsoft.com/assets/fluentui-resources/1.1.0/app-min/assets/item-types/24_1.5x/xlsx.png]"
+            "ค่าใช้จ่าย.xlsx<https://systemoneitcoth-my.sharepoint.com/:x:/g/personal/test_file.xlsx>\n"
+            "**Bold text** and *italic text* and `code` and <https://example.com/link>"
+        )
+        rendered = render_ticket_description(raw_desc)
+        self.assertIn('Open File / Sharepoint', rendered)
+        self.assertIn('ค่าใช้จ่าย.xlsx', rendered)
+        self.assertIn('strong class="font-bold text-white"', rendered)
+        self.assertIn('<a href="https://example.com/link"', rendered)
+        self.assertIn('🔗', rendered)
+
+
+    def test_one_time_email_recipient_preview_and_customization(self):
+        from tickets.models import EmailLog
+
+        self.client.force_login(self.admin_a)
+        
+        # 1. Test ticket detail page context contains default_recipients
+        detail_resp = self.client.get(reverse('ticket_detail', args=[self.ticket_a.pk]))
+        self.assertEqual(detail_resp.status_code, 200)
+        self.assertIn('default_recipients', detail_resp.context)
+        recipients_list = detail_resp.context['default_recipients']
+        self.assertTrue(len(recipients_list) > 0)
+        self.assertIn('selected_recipients', detail_resp.content.decode('utf-8'))
+
+        # 2. Test posting a comment with custom extra recipient
+        extra_email = "extra.auditor@company-a.com"
+        comment_resp = self.client.post(
+            reverse('ticket_detail', args=[self.ticket_a.pk]),
+            {
+                'content': 'Test comment with extra email recipient',
+                'selected_recipients': [self.user_a.email],
+                'extra_recipients': extra_email,
+            }
+        )
+        self.assertEqual(comment_resp.status_code, 302)
+
+        # Verify EmailLog was created for extra recipient
+        logs = EmailLog.objects.filter(recipient=extra_email)
+        self.assertTrue(logs.exists())
+
+        # 3. Test ticket update with one-time custom recipient
+        extra_status_email = "status.reviewer@company-a.com"
+        update_resp = self.client.post(
+            reverse('ticket_update', args=[self.ticket_a.pk]),
+            {
+                'title': self.ticket_a.title,
+                'description': self.ticket_a.description,
+                'priority': self.ticket_a.priority,
+                'status': Ticket.STATUS_IN_PROGRESS,
+                'ticket_category': self.ticket_a.ticket_category_id or '',
+                'selected_recipients': [self.admin_a.email],
+                'extra_recipients': extra_status_email,
+            }
+        )
+        self.assertEqual(update_resp.status_code, 302)
+        status_logs = EmailLog.objects.filter(recipient=extra_status_email)
+        self.assertTrue(status_logs.exists())
+
     def test_non_superuser_system_admin_cannot_edit_django_superuser(self):
         app_admin = User.objects.create_user(
             username="app_admin_only",
@@ -3101,5 +3164,7 @@ class SimplePasswordTests(TestCase):
         owner_page = self.client.get(reverse('account_password'))
         self.assertNotContains(owner_page, secret)
         self.assertContains(owner_page, 'Existing passwords are one-way hashes')
+
+
 
 
