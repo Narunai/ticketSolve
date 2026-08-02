@@ -593,6 +593,11 @@ def import_email_to_tickets(config):
             except Exception as exc:
                 result['failed'] += 1
                 logger.exception('Email to Ticket message import failed for UID %r.', uid)
+                if message is not None:
+                    try:
+                        _record_contact(config, message)
+                    except Exception:
+                        pass
                 uid_text = uid.decode('ascii', errors='ignore') if isinstance(uid, bytes) else str(uid)
                 failure_message_id = (
                     message.message_id

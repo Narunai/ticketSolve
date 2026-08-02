@@ -291,13 +291,14 @@
                     {% if contact_query %}<a href="{% url 'email_timer' %}" class="rounded-lg border border-slate-700 px-3 py-2 text-slate-400">Clear</a>{% endif %}
                 </form>
             </div>
-            <table class="w-full min-w-[900px] text-left text-[11px]">
+            <table class="w-full min-w-[1100px] text-left text-[11px]">
                 <thead class="border-b border-slate-800/80 text-slate-500">
                     <tr>
                         <th class="px-3 py-2">Display name</th>
                         <th class="px-3 py-2">Email address</th>
                         <th class="px-3 py-2">Mailbox</th>
-                        <th class="px-3 py-2">Target company</th>
+                        <th class="px-3 py-2">Sender → Assignee Routing</th>
+                        <th class="px-3 py-2">Latest Import & Scan Status</th>
                         <th class="px-3 py-2 text-right">Messages</th>
                         <th class="px-3 py-2">First seen</th>
                         <th class="px-3 py-2">Last seen / subject</th>
@@ -309,7 +310,71 @@
                         <td class="px-3 py-2 font-medium text-slate-200">{{ contact.display_name|default:"(No display name)" }}</td>
                         <td class="px-3 py-2"><a href="mailto:{{ contact.email }}" class="break-all text-sky-400 hover:underline">{{ contact.email }}</a></td>
                         <td class="px-3 py-2">{{ contact.smtp_configuration.name }}</td>
-                        <td class="px-3 py-2">{{ contact.smtp_configuration.email_to_ticket_company|default:"Not configured" }}</td>
+                        
+                        <!-- Sender → Assignee Routing Column -->
+                        <td class="px-3 py-2">
+                            {% if contact.routing_rule %}
+                            <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" title="Routed to {{ contact.routing_rule.assignee.username }}">
+                                <span>🔀</span>
+                                <span>{{ contact.routing_rule.assignee.username }}</span>
+                                <span class="text-slate-400 text-[9px]">({{ contact.routing_rule.assignee.company.name|default:"No company" }})</span>
+                            </span>
+                            {% else %}
+                            <span class="text-slate-600 text-[10px] italic">— Default Routing</span>
+                            {% endif %}
+                        </td>
+
+                        <!-- Latest Import & Scan Status Column -->
+                        <td class="px-3 py-2">
+                            {% if contact.latest_receipt %}
+                                {% if contact.latest_receipt.status == 'FAILED' %}
+                                <div class="space-y-1">
+                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30">
+                                        <span>❌</span> <span>Scan Failed</span>
+                                    </span>
+                                    <div class="text-[9px] text-rose-300 font-mono truncate max-w-xs" title="{{ contact.latest_receipt.details }}">
+                                        {{ contact.latest_receipt.details|default:"Scan / decode error"|truncatechars:60 }}
+                                    </div>
+                                </div>
+                                {% elif contact.latest_receipt.status == 'REJECTED' %}
+                                <div class="space-y-1">
+                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/10 text-rose-300 border border-rose-500/20">
+                                        <span>🚫</span> <span>Rejected</span>
+                                    </span>
+                                    <div class="text-[9px] text-slate-400 truncate max-w-xs" title="{{ contact.latest_receipt.details }}">
+                                        {{ contact.latest_receipt.details|default:"Rejected by admin"|truncatechars:60 }}
+                                    </div>
+                                </div>
+                                {% elif contact.latest_receipt.status == 'IMPORTED' %}
+                                <div class="space-y-1">
+                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                        <span>✅</span> <span>Approved / Imported</span>
+                                    </span>
+                                    {% if contact.latest_receipt.ticket %}
+                                    <a href="{% url 'ticket_detail' contact.latest_receipt.ticket.pk %}" class="block text-[10px] text-sky-400 font-semibold hover:underline">
+                                        Ticket #{{ contact.latest_receipt.ticket.pk }}
+                                    </a>
+                                    {% endif %}
+                                </div>
+                                {% elif contact.latest_receipt.status == 'PENDING' %}
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-500/10 text-sky-300 border border-sky-500/20">
+                                    <span>⏳</span> <span>Pending Approval</span>
+                                </span>
+                                {% elif contact.latest_receipt.status == 'SKIPPED' %}
+                                <div class="space-y-1">
+                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                                        <span>⚠️</span> <span>Skipped</span>
+                                    </span>
+                                    <div class="text-[9px] text-slate-500 truncate max-w-xs" title="{{ contact.latest_receipt.details }}">
+                                        {{ contact.latest_receipt.details|truncatechars:50 }}
+                                    </div>
+                                </div>
+                                {% endif %}
+                            {% else %}
+                            <span class="text-slate-600 text-[10px] italic">— No recent log</span>
+                            {% endif %}
+                        </td>
+
                         <td class="px-3 py-2 text-right">{{ contact.message_count }}</td>
                         <td class="whitespace-nowrap px-3 py-2">{{ contact.first_seen_at|date:"Y-m-d H:i:s" }}</td>
                         <td class="px-3 py-2">
@@ -318,7 +383,7 @@
                         </td>
                     </tr>
                     {% empty %}
-                    <tr><td colspan="7" class="px-3 py-10 text-center text-slate-500">ยังไม่มีรายชื่ออีเมลที่ระบบเก็บไว้</td></tr>
+                    <tr><td colspan="8" class="px-3 py-10 text-center text-slate-500">ยังไม่มีรายชื่ออีเมลที่ระบบเก็บไว้</td></tr>
                     {% endfor %}
                 </tbody>
             </table>

@@ -3105,18 +3105,47 @@ class EmailToTicketTimerView(
             status=InboundEmailReceipt.STATUS_PENDING,
         ).count()
         contact_query = (self.request.GET.get('contact_q') or '').strip()[:100]
-        email_contacts = InboundEmailContact.objects.select_related(
+        contacts_qs = InboundEmailContact.objects.select_related(
             'smtp_configuration',
             'smtp_configuration__email_to_ticket_company',
         )
         if contact_query:
-            email_contacts = email_contacts.filter(
+            contacts_qs = contacts_qs.filter(
                 models.Q(email__icontains=contact_query)
                 | models.Q(display_name__icontains=contact_query)
                 | models.Q(last_subject__icontains=contact_query)
             )
+        email_contacts = list(contacts_qs[:250])
+
+        # Map active routing rules by sender_email and (smtp_id, sender_email)
+        routing_rules_map = {}
+        for rule in InboundEmailRoutingRule.objects.select_related(
+            'smtp_configuration', 'assignee', 'assignee__company'
+        ):
+            if rule.is_active and rule.sender_email:
+                r_email = rule.sender_email.strip().casefold()
+                routing_rules_map[(rule.smtp_configuration_id, r_email)] = rule
+                routing_rules_map[r_email] = rule
+
+        # Map latest InboundEmailReceipt by sender_email
+        latest_receipts_map = {}
+        for r in InboundEmailReceipt.objects.select_related('ticket', 'decided_by', 'smtp_configuration').order_by('-processed_at')[:500]:
+            if r.sender_email:
+                r_email = r.sender_email.strip().casefold()
+                key = (r.smtp_configuration_id, r_email)
+                if key not in latest_receipts_map:
+                    latest_receipts_map[key] = r
+                if r_email not in latest_receipts_map:
+                    latest_receipts_map[r_email] = r
+
+        for contact in email_contacts:
+            c_email = (contact.email or '').strip().casefold()
+            key = (contact.smtp_configuration_id, c_email)
+            contact.routing_rule = routing_rules_map.get(key) or routing_rules_map.get(c_email)
+            contact.latest_receipt = latest_receipts_map.get(key) or latest_receipts_map.get(c_email)
+
         context['contact_query'] = contact_query
-        context['email_contacts'] = email_contacts[:250]
+        context['email_contacts'] = email_contacts
         context['mailboxes'] = SMTPConfiguration.objects.filter(
             is_active=True,
             feature_scope__in=[
