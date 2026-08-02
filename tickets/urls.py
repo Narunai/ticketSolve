@@ -11,6 +11,7 @@ urlpatterns = [
     path('ticket/create/', views.TicketCreateView.as_view(), name='ticket_create'),
     path('ticket/<int:pk>/', views.TicketDetailView.as_view(), name='ticket_detail'),
     path('ticket/<int:pk>/edit/', views.TicketUpdateView.as_view(), name='ticket_update'),
+    path('ticket/<int:pk>/preview-recipients/', views.TicketEmailRecipientPreviewView.as_view(), name='ticket_email_preview_recipients'),
     path('ticket/<int:pk>/attachment/', views.LegacyTicketAttachmentDownloadView.as_view(), name='ticket_legacy_attachment_download'),
     path('attachments/ticket/<int:pk>/download/', views.TicketAttachmentDownloadView.as_view(), name='ticket_attachment_download'),
     path('attachments/comment/<int:pk>/download/', views.CommentAttachmentDownloadView.as_view(), name='comment_attachment_download'),

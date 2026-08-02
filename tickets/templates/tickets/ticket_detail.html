@@ -213,36 +213,13 @@
                         </div>
                     </div>
 
-                    <!-- Email Recipients Notification Preview Panel -->
-                    <div class="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-3 my-3">
-                        <div class="flex items-center justify-between">
-                            <label class="block text-xs font-bold uppercase tracking-wider text-indigo-300 flex items-center gap-1.5">
-                                <span>📧</span>
-                                <span>จะส่งแจ้งเตือนทางอีเมลหาใครบ้าง (Email Recipients Preview)</span>
-                            </label>
-                            <span class="text-[10px] text-indigo-400/80 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20 font-medium">การตั้งค่าผู้รับนี้จะมีผลเฉพาะการตอบครั้งนี้เท่านั้น</span>
+                    <!-- Email Notification Info Notice -->
+                    <div class="flex items-center justify-between p-3 rounded-xl bg-slate-900/60 border border-slate-800 my-3">
+                        <div class="flex items-center gap-2 text-xs text-indigo-300">
+                            <span>📧</span>
+                            <span>เมื่อกดส่ง ระบบจะประมวลผลเช็กผู้รับอีเมลตาม Notification Rules และแสดง Popup ให้สิทธิ์คุณตรวจสอบก่อนส่ง</span>
                         </div>
-
-                        <!-- Default recipients checkboxes -->
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                            {% for rec in default_recipients %}
-                            <label class="flex items-center gap-2 p-2.5 rounded-lg bg-slate-950/40 border border-slate-800 hover:border-slate-700 transition-colors cursor-pointer">
-                                <input type="checkbox" name="selected_recipients" value="{{ rec.email }}" {% if rec.is_checked %}checked{% endif %} class="rounded bg-slate-900 border-slate-700 text-indigo-500 focus:ring-indigo-500 h-4 w-4">
-                                <div class="min-w-0 flex-1">
-                                    <div class="font-semibold text-slate-200 truncate">{{ rec.name }} <span class="text-[10px] text-indigo-400 font-normal">({{ rec.role }})</span></div>
-                                    <div class="text-[10px] text-slate-400 font-mono truncate">{{ rec.email }}</div>
-                                </div>
-                            </label>
-                            {% empty %}
-                            <div class="text-xs text-slate-500 italic col-span-2">ไม่มีอีเมลผู้รับตามค่าเริ่มต้น</div>
-                            {% endfor %}
-                        </div>
-
-                        <!-- Extra Email Input -->
-                        <div>
-                            <label class="block text-[11px] font-medium text-slate-400 mb-1">➕ เพิ่มอีเมลผู้รับเพิ่มเติมสำหรับการตอบครั้งนี้ (ถ้ามี):</label>
-                            <input type="text" name="extra_recipients" placeholder="ระบุอีเมลเพิ่มเติม คั่นด้วยเครื่องหมายจุลภาค (เช่น manager@company.com, cc@company.com)" class="w-full bg-slate-950/60 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono">
-                        </div>
+                        <span class="text-[10px] text-slate-400 bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800 font-mono">Check Rules On Submit</span>
                     </div>
 
                     <div class="flex justify-end">
@@ -625,6 +602,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 return false;
             }
 
+            if (form.dataset.modalConfirmed !== "true") {
+                openEmailPreviewModal({{ ticket.pk }}, 'comment', {}, form);
+                return false;
+            }
+
             updateRealInput();
 
             // Lock Form & UI
@@ -700,6 +682,144 @@ function switchLogTab(tabName) {
         emailTab.classList.remove('hidden');
         emailBtn.className = 'px-3 py-1.5 rounded-xl text-xs font-bold transition-all bg-emerald-600 text-white shadow-md shadow-emerald-500/20 cursor-pointer';
         auditBtn.className = 'px-3 py-1.5 rounded-xl text-xs font-bold transition-all bg-slate-900 text-slate-400 hover:text-white border border-slate-800 cursor-pointer';
+    }
+<!-- Email Recipients Modal Popup -->
+<div id="emailPreviewModal" class="fixed inset-0 z-50 hidden overflow-y-auto bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="relative w-full max-w-lg rounded-2xl bg-slate-900 border border-slate-800 p-6 shadow-2xl space-y-5">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div class="flex items-center gap-2.5">
+                <span class="text-xl">📧</span>
+                <div>
+                    <h3 class="text-base font-bold text-white">พรีวิวการส่งแจ้งเตือนทางอีเมล</h3>
+                    <p class="text-xs text-slate-400">ตรวจสอบสิทธิ์และผู้รับที่ผ่านเงื่อนไขก่อนส่งอีเมล</p>
+                </div>
+            </div>
+            <button type="button" onclick="closeEmailPreviewModal()" class="text-slate-400 hover:text-white p-1 rounded-lg text-lg">✕</button>
+        </div>
+
+        <div class="flex items-center gap-2 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs">
+            <span>ℹ️</span>
+            <span>การเลือกและกำหนดผู้รับเพิ่มเติมนี้จะมีผล<strong>เฉพาะการทำรายการครั้งนี้เท่านั้น</strong></span>
+        </div>
+
+        <div class="space-y-2 max-h-60 overflow-y-auto pr-1" id="modalRecipientsList">
+        </div>
+
+        <div class="space-y-1.5 pt-2 border-t border-slate-800/80">
+            <label class="block text-xs font-semibold text-slate-300">➕ เพิ่มอีเมลผู้รับเพิ่มเติมเฉพาะครั้งนี้</label>
+            <input type="text" id="modalExtraRecipients" placeholder="เช่น manager@company.com, auditor@company.com"
+                   class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-mono">
+            <p class="text-[11px] text-slate-500">คั่นด้วยเครื่องหมายจุลภาค (,) หากมีหลายอีเมล</p>
+        </div>
+
+        <div class="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+            <button type="button" onclick="closeEmailPreviewModal()" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 bg-slate-800 hover:bg-slate-700 transition-colors">
+                ยกเลิก
+            </button>
+            <button type="button" id="btnConfirmSendEmail" onclick="submitFormWithRecipients()" class="px-5 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-600/30 transition-all flex items-center gap-2">
+                <span>ยืนยันและส่งอีเมล</span>
+                <span>➔</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+let pendingFormToSubmit = null;
+
+function openEmailPreviewModal(ticketId, actionType, extraParams = {}, targetForm = null) {
+    pendingFormToSubmit = targetForm;
+    const modal = document.getElementById('emailPreviewModal');
+    const recipientsList = document.getElementById('modalRecipientsList');
+    if (!modal || !recipientsList) return;
+
+    recipientsList.innerHTML = '<div class="p-6 text-center text-slate-400 text-xs flex items-center justify-center gap-2"><span>⏳</span> <span>กำลังประมวลผลเช็ก Notification Rules ของระบบ...</span></div>';
+    modal.classList.remove('hidden');
+
+    let url = `/ticket/${ticketId}/preview-recipients/?action_type=${actionType}`;
+    for (const [key, val] of Object.entries(extraParams)) {
+        if (val) url += `&${encodeURIComponent(key)}=${encodeURIComponent(val)}`;
+    }
+
+    fetch(url)
+        .then(res => res.json())
+        .then(data => {
+            if (data.status !== 'success' || !data.recipients) {
+                recipientsList.innerHTML = '<div class="p-4 text-center text-xs text-rose-400">ไม่สามารถดึงข้อมูลผู้รับอีเมลได้</div>';
+                return;
+            }
+            if (data.recipients.length === 0) {
+                recipientsList.innerHTML = '<div class="p-4 text-center text-xs text-slate-500 italic">ไม่มีผู้รับตามเงื่อนไขของระบบ</div>';
+                return;
+            }
+
+            let html = '';
+            data.recipients.forEach(rec => {
+                const badgeClass = rec.will_receive 
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+                    : 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+                const badgeText = rec.will_receive ? '✅ จะได้รับอีเมล' : '⚠️ ถูกยกเลิกโดย Notification Rules';
+                
+                html += `
+                <label class="flex items-start gap-3 p-3 rounded-xl bg-slate-950/60 border border-slate-800 hover:border-slate-700 transition-colors cursor-pointer">
+                    <input type="checkbox" name="modal_selected_recipients" value="${rec.email}" ${rec.is_checked ? 'checked' : ''} class="mt-0.5 rounded bg-slate-900 border-slate-700 text-indigo-500 focus:ring-indigo-500 h-4 w-4 shrink-0">
+                    <div class="min-w-0 flex-1 space-y-1">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="font-semibold text-slate-200 text-xs truncate">${rec.name} <span class="text-[10px] text-indigo-400 font-normal">(${rec.role})</span></span>
+                            <span class="text-[10px] font-medium px-2 py-0.5 rounded border ${badgeClass} shrink-0">${badgeText}</span>
+                        </div>
+                        <div class="text-[11px] text-slate-400 font-mono truncate">${rec.email}</div>
+                        <div class="text-[10px] text-slate-500">${rec.reason}</div>
+                    </div>
+                </label>`;
+            });
+            recipientsList.innerHTML = html;
+        })
+        .catch(err => {
+            console.error('Email preview error:', err);
+            recipientsList.innerHTML = '<div class="p-4 text-center text-xs text-rose-400">เกิดข้อผิดพลาดในการเช็ก Notification Rules</div>';
+        });
+}
+
+function closeEmailPreviewModal() {
+    const modal = document.getElementById('emailPreviewModal');
+    if (modal) modal.classList.add('hidden');
+    pendingFormToSubmit = null;
+}
+
+function submitFormWithRecipients() {
+    if (!pendingFormToSubmit) return;
+
+    pendingFormToSubmit.querySelectorAll('.dynamic-recipient-input').forEach(el => el.remove());
+
+    const checkedCheckboxes = document.querySelectorAll('#emailPreviewModal input[name="modal_selected_recipients"]:checked');
+    checkedCheckboxes.forEach(cb => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'selected_recipients';
+        input.value = cb.value;
+        input.className = 'dynamic-recipient-input';
+        pendingFormToSubmit.appendChild(input);
+    });
+
+    const extraInput = document.getElementById('modalExtraRecipients');
+    if (extraInput && extraInput.value.trim()) {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'extra_recipients';
+        input.value = extraInput.value.trim();
+        input.className = 'dynamic-recipient-input';
+        pendingFormToSubmit.appendChild(input);
+    }
+
+    closeEmailPreviewModal();
+    pendingFormToSubmit.dataset.modalConfirmed = "true";
+
+    if (typeof pendingFormToSubmit.requestSubmit === 'function') {
+        pendingFormToSubmit.requestSubmit();
+    } else {
+        const event = new Event('submit', { cancelable: true, bubbles: true });
+        pendingFormToSubmit.dispatchEvent(event);
     }
 }
 </script>

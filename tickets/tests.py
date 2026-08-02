@@ -2648,6 +2648,31 @@ class MultiTenantTicketTests(TestCase):
         self.assertIn('<a href="https://example.com/link"', rendered)
         self.assertIn('🔗', rendered)
 
+    def test_recipient_preview_api_endpoint(self):
+        self.client.force_login(self.admin_a)
+        
+        # Test preview API for comment
+        resp = self.client.get(
+            reverse('ticket_email_preview_recipients', args=[self.ticket_a.pk]),
+            {'action_type': 'comment'}
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data['status'], 'success')
+        self.assertIn('recipients', data)
+        self.assertTrue(len(data['recipients']) > 0)
+
+        # Test preview API for update with custom status
+        resp_update = self.client.get(
+            reverse('ticket_email_preview_recipients', args=[self.ticket_a.pk]),
+            {'action_type': 'update', 'status': Ticket.STATUS_RESOLVED}
+        )
+        self.assertEqual(resp_update.status_code, 200)
+        data_update = resp_update.json()
+        self.assertEqual(data_update['status'], 'success')
+        self.assertEqual(data_update['new_status'], Ticket.STATUS_RESOLVED)
+
+
 
     def test_one_time_email_recipient_preview_and_customization(self):
         from tickets.models import EmailLog

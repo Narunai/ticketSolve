@@ -8,7 +8,7 @@ from django.views.generic import CreateView, UpdateView, DetailView, TemplateVie
 from django.urls import reverse, reverse_lazy
 
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.http import FileResponse
+from django.http import FileResponse, JsonResponse
 from django.views.decorators.http import require_POST
 from .models import Ticket, CustomUser, Company, EmailLog, TicketAuditLog, SecurityAuditLog, ReportViewLog, MonthlyReportSchedule, TicketAutomationConfig, SMTPConfiguration, InboundEmailReceipt, InboundEmailAttachment, InboundEmailContact, InboundEmailRoutingRule, EmailToTicketSchedule, EmailToTicketRunLog, InAppNotification, get_smtp_connection, get_smtp_from_email, TicketComment, TicketAttachment, CommentAttachment, TicketCategory, ResolutionCategory, ModuleCategory, TicketStatusConfig, CompanyTicketConfig, CompanyTicketField, NotificationConfig, should_send_email_notification, BackupLog, BackupSchedule
 from .backup_service import perform_full_backup, perform_incremental_backup, perform_system_data_backup, get_backup_file_path, FileLock
@@ -1567,8 +1567,6 @@ class TicketDetailView(LoginRequiredMixin, DetailView):
                     'recipient_list': [email],
                     'fail_silently': False
                 }
-                if connection:
-                    kwargs['connection'] = connection
                 sent_count = send_mail(**kwargs)
             except Exception as e:
                 print(f"[Comment Email Error] Failed to send email to {email}: {e}")
@@ -1585,6 +1583,117 @@ class TicketDetailView(LoginRequiredMixin, DetailView):
                 success=(sent_count > 0),
                 error_message=err_msg
             )
+
+
+class TicketEmailRecipientPreviewView(LoginRequiredMixin, View):
+    def get(self, request, pk, *args, **kwargs):
+        ticket = get_object_or_404(Ticket, pk=pk)
+        if not visible_tickets_for(request.user, Ticket.objects.filter(pk=ticket.pk)).exists():
+            return JsonResponse({'status': 'error', 'message': 'Permission denied'}, status=403)
+
+        action_type = request.GET.get('action_type', 'update')  # 'comment' or 'update'
+        new_status = request.GET.get('status') or ticket.status
+        assigned_to_id = request.GET.get('assigned_to')
+
+        assigned_user = None
+        if assigned_to_id:
+            try:
+                assigned_user = CustomUser.objects.get(pk=assigned_to_id)
+            except (CustomUser.DoesNotExist, ValueError):
+                assigned_user = ticket.assigned_to
+        else:
+            assigned_user = ticket.assigned_to
+
+        candidates = []
+        seen = set()
+
+        # 1. Creator / Reporter
+        if ticket.created_by and ticket.created_by.email:
+            email = ticket.created_by.email.strip()
+            if email.lower() not in seen:
+                seen.add(email.lower())
+                candidates.append({
+                    'email': email,
+                    'user': ticket.created_by,
+                    'name': ticket.created_by.username,
+                    'role': 'Reporter / Creator',
+                })
+
+        # 2. Assignee
+        if assigned_user and assigned_user.email:
+            email = assigned_user.email.strip()
+            if email.lower() not in seen:
+                seen.add(email.lower())
+                candidates.append({
+                    'email': email,
+                    'user': assigned_user,
+                    'name': assigned_user.username,
+                    'role': 'Assignee',
+                })
+
+        # 3. Original Email Sender (if inbound email ticket)
+        raw_source = (ticket.custom_fields_data or {}).get('email_to_ticket') or {}
+        if isinstance(raw_source, dict) and raw_source.get('sender_email'):
+            sender_email = raw_source['sender_email'].strip()
+            sender_name = raw_source.get('sender_name') or sender_email
+            if sender_email.lower() not in seen:
+                seen.add(sender_email.lower())
+                candidates.append({
+                    'email': sender_email,
+                    'user': None,
+                    'name': sender_name,
+                    'role': 'Original Email Sender',
+                })
+
+        # 4. NotificationConfig targets for company
+        if ticket.company:
+            configs = NotificationConfig.objects.filter(company=ticket.company)
+            for cfg in configs:
+                for u in cfg.target_users.filter(is_active=True):
+                    if u.email:
+                        email = u.email.strip()
+                        if email.lower() not in seen:
+                            seen.add(email.lower())
+                            candidates.append({
+                                'email': email,
+                                'user': u,
+                                'name': u.username,
+                                'role': f'Notification Rule ({cfg.name})',
+                            })
+
+        event_code = EmailLog.ACTION_COMMENT_ADDED if action_type == 'comment' else EmailLog.ACTION_TICKET_UPDATED
+        
+        evaluated_recipients = []
+        for cand in candidates:
+            if action_type == 'comment' and cand['user'] and cand['user'] == request.user:
+                allowed = False
+                reason = "Comment author (excluded by default)"
+            else:
+                allowed = should_send_email_notification(
+                    cand['email'],
+                    ticket=ticket,
+                    event_type=event_code,
+                    new_status=new_status,
+                    recipient_user=cand['user']
+                )
+                reason = "Matches Notification Rules" if allowed else "Filtered out by Notification Config rules"
+
+            evaluated_recipients.append({
+                'email': cand['email'],
+                'name': cand['name'],
+                'role': cand['role'],
+                'will_receive': allowed,
+                'is_checked': allowed,
+                'reason': reason,
+            })
+
+        return JsonResponse({
+            'status': 'success',
+            'ticket_id': ticket.id,
+            'action_type': action_type,
+            'new_status': new_status,
+            'recipients': evaluated_recipients,
+        })
 
 
 def _protected_file_response(file_field, filename):
