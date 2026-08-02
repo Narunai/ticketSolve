@@ -89,19 +89,53 @@ def clean_email_body(raw_content, is_html=False):
     return result
 
 
+_CHARSET_ALIASES = {
+    'windows-874': 'cp874',
+    'windows874': 'cp874',
+    'win-874': 'cp874',
+    'win874': 'cp874',
+    'tis-620': 'tis-620',
+    'tis620': 'tis-620',
+    'tis_620': 'tis-620',
+    'iso-8859-11': 'cp874',
+    'ks_c_5601-1987': 'euc_kr',
+    'gb2312_80': 'gb2312',
+}
+
+
+def _normalize_charset(charset):
+    if not charset:
+        return 'utf-8'
+    c = str(charset).strip().lower()
+    return _CHARSET_ALIASES.get(c, c)
+
+
+def _safe_decode_bytes(data, charset='utf-8'):
+    if not isinstance(data, bytes):
+        return str(data or '')
+    normalized = _normalize_charset(charset)
+    try:
+        return data.decode(normalized, errors='replace')
+    except (LookupError, UnicodeDecodeError):
+        try:
+            return data.decode('cp874', errors='replace')
+        except (LookupError, UnicodeDecodeError):
+            return data.decode('utf-8', errors='replace')
+
+
 def _decode_header(value):
     if not value:
         return ''
     try:
-        return str(make_header(decode_header(value))).strip()
-    except (LookupError, UnicodeDecodeError):
         fragments = []
         for part, charset in decode_header(value):
             if isinstance(part, bytes):
-                fragments.append(part.decode(charset or 'utf-8', errors='replace'))
+                fragments.append(_safe_decode_bytes(part, charset))
             else:
                 fragments.append(str(part))
         return ''.join(fragments).strip()
+    except Exception:
+        return str(value or '').strip()
 
 
 def _decode_payload(part):
@@ -109,10 +143,7 @@ def _decode_payload(part):
     if payload is None:
         return ''
     charset = part.get_content_charset() or 'utf-8'
-    try:
-        return payload.decode(charset, errors='replace')
-    except LookupError:
-        return payload.decode('utf-8', errors='replace')
+    return _safe_decode_bytes(payload, charset)
 
 
 def _parse_message(uid, raw_email):

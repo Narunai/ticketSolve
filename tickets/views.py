@@ -3146,13 +3146,18 @@ class EmailToTicketTimerView(
 
         context['contact_query'] = contact_query
         context['email_contacts'] = email_contacts
-        context['mailboxes'] = SMTPConfiguration.objects.filter(
+        active_mailboxes = SMTPConfiguration.objects.filter(
             is_active=True,
             feature_scope__in=[
                 SMTPConfiguration.FEATURE_EMAIL_TO_TICKET,
                 SMTPConfiguration.FEATURE_BOTH,
             ],
         ).select_related('email_to_ticket_company').order_by('name')
+        first_smtp = active_mailboxes.first()
+        context['mailboxes'] = active_mailboxes
+        context['first_smtp'] = first_smtp
+        context['default_filter_issue_only'] = first_smtp.filter_issue_only if first_smtp else True
+        context['default_issue_keywords'] = first_smtp.issue_keywords if (first_smtp and first_smtp.issue_keywords) else 'ปัญหา, ticket, help, issue, support, แจ้ง, ขอ'
         edit_rule_id = self.request.GET.get('edit_rule')
         edit_rule = None
         if edit_rule_id:
@@ -3271,6 +3276,38 @@ class InboundEmailRoutingRuleDeleteView(
         sender_email = rule.sender_email
         rule.delete()
         messages.success(request, f'Deleted routing rule for {sender_email}.')
+        return redirect('email_timer')
+
+
+class EmailToTicketKeywordFilterSaveView(
+    LoginRequiredMixin,
+    SuperuserOrSystemAdminRequiredMixin,
+    View,
+):
+    def post(self, request, *args, **kwargs):
+        filter_issue_only = request.POST.get('filter_issue_only') == 'on'
+        issue_keywords = (request.POST.get('issue_keywords') or '').strip()
+        mailbox_id = request.POST.get('mailbox_id')
+
+        configs = SMTPConfiguration.objects.filter(
+            feature_scope__in=[
+                SMTPConfiguration.FEATURE_EMAIL_TO_TICKET,
+                SMTPConfiguration.FEATURE_BOTH,
+            ]
+        )
+        if mailbox_id and mailbox_id != 'all':
+            configs = configs.filter(pk=mailbox_id)
+
+        updated_count = configs.update(
+            filter_issue_only=filter_issue_only,
+            issue_keywords=issue_keywords,
+        )
+
+        status_str = "Enabled (Subject keywords required)" if filter_issue_only else "Disabled (Accept all emails)"
+        messages.success(
+            request,
+            f"Keyword Filter Settings updated for {updated_count} mailbox(es): {status_str}.",
+        )
         return redirect('email_timer')
 
 

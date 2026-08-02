@@ -11,7 +11,10 @@
                 ตั้งรอบสแกน mailbox และตรวจสอบประวัติการทำงานของระบบ
             </p>
         </div>
-        <div class="flex gap-2">
+        <div class="flex items-center gap-2">
+            <button type="button" onclick="openKeywordFilterModal()" class="rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-3.5 py-2 text-xs font-bold text-indigo-300 hover:bg-indigo-500/20 transition-all flex items-center gap-1.5 cursor-pointer">
+                <span>🔍</span> <span>Keyword Filters</span>
+            </button>
             <a href="{% url 'system_settings' %}" class="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-700">
                 SMTP Settings
             </a>
@@ -560,5 +563,98 @@
         }
         activateEmailLogTab(initialTab, false);
     })();
+
+    function openKeywordFilterModal() {
+        document.getElementById('keywordFilterModal').classList.remove('hidden');
+    }
+    function closeKeywordFilterModal() {
+        document.getElementById('keywordFilterModal').classList.add('hidden');
+    }
+    function appendKeyword(keyword) {
+        const area = document.getElementById('modal_issue_keywords');
+        let current = area.value.trim();
+        if (!current) {
+            area.value = keyword;
+        } else {
+            const list = current.split(',').map(s => s.trim().toLowerCase());
+            if (!list.includes(keyword.toLowerCase())) {
+                area.value = current + ', ' + keyword;
+            }
+        }
+    }
+    function resetDefaultKeywords() {
+        document.getElementById('modal_issue_keywords').value = 'ปัญหา, ticket, help, issue, support, แจ้ง, ขอ';
+        document.getElementById('modal_filter_issue_only').checked = true;
+    }
 </script>
+
+<!-- Keyword Filters Management Modal -->
+<div id="keywordFilterModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm hidden">
+    <div class="w-full max-w-xl rounded-2xl border border-indigo-500/30 bg-slate-900/95 p-6 shadow-2xl space-y-5">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-4">
+            <div class="flex items-center gap-2.5">
+                <span class="text-xl">🔍</span>
+                <div>
+                    <h3 class="text-base font-bold text-white">Email Timer Keyword Filters</h3>
+                    <p class="text-[11px] text-slate-400">Configure subject keywords required for converting emails into tickets</p>
+                </div>
+            </div>
+            <button type="button" onclick="closeKeywordFilterModal()" class="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white">✕</button>
+        </div>
+
+        <form method="post" action="{% url 'email_keyword_filter_save' %}" class="space-y-4">
+            {% csrf_token %}
+            <div>
+                <label class="block text-xs font-medium text-slate-300 mb-1.5">Target Mailbox</label>
+                <select name="mailbox_id" class="w-full rounded-xl border border-slate-800 bg-slate-950 px-3.5 py-2.5 text-xs text-slate-200 focus:border-indigo-500 focus:outline-none">
+                    <option value="all">🌐 All Email-to-Ticket Mailboxes</option>
+                    {% for box in mailboxes %}
+                    <option value="{{ box.pk }}">{{ box.name }} ({{ box.email_to_ticket_company|default:"No company" }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <span class="text-xs font-bold text-slate-200">Require Subject Keyword Filter</span>
+                        <p class="text-[10px] text-slate-400">Only emails matching configured keywords will create/queue tickets</p>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" name="filter_issue_only" id="modal_filter_issue_only" class="sr-only peer" {% if default_filter_issue_only %}checked{% endif %}>
+                        <div class="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                    </label>
+                </div>
+            </div>
+
+            <div>
+                <div class="flex items-center justify-between mb-1.5">
+                    <label class="block text-xs font-medium text-slate-300">Issue Subject Keywords (Comma-separated)</label>
+                    <span class="text-[10px] text-slate-500">Case-insensitive</span>
+                </div>
+                <textarea name="issue_keywords" id="modal_issue_keywords" rows="4" class="w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-xs text-slate-200 font-mono focus:border-indigo-500 focus:outline-none placeholder-slate-600" placeholder="e.g. ปัญหา, ticket, help, issue, support, แจ้ง, ขอ">{{ default_issue_keywords }}</textarea>
+            </div>
+
+            <!-- Quick Add Presets -->
+            <div>
+                <span class="block text-[10px] text-slate-400 mb-1.5">Quick Presets & Common Keywords:</span>
+                <div class="flex flex-wrap gap-1.5">
+                    <button type="button" onclick="appendKeyword('ปัญหา')" class="px-2 py-1 rounded-md text-[10px] bg-slate-800 text-indigo-300 hover:bg-indigo-600/30 border border-slate-700 font-mono">+ ปัญหา</button>
+                    <button type="button" onclick="appendKeyword('แจ้งปัญหา')" class="px-2 py-1 rounded-md text-[10px] bg-slate-800 text-indigo-300 hover:bg-indigo-600/30 border border-slate-700 font-mono">+ แจ้งปัญหา</button>
+                    <button type="button" onclick="appendKeyword('ticket')" class="px-2 py-1 rounded-md text-[10px] bg-slate-800 text-indigo-300 hover:bg-indigo-600/30 border border-slate-700 font-mono">+ ticket</button>
+                    <button type="button" onclick="appendKeyword('support')" class="px-2 py-1 rounded-md text-[10px] bg-slate-800 text-indigo-300 hover:bg-indigo-600/30 border border-slate-700 font-mono">+ support</button>
+                    <button type="button" onclick="appendKeyword('help')" class="px-2 py-1 rounded-md text-[10px] bg-slate-800 text-indigo-300 hover:bg-indigo-600/30 border border-slate-700 font-mono">+ help</button>
+                    <button type="button" onclick="appendKeyword('issue')" class="px-2 py-1 rounded-md text-[10px] bg-slate-800 text-indigo-300 hover:bg-indigo-600/30 border border-slate-700 font-mono">+ issue</button>
+                    <button type="button" onclick="appendKeyword('inquiry')" class="px-2 py-1 rounded-md text-[10px] bg-slate-800 text-indigo-300 hover:bg-indigo-600/30 border border-slate-700 font-mono">+ inquiry</button>
+                    <button type="button" onclick="resetDefaultKeywords()" class="px-2 py-1 rounded-md text-[10px] bg-rose-500/10 text-rose-300 hover:bg-rose-500/20 border border-rose-500/30 font-mono">↺ Reset Defaults</button>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+                <button type="button" onclick="closeKeywordFilterModal()" class="px-4 py-2 rounded-xl text-xs font-semibold border border-slate-700 text-slate-300 hover:bg-slate-800">Cancel</button>
+                <button type="submit" class="px-5 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-600/30">Save Keyword Filters ➔</button>
+            </div>
+        </form>
+    </div>
+</div>
 {% endblock %}

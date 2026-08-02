@@ -3190,6 +3190,31 @@ class SimplePasswordTests(TestCase):
         self.assertNotContains(owner_page, secret)
         self.assertContains(owner_page, 'Existing passwords are one-way hashes')
 
+    def test_windows_874_decoding_support(self):
+        from .email_to_ticket import _safe_decode_bytes, _decode_header
+        sample_bytes = "ทดสอบ windows-874".encode('cp874')
+        decoded = _safe_decode_bytes(sample_bytes, 'windows-874')
+        self.assertIn("ทดสอบ", decoded)
+
+        header_val = "=?windows-874?B?4OC04OC24OC3?="
+        decoded_hdr = _decode_header(header_val)
+        self.assertIsNotNone(decoded_hdr)
+
+    def test_keyword_filter_save_view(self):
+        self.client.force_login(self.system_admin)
+        response = self.client.post(
+            reverse('email_keyword_filter_save'),
+            {
+                'mailbox_id': 'all',
+                'filter_issue_only': 'on',
+                'issue_keywords': 'ปัญหา, ticket, help, urgent',
+            },
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Keyword Filter Settings updated')
+
+
 
 
 
