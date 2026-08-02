@@ -693,8 +693,8 @@ function switchLogTab(tabName) {
             <div class="flex items-center gap-2.5">
                 <span class="text-xl">📧</span>
                 <div>
-                    <h3 class="text-base font-bold text-white">พรีวิวการส่งแจ้งเตือนทางอีเมล</h3>
-                    <p class="text-xs text-slate-400">ตรวจสอบสิทธิ์และผู้รับที่ผ่านเงื่อนไขก่อนส่งอีเมล</p>
+                    <h3 class="text-base font-bold text-white">Email Notification Preview</h3>
+                    <p class="text-xs text-slate-400">Review qualified recipients and system notification rules before sending.</p>
                 </div>
             </div>
             <button type="button" onclick="closeEmailPreviewModal()" class="text-slate-400 hover:text-white p-1 rounded-lg text-lg">✕</button>
@@ -702,25 +702,25 @@ function switchLogTab(tabName) {
 
         <div class="flex items-center gap-2 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs">
             <span>ℹ️</span>
-            <span>การเลือกและกำหนดผู้รับเพิ่มเติมนี้จะมีผล<strong>เฉพาะการทำรายการครั้งนี้เท่านั้น</strong></span>
+            <span>Custom recipient selections and additions apply <strong>strictly to this submission only</strong>.</span>
         </div>
 
         <div class="space-y-2 max-h-60 overflow-y-auto pr-1" id="modalRecipientsList">
         </div>
 
         <div class="space-y-1.5 pt-2 border-t border-slate-800/80">
-            <label class="block text-xs font-semibold text-slate-300">➕ เพิ่มอีเมลผู้รับเพิ่มเติมเฉพาะครั้งนี้</label>
-            <input type="text" id="modalExtraRecipients" placeholder="เช่น manager@company.com, auditor@company.com"
+            <label class="block text-xs font-semibold text-slate-300">➕ Add One-Time Additional Email Recipients</label>
+            <input type="text" id="modalExtraRecipients" placeholder="e.g. manager@company.com, auditor@company.com"
                    class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-mono">
-            <p class="text-[11px] text-slate-500">คั่นด้วยเครื่องหมายจุลภาค (,) หากมีหลายอีเมล</p>
+            <p class="text-[11px] text-slate-500">Separate multiple email addresses with commas (,)</p>
         </div>
 
         <div class="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
             <button type="button" onclick="closeEmailPreviewModal()" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 bg-slate-800 hover:bg-slate-700 transition-colors">
-                ยกเลิก
+                Cancel
             </button>
             <button type="button" id="btnConfirmSendEmail" onclick="submitFormWithRecipients()" class="px-5 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-600/30 transition-all flex items-center gap-2">
-                <span>ยืนยันและส่งอีเมล</span>
+                <span>Confirm & Send Email</span>
                 <span>➔</span>
             </button>
         </div>
@@ -736,7 +736,7 @@ function openEmailPreviewModal(ticketId, actionType, extraParams = {}, targetFor
     const recipientsList = document.getElementById('modalRecipientsList');
     if (!modal || !recipientsList) return;
 
-    recipientsList.innerHTML = '<div class="p-6 text-center text-slate-400 text-xs flex items-center justify-center gap-2"><span>⏳</span> <span>กำลังประมวลผลเช็ก Notification Rules ของระบบ...</span></div>';
+    recipientsList.innerHTML = '<div class="p-6 text-center text-slate-400 text-xs flex items-center justify-center gap-2"><span>⏳</span> <span>Evaluating system notification rules...</span></div>';
     modal.classList.remove('hidden');
 
     let url = `/ticket/${ticketId}/preview-recipients/?action_type=${actionType}`;
@@ -748,11 +748,11 @@ function openEmailPreviewModal(ticketId, actionType, extraParams = {}, targetFor
         .then(res => res.json())
         .then(data => {
             if (data.status !== 'success' || !data.recipients) {
-                recipientsList.innerHTML = '<div class="p-4 text-center text-xs text-rose-400">ไม่สามารถดึงข้อมูลผู้รับอีเมลได้</div>';
+                recipientsList.innerHTML = '<div class="p-4 text-center text-xs text-rose-400">Unable to fetch email recipients preview</div>';
                 return;
             }
             if (data.recipients.length === 0) {
-                recipientsList.innerHTML = '<div class="p-4 text-center text-xs text-slate-500 italic">ไม่มีผู้รับตามเงื่อนไขของระบบ</div>';
+                recipientsList.innerHTML = '<div class="p-4 text-center text-xs text-slate-500 italic">No recipients match system notification criteria</div>';
                 return;
             }
 
@@ -761,7 +761,7 @@ function openEmailPreviewModal(ticketId, actionType, extraParams = {}, targetFor
                 const badgeClass = rec.will_receive 
                     ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
                     : 'bg-amber-500/10 text-amber-400 border-amber-500/20';
-                const badgeText = rec.will_receive ? '✅ จะได้รับอีเมล' : '⚠️ ถูกยกเลิกโดย Notification Rules';
+                const badgeText = rec.will_receive ? '✅ Will Receive Email' : '⚠️ Filtered by Notification Rules';
                 
                 html += `
                 <label class="flex items-start gap-3 p-3 rounded-xl bg-slate-950/60 border border-slate-800 hover:border-slate-700 transition-colors cursor-pointer">
@@ -780,7 +780,7 @@ function openEmailPreviewModal(ticketId, actionType, extraParams = {}, targetFor
         })
         .catch(err => {
             console.error('Email preview error:', err);
-            recipientsList.innerHTML = '<div class="p-4 text-center text-xs text-rose-400">เกิดข้อผิดพลาดในการเช็ก Notification Rules</div>';
+            recipientsList.innerHTML = '<div class="p-4 text-center text-xs text-rose-400">An error occurred while evaluating notification rules</div>';
         });
 }
 
@@ -793,7 +793,9 @@ function closeEmailPreviewModal() {
 function submitFormWithRecipients() {
     if (!pendingFormToSubmit) return;
 
-    pendingFormToSubmit.querySelectorAll('.dynamic-recipient-input').forEach(el => el.remove());
+    const formToSubmit = pendingFormToSubmit;
+
+    formToSubmit.querySelectorAll('.dynamic-recipient-input').forEach(el => el.remove());
 
     const checkedCheckboxes = document.querySelectorAll('#emailPreviewModal input[name="modal_selected_recipients"]:checked');
     checkedCheckboxes.forEach(cb => {
@@ -802,7 +804,7 @@ function submitFormWithRecipients() {
         input.name = 'selected_recipients';
         input.value = cb.value;
         input.className = 'dynamic-recipient-input';
-        pendingFormToSubmit.appendChild(input);
+        formToSubmit.appendChild(input);
     });
 
     const extraInput = document.getElementById('modalExtraRecipients');
@@ -812,17 +814,17 @@ function submitFormWithRecipients() {
         input.name = 'extra_recipients';
         input.value = extraInput.value.trim();
         input.className = 'dynamic-recipient-input';
-        pendingFormToSubmit.appendChild(input);
+        formToSubmit.appendChild(input);
     }
 
+    formToSubmit.dataset.modalConfirmed = "true";
     closeEmailPreviewModal();
-    pendingFormToSubmit.dataset.modalConfirmed = "true";
 
-    if (typeof pendingFormToSubmit.requestSubmit === 'function') {
-        pendingFormToSubmit.requestSubmit();
+    if (typeof formToSubmit.requestSubmit === 'function') {
+        formToSubmit.requestSubmit();
     } else {
         const event = new Event('submit', { cancelable: true, bubbles: true });
-        pendingFormToSubmit.dispatchEvent(event);
+        formToSubmit.dispatchEvent(event);
     }
 }
 </script>
