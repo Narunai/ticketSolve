@@ -1490,7 +1490,6 @@ class TicketDetailView(LoginRequiredMixin, DetailView):
             )
 
             from .models import CommentAttachment
-            from filelock import FileLock
             with FileLock("system_backup.lock", timeout=30):
                 for f in files:
                     CommentAttachment.objects.create(
