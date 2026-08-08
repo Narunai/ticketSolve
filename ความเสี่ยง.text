@@ -1,0 +1,1 @@
+ความเสี่ยงสำคัญที่ยังควรดำเนินการต่อคือ backup นอก VPS ไป S3 แบบ encrypted/Object Lock, MFA สำหรับ System Admin, เปลี่ยน CSP จาก Report-Only เป็นบังคับใช้, ย้าย SQLite ไป PostgreSQL และเพิ่ม malware scanning สำหรับไฟล์แนบ

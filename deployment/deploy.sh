@@ -129,16 +129,21 @@ run_manage() {
 run_manage migrate migrate --noinput
 run_manage static collectstatic --noinput
 
+pip install -r chatbot_service/requirements.txt
+
 sudo cp deployment/gunicorn.service /etc/systemd/system/gunicorn.service
 sudo cp deployment/ticketsolve-scheduler.service /etc/systemd/system/ticketsolve-scheduler.service
 sudo cp deployment/ticketsolve-scheduler.timer /etc/systemd/system/ticketsolve-scheduler.timer
 sudo cp deployment/ticketsolve-email-to-ticket.service /etc/systemd/system/ticketsolve-email-to-ticket.service
 sudo cp deployment/ticketsolve-email-to-ticket.timer /etc/systemd/system/ticketsolve-email-to-ticket.timer
+sudo cp chatbot_service/ticket-chatbot.service /etc/systemd/system/ticket-chatbot.service
 sudo systemctl daemon-reload
 sudo systemctl restart gunicorn
 sudo systemctl enable gunicorn
 sudo systemctl enable --now ticketsolve-scheduler.timer
 sudo systemctl enable --now ticketsolve-email-to-ticket.timer
+sudo systemctl enable --now ticket-chatbot
+sudo systemctl restart ticket-chatbot
 
 sudo cp deployment/nginx.conf /etc/nginx/sites-available/ticketsolve
 if [ ! -L "/etc/nginx/sites-enabled/ticketsolve" ]; then

@@ -60,15 +60,15 @@ pytest
 
 ## 📊 3. สรุปผลการทดสอบล่าสุด (Latest Test Results)
 
-ผลที่ยืนยันล่าสุดวันที่ 2 สิงหาคม 2026:
+ผลที่ยืนยันล่าสุดวันที่ 8 สิงหาคม 2026:
 
 ```text
-Found 98 test(s).
-Ran 98 tests in 63.665s
+Found 103 test(s).
+Ran 103 tests in 74.138s
 OK
 System check identified no issues (0 silenced).
 ```
 
-* **Discovered test methods**: 97
-* **Full suite**: ผ่านครบ 97/97 บน development environment (Django 5.2.16)
+* **Discovered test methods**: 103
+* **Full suite**: ผ่านครบ 103/103 บน development environment (Django 5.2)
 * **Dependency audit**: `pip-audit -r requirements.txt` ไม่พบ known vulnerabilities

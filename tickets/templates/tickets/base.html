@@ -337,9 +337,9 @@
     
     <!-- Sidebar Navigation -->
     {% if user.is_authenticated %}
-    <aside class="w-full md:w-64 glass-panel border-r border-slate-800 flex flex-col shrink-0">
+    <aside class="w-full md:w-64 glass-panel border-r border-slate-800 flex flex-col shrink-0 md:h-screen md:sticky md:top-0 overflow-hidden">
         <!-- Logo Header -->
-        <div class="h-14 px-5 border-b border-slate-800/80 flex items-center justify-between gap-3">
+        <div class="h-14 px-5 border-b border-slate-800/80 flex items-center justify-between gap-3 shrink-0">
             <div class="flex items-center gap-3">
                 <div class="w-8 h-8 rounded-lg bg-theme-gradient flex items-center justify-center font-bold text-white shadow-theme-glow">
                     T
@@ -361,9 +361,9 @@
         </div>
 
         <!-- Collapsible Content Wrapper (Hidden on mobile by default) -->
-        <div id="sidebarMenu" class="hidden md:flex flex-col flex-1 border-t border-slate-800/60 md:border-none">
+        <div id="sidebarMenu" class="hidden md:flex flex-col flex-1 min-h-0 border-t border-slate-800/60 md:border-none overflow-y-auto md:overflow-hidden max-h-[calc(100vh-3.5rem)] md:max-h-none">
             <!-- Signed-in account / tenant identity -->
-            <div id="sidebarIdentityCard" class="p-3 mx-3 my-3 rounded-xl bg-theme-bg border border-theme-border shadow-inner">
+            <div id="sidebarIdentityCard" class="p-3 mx-3 my-3 rounded-xl bg-theme-bg border border-theme-border shadow-inner shrink-0">
                 <span class="text-[9px] text-theme-accent font-semibold tracking-wider uppercase block">{{ t.account_info }}</span>
                 <dl class="mt-2 space-y-1 text-[10px]">
                     <div class="flex items-center justify-between gap-2">
@@ -386,7 +386,7 @@
             </div>
 
             <!-- Navigation Links -->
-            <nav class="flex-1 px-3 pb-3 space-y-1 overflow-y-auto" aria-label="Main navigation">
+            <nav class="flex-1 min-h-0 px-3 pb-3 space-y-1 overflow-y-auto" aria-label="Main navigation">
                 <div class="px-3 pt-1 pb-1 text-[9px] font-bold uppercase tracking-[0.16em] text-slate-600">Workspace</div>
                 <a href="{% url 'dashboard' %}" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/50 transition-all text-xs font-medium {% if request.resolver_match.url_name == 'dashboard' %}bg-theme-bg border border-theme-border text-theme-accent{% endif %}">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2v-4zM14 16a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2v-4z"></path></svg>
@@ -410,6 +410,10 @@
                 <a href="{% url 'company_list' %}" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/50 transition-all text-xs font-medium {% if request.resolver_match.url_name == 'company_list' or request.resolver_match.url_name == 'company_create' or request.resolver_match.url_name == 'company_update' %}bg-theme-bg border border-theme-border text-theme-accent{% endif %}">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
                     {{ t.manage_companies }}
+                </a>
+                <a href="/chatbot-admin/" target="_blank" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sky-300 hover:text-sky-100 hover:bg-sky-500/10 transition-all text-xs font-medium">
+                    <svg class="w-4 h-4 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path></svg>
+                    <span>AI Chatbot Admin</span>
                 </a>
                 {% endif %}
 
@@ -468,7 +472,7 @@
             </nav>
 
             <!-- Sidebar Footer/User Profile -->
-            <div class="p-3 border-t border-slate-800/80 flex items-center justify-between mt-auto">
+            <div class="p-3 border-t border-slate-800/80 flex items-center justify-between shrink-0 mt-auto bg-slate-950/80 backdrop-blur-sm z-10">
                 <div class="flex items-center gap-2.5 min-w-0">
                     <div class="w-8 h-8 rounded-full bg-slate-800 border border-theme-border flex items-center justify-center font-semibold text-xs text-theme-accent shrink-0">
                         {{ user.username|slice:":2"|upper }}
@@ -599,5 +603,9 @@
         </div>
     </main>
 
+    {% if user.is_authenticated %}
+    <!-- Gemini Chatbot Floating Widget (Only loaded for authenticated users) -->
+    <script src="/chatbot-static/widget.js?v=3"></script>
+    {% endif %}
 </body>
 </html>
