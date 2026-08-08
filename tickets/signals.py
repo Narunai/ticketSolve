@@ -251,17 +251,30 @@ def send_ticket_notifications(sender, instance, created, **kwargs):
         )
 
         subject = f"[TicketSolve] Ticket Created | #{instance.id} - {instance.title}"
+        details_list = [
+            ('Ticket reference', f'#{instance.id}'),
+            ('Subject', instance.title),
+            ('Priority', instance.get_priority_display()),
+            ('Organization', instance.company.name if instance.company else 'Central Administration'),
+            ('Assignee', instance.assigned_to.username if instance.assigned_to else 'Unassigned'),
+        ]
+        if is_email_ticket:
+            sender_info = email_source.get('sender_email') or 'Email Sender'
+            if email_source.get('sender_name'):
+                sender_info = f"{email_source['sender_name']} <{email_source['sender_email']}>"
+            details_list.append(('Original Email Sender', sender_info))
+            if email_source.get('routing_rule_id'):
+                details_list.append(('Routing Rule', f"Auto-routed to {instance.assigned_to.username}"))
+        details_list.append(('Description', instance.description or 'No description provided'))
+
+        greeting_name = instance.assigned_to.username if (is_email_ticket and instance.assigned_to) else instance.created_by.username
+        intro_text = 'A new email support request has been imported and assigned.' if is_email_ticket else 'Your support request has been registered successfully. The service desk will review the request and provide updates through TicketSolve.'
+
         message, html_message = build_formal_email(
             heading='Support Ticket Confirmation',
-            greeting=f'Dear {instance.created_by.username},',
-            introduction='Your support request has been registered successfully. The service desk will review the request and provide updates through TicketSolve.',
-            details=[
-                ('Ticket reference', f'#{instance.id}'),
-                ('Subject', instance.title),
-                ('Priority', instance.get_priority_display()),
-                ('Organization', instance.company.name if instance.company else 'Central Administration'),
-                ('Description', instance.description or 'No description provided'),
-            ],
+            greeting=f'Dear {greeting_name},',
+            introduction=intro_text,
+            details=details_list,
             action_label='View ticket details',
             action_url=f'{settings.PUBLIC_BASE_URL}/ticket/{instance.id}/',
         )

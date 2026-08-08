@@ -370,6 +370,16 @@ def _create_ticket(config, message, matched_keywords=None, decided_by=None):
             category=Ticket.CATEGORY_OTHER,
             custom_fields_data={'email_to_ticket': source_metadata},
         )
+        from .models import TicketAuditLog
+        if routing_rule and assignee:
+            audit_detail = f"🔀 Auto-routed via Sender Routing Rule: Matched '{message.sender_email}' → Assigned to {assignee.username} ({ticket_company.name})"
+        else:
+            audit_detail = f"📧 Ticket imported from email ({message.sender_email})"
+        TicketAuditLog.objects.create(
+            ticket=ticket,
+            actor=ticket_creator,
+            details=audit_detail
+        )
         with FileLock('system_backup.lock', timeout=30):
             for index, (filename, content) in enumerate(accepted):
                 attachment = TicketAttachment.objects.create(
