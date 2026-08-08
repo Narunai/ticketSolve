@@ -1,3 +1,4 @@
+from django.db import models
 from django.db.models.signals import pre_save, post_save, post_delete, post_migrate
 from django.dispatch import receiver
 from django.core.mail import EmailMultiAlternatives, send_mail
@@ -225,14 +226,15 @@ def send_ticket_notifications(sender, instance, created, **kwargs):
         is_email_ticket = email_source.get('source') == 'EMAIL_TO_TICKET'
         in_app_recipients = set(
             CustomUser.objects.filter(
-                company=instance.company,
-                role=CustomUser.CLIENT_ADMIN,
-                is_active=True,
+                is_active=True
+            ).filter(
+                models.Q(company=instance.company, role__in=[CustomUser.CLIENT_ADMIN, CustomUser.CLIENT_STAFF]) |
+                models.Q(role__in=[CustomUser.SYSTEM_ADMIN, CustomUser.SYSTEM_SUB_ADMIN])
             )
         )
-        if instance.assigned_to and (is_email_ticket or instance.assigned_to_id != instance.created_by_id):
+        if instance.assigned_to:
             in_app_recipients.add(instance.assigned_to)
-        if not is_email_ticket:
+        if not is_email_ticket and instance.created_by:
             in_app_recipients.discard(instance.created_by)
 
         if is_email_ticket:
@@ -306,8 +308,19 @@ def send_ticket_notifications(sender, instance, created, **kwargs):
         if previous_status == instance.status:
             return
 
+        status_recipients = set(
+            CustomUser.objects.filter(
+                role__in=[CustomUser.SYSTEM_ADMIN, CustomUser.SYSTEM_SUB_ADMIN],
+                is_active=True
+            )
+        )
+        if instance.created_by:
+            status_recipients.add(instance.created_by)
+        if instance.assigned_to:
+            status_recipients.add(instance.assigned_to)
+
         create_in_app_notifications(
-            [instance.created_by, instance.assigned_to],
+            status_recipients,
             InAppNotification.EVENT_STATUS_CHANGED,
             f'Ticket #{instance.id} status changed',
             f'{previous_status or "Unknown"} → {instance.get_status_display()}',
@@ -360,8 +373,19 @@ def send_ticket_notifications(sender, instance, created, **kwargs):
 def notify_ticket_comment(sender, instance, created, **kwargs):
     if not created:
         return
+    comment_recipients = set(
+        CustomUser.objects.filter(
+            role__in=[CustomUser.SYSTEM_ADMIN, CustomUser.SYSTEM_SUB_ADMIN],
+            is_active=True
+        )
+    )
+    if instance.ticket.created_by:
+        comment_recipients.add(instance.ticket.created_by)
+    if instance.ticket.assigned_to:
+        comment_recipients.add(instance.ticket.assigned_to)
+
     create_in_app_notifications(
-        [instance.ticket.created_by, instance.ticket.assigned_to],
+        comment_recipients,
         InAppNotification.EVENT_COMMENT_ADDED,
         f'New comment on Ticket #{instance.ticket_id}',
         f'{instance.author.username}: {instance.content[:180]}',
