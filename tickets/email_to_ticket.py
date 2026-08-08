@@ -333,7 +333,12 @@ def _resolve_ticket_route(config, message):
     )
     ticket_creator = config.email_to_ticket_creator
     creator_source = 'SMTP_DEFAULT'
-    if (
+    from .models import CustomUser
+    sender_user = CustomUser.objects.filter(email__iexact=(message.sender_email or '').strip()).first()
+    if sender_user:
+        ticket_creator = sender_user
+        creator_source = 'SENDER_MATCH'
+    elif (
         routing_rule
         and assignee
         and ticket_creator.company_id != ticket_company.id

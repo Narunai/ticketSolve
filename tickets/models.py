@@ -685,6 +685,13 @@ class EmailLog(models.Model):
         (ACTION_COMMENT_ADDED, 'New Comment Added'),
     ]
 
+    ticket = models.ForeignKey(
+        'Ticket',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='email_logs'
+    )
     recipient = models.CharField(max_length=255)
     recipient_type = models.CharField(
         max_length=2,

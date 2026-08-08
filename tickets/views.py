@@ -1472,8 +1472,9 @@ class TicketDetailView(LoginRequiredMixin, DetailView):
         }
         from .models import EmailLog, get_ticket_default_recipients
         context['email_logs'] = EmailLog.objects.filter(
-            models.Q(subject__icontains=f"Ticket #{self.object.id}") |
-            models.Q(message__icontains=f"Ticket #{self.object.id}")
+            models.Q(ticket=self.object) |
+            models.Q(subject__icontains=f"#{self.object.id}") |
+            models.Q(message__icontains=f"#{self.object.id}")
         ).order_by('-sent_at')
         context['default_recipients'] = get_ticket_default_recipients(self.object)
         return context
@@ -3373,6 +3374,7 @@ class InboundEmailApproveView(
             if skipped:
                 message += f' {len(skipped)} attachment(s) were rejected by safety checks.'
             messages.success(request, message)
+            return redirect('ticket_detail', pk=ticket.pk)
         return redirect('email_timer')
 
 
