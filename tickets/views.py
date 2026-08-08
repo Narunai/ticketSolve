@@ -3460,6 +3460,21 @@ class EmailToTicketTimerRunView(
         return redirect('email_timer')
 
 
+class EmailToTicketBatchScanView(
+    LoginRequiredMixin,
+    SuperuserOrSystemAdminRequiredMixin,
+    View,
+):
+    def post(self, request, *args, **kwargs):
+        from .email_to_ticket import scan_single_email_step
+        mailbox_id = request.POST.get('mailbox_id')
+        step_result = scan_single_email_step(
+            actor=request.user,
+            config_id=mailbox_id if (mailbox_id and mailbox_id != 'all') else None
+        )
+        return JsonResponse(step_result)
+
+
 # System Settings views (SMTP configurations)
 class SystemSettingsView(LoginRequiredMixin, SuperuserOrSystemAdminRequiredMixin, TemplateView):
     template_name = 'tickets/settings.html'

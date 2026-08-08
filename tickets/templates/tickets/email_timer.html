@@ -18,12 +18,9 @@
             <a href="{% url 'system_settings' %}" class="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-700">
                 SMTP Settings
             </a>
-            <form method="post" action="{% url 'email_timer_run' %}">
-                {% csrf_token %}
-                <button type="submit" class="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-bold text-amber-300 hover:bg-amber-500/20">
-                    Scan now
-                </button>
-            </form>
+            <button type="button" onclick="startProgressiveEmailScan()" class="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3.5 py-2 text-xs font-bold text-amber-300 hover:bg-amber-500/20 transition-all flex items-center gap-1.5 cursor-pointer shadow-lg shadow-amber-500/5">
+                <span class="animate-pulse">⚡</span> <span>Scan now</span>
+            </button>
         </div>
     </div>
 
@@ -658,4 +655,243 @@
         </form>
     </div>
 </div>
+
+<!-- Live Progressive Email Scan Modal -->
+<div id="scanProgressModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4">
+    <div class="w-full max-w-xl rounded-2xl border border-amber-500/30 bg-slate-900 p-6 shadow-2xl space-y-5">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-4">
+            <div class="flex items-center gap-3">
+                <div class="relative flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400">
+                    <svg id="scanSpinner" class="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span id="scanDoneCheck" class="hidden text-emerald-400 text-lg font-bold">✓</span>
+                </div>
+                <div>
+                    <h3 class="text-base font-bold text-white" id="scanModalTitle">🔍 Step-by-Step Email Scanning...</h3>
+                    <p class="text-xs text-slate-400" id="scanModalSub">Processing emails one by one to prevent timeouts</p>
+                </div>
+            </div>
+            <button id="scanCloseBtn" type="button" onclick="closeScanModal()" class="hidden rounded-lg bg-slate-800 px-3.5 py-1.5 text-xs font-bold text-slate-200 hover:bg-slate-700 transition-all border border-slate-700 cursor-pointer">
+                Close & Refresh 🔄
+            </button>
+        </div>
+
+        <!-- Progress Bar -->
+        <div class="space-y-1.5">
+            <div class="flex justify-between text-xs">
+                <span class="text-slate-400" id="scanProgressText">Progress: 0 / 0 emails</span>
+                <span class="font-bold text-amber-400" id="scanPercentText">0%</span>
+            </div>
+            <div class="h-3 w-full overflow-hidden rounded-full bg-slate-800 p-0.5 border border-slate-700">
+                <div id="scanProgressBar" class="h-full rounded-full bg-gradient-to-r from-amber-500 via-indigo-500 to-emerald-500 transition-all duration-300" style="width: 0%"></div>
+            </div>
+        </div>
+
+        <!-- Live Current Email Processing Card -->
+        <div class="rounded-xl border border-slate-800 bg-slate-950/60 p-4 space-y-2 text-xs">
+            <div class="flex items-center justify-between text-slate-400 border-b border-slate-800/80 pb-2">
+                <span class="font-bold tracking-wider text-[10px] uppercase text-slate-400">📩 CURRENT EMAIL PROCESSING</span>
+                <span id="scanMailboxBadge" class="rounded bg-indigo-500/20 px-2 py-0.5 text-[10px] font-semibold text-indigo-300">-</span>
+            </div>
+            <div class="font-semibold text-white truncate text-sm" id="scanCurrentSubject">Preparing inbox scan...</div>
+            <div class="text-slate-400 truncate" id="scanCurrentSender">Checking for unseen messages</div>
+        </div>
+
+        <!-- Live Summary Stats Grid -->
+        <div class="grid grid-cols-4 gap-2 text-center text-xs">
+            <div class="rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-2">
+                <div class="text-[10px] uppercase text-emerald-400 font-bold">Imported</div>
+                <div class="text-base font-bold text-white" id="scanStatImported">0</div>
+            </div>
+            <div class="rounded-lg border border-amber-500/20 bg-amber-500/10 p-2">
+                <div class="text-[10px] uppercase text-amber-400 font-bold">Pending</div>
+                <div class="text-base font-bold text-white" id="scanStatPending">0</div>
+            </div>
+            <div class="rounded-lg border border-slate-500/20 bg-slate-500/10 p-2">
+                <div class="text-[10px] uppercase text-slate-400 font-bold">Skipped</div>
+                <div class="text-base font-bold text-white" id="scanStatSkipped">0</div>
+            </div>
+            <div class="rounded-lg border border-rose-500/20 bg-rose-500/10 p-2">
+                <div class="text-[10px] uppercase text-rose-400 font-bold">Failed</div>
+                <div class="text-base font-bold text-white" id="scanStatFailed">0</div>
+            </div>
+        </div>
+
+        <!-- Status Log Box -->
+        <div id="scanLogBox" class="h-28 overflow-y-auto rounded-lg border border-slate-800 bg-slate-950 p-2.5 font-mono text-[11px] text-slate-300 space-y-1">
+            <div class="text-slate-500">> Initializing step-by-step scanner...</div>
+        </div>
+    </div>
+</div>
+
+<script>
+let isScanning = false;
+let totalImported = 0;
+let totalPending = 0;
+let totalSkipped = 0;
+let totalFailed = 0;
+let totalProcessed = 0;
+let totalUnseen = 0;
+
+async function startProgressiveEmailScan() {
+    if (isScanning) return;
+    isScanning = true;
+
+    const modal = document.getElementById('scanProgressModal');
+    const spinner = document.getElementById('scanSpinner');
+    const doneCheck = document.getElementById('scanDoneCheck');
+    const closeBtn = document.getElementById('scanCloseBtn');
+    const modalTitle = document.getElementById('scanModalTitle');
+    const modalSub = document.getElementById('scanModalSub');
+    const logBox = document.getElementById('scanLogBox');
+
+    modal.classList.remove('hidden');
+    spinner.classList.remove('hidden');
+    doneCheck.classList.add('hidden');
+    closeBtn.classList.add('hidden');
+    modalTitle.innerText = "🔍 Step-by-Step Email Scanning...";
+    modalSub.innerText = "Processing emails one by one to prevent timeouts";
+    logBox.innerHTML = '<div class="text-slate-500">> Starting scanner...</div>';
+
+    totalImported = 0;
+    totalPending = 0;
+    totalSkipped = 0;
+    totalFailed = 0;
+    totalProcessed = 0;
+    totalUnseen = 0;
+
+    updateProgress(0, 0, 0);
+    updateScanStats();
+    document.getElementById('scanCurrentSubject').innerText = "Connecting to IMAP mailboxes...";
+    document.getElementById('scanCurrentSender').innerText = "Querying unseen emails...";
+    document.getElementById('scanMailboxBadge').innerText = "-";
+
+    logMessage("Connected to server. Fetching first batch...");
+
+    const csrfToken = '{{ csrf_token }}';
+    const scanStepUrl = "{% url 'email_timer_scan_step' %}";
+
+    try {
+        let completed = false;
+        let stepCount = 0;
+
+        while (!completed) {
+            stepCount++;
+            const formData = new FormData();
+            formData.append('csrfmiddlewaretoken', csrfToken);
+
+            const response = await fetch(scanStepUrl, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrfToken,
+                },
+                body: formData
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: Failed to reach scan endpoint`);
+            }
+
+            const data = await response.json();
+
+            if (data.total_unseen && totalUnseen === 0) {
+                totalUnseen = data.total_unseen;
+            }
+
+            if (data.processed > 0) {
+                totalProcessed += data.processed;
+                totalImported += data.imported || 0;
+                totalPending += data.pending || 0;
+                totalSkipped += data.skipped || 0;
+                totalFailed += data.failed || 0;
+
+                const subject = data.last_subject || "(No subject)";
+                const sender = data.last_sender || "-";
+                const mailbox = data.mailbox_name || "IMAP";
+
+                document.getElementById('scanCurrentSubject').innerText = subject;
+                document.getElementById('scanCurrentSender').innerText = sender;
+                document.getElementById('scanMailboxBadge').innerText = mailbox;
+
+                let actionTag = "Processed";
+                if (data.imported > 0) actionTag = "Created Ticket";
+                else if (data.pending > 0) actionTag = "Queued Approval";
+                else if (data.skipped > 0) actionTag = "Skipped";
+
+                logMessage(`[${actionTag}] "${subject}" (${sender})`);
+            }
+
+            updateScanStats();
+
+            if (totalUnseen > 0) {
+                const percent = Math.min(100, Math.round((totalProcessed / totalUnseen) * 100));
+                updateProgress(totalProcessed, totalUnseen, percent);
+            }
+
+            if (data.completed) {
+                completed = true;
+            }
+
+            // Short pause between steps
+            await new Promise(r => setTimeout(r, 200));
+        }
+
+        // Complete UI
+        spinner.classList.add('hidden');
+        doneCheck.classList.remove('hidden');
+        closeBtn.classList.remove('hidden');
+        modalTitle.innerText = "✅ Scan Finished Successfully!";
+        modalSub.innerText = `All emails in inbox processed cleanly (${totalProcessed} total).`;
+
+        if (totalUnseen === 0 && totalProcessed === 0) {
+            updateProgress(0, 0, 100);
+            document.getElementById('scanProgressText').innerText = "No unseen emails in mailbox.";
+            document.getElementById('scanCurrentSubject').innerText = "Inbox is completely up to date.";
+            document.getElementById('scanCurrentSender').innerText = "0 new emails to import.";
+            logMessage("🎉 Inbox scan complete. No new unseen emails found.");
+        } else {
+            updateProgress(totalProcessed, totalUnseen || totalProcessed, 100);
+            logMessage(`🎉 Finished scanning! Total: ${totalProcessed} email(s) processed.`);
+        }
+
+    } catch (err) {
+        console.error("Progressive email scan failed:", err);
+        spinner.classList.add('hidden');
+        closeBtn.classList.remove('hidden');
+        modalTitle.innerText = "❌ Scan Error";
+        modalSub.innerText = err.message || "Connection error during email scan.";
+        logMessage(`❌ ERROR: ${err.message || err}`);
+    } finally {
+        isScanning = false;
+    }
+}
+
+function updateProgress(processed, total, percent) {
+    document.getElementById('scanProgressText').innerText = `Progress: ${processed} / ${total} emails`;
+    document.getElementById('scanPercentText').innerText = `${percent}%`;
+    document.getElementById('scanProgressBar').style.width = `${percent}%`;
+}
+
+function updateScanStats() {
+    document.getElementById('scanStatImported').innerText = totalImported;
+    document.getElementById('scanStatPending').innerText = totalPending;
+    document.getElementById('scanStatSkipped').innerText = totalSkipped;
+    document.getElementById('scanStatFailed').innerText = totalFailed;
+}
+
+function logMessage(msg) {
+    const logBox = document.getElementById('scanLogBox');
+    const div = document.createElement('div');
+    div.innerText = `> ${msg}`;
+    logBox.appendChild(div);
+    logBox.scrollTop = logBox.scrollHeight;
+}
+
+function closeScanModal() {
+    document.getElementById('scanProgressModal').classList.add('hidden');
+    window.location.reload();
+}
+</script>
 {% endblock %}

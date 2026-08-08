@@ -502,16 +502,19 @@ def _imap_since_date(days_back):
     return f'{target.day:02d}-{months[target.month]}-{target.year}'
 
 
-def import_email_to_tickets(config):
+def import_email_to_tickets(config, max_count=None):
     result = {
         'success': False,
         'found': 0,
+        'total_unseen': 0,
         'pending': 0,
         'imported': 0,
         'skipped': 0,
         'duplicates': 0,
         'failed': 0,
         'error': '',
+        'last_subject': '',
+        'last_sender': '',
     }
     now = timezone.now()
     SMTPConfiguration.objects.filter(pk=config.pk).update(last_inbound_check_at=now)
@@ -532,8 +535,11 @@ def import_email_to_tickets(config):
         if status != 'OK':
             raise RuntimeError('IMAP search failed.')
         uids = (payload[0] or b'').split()
+        result['total_unseen'] = len(uids)
         if len(uids) > config.max_emails_per_fetch:
             uids = uids[-config.max_emails_per_fetch:]
+        if max_count is not None and max_count > 0:
+            uids = uids[:max_count]
         result['found'] = len(uids)
 
         for uid in uids:
@@ -577,6 +583,8 @@ def import_email_to_tickets(config):
                 if not raw_email:
                     raise RuntimeError('IMAP message body was empty.')
                 message = _parse_message(uid, raw_email)
+                result['last_subject'] = message.subject
+                result['last_sender'] = message.sender_email
 
                 existing = InboundEmailReceipt.objects.filter(
                     smtp_configuration=config,
@@ -724,3 +732,92 @@ def import_all_active_email_to_ticket_configs():
     for config in configs:
         results.append((config, import_email_to_tickets(config)))
     return results
+
+
+def scan_single_email_step(*, actor=None, config_id=None):
+    """
+    Scans and processes 1 email at a time to prevent worker timeouts and enable real-time UI progress updates.
+    """
+    configs = SMTPConfiguration.objects.filter(
+        is_active=True,
+        feature_scope__in=[
+            SMTPConfiguration.FEATURE_EMAIL_TO_TICKET,
+            SMTPConfiguration.FEATURE_BOTH,
+        ],
+    ).select_related(
+        'email_to_ticket_company',
+        'email_to_ticket_creator',
+        'email_to_ticket_assignee',
+    )
+    if config_id:
+        configs = configs.filter(pk=config_id)
+
+    if not configs.exists():
+        return {
+            'completed': True,
+            'processed': 0,
+            'remaining': 0,
+            'total_unseen': 0,
+            'imported': 0,
+            'pending': 0,
+            'skipped': 0,
+            'duplicates': 0,
+            'failed': 0,
+            'mailbox_name': '',
+            'last_subject': '',
+            'last_sender': '',
+            'message': 'No active mailboxes configured.',
+        }
+
+    total_unseen_all = 0
+    step_result = None
+    target_config = None
+
+    for config in configs:
+        res = import_email_to_tickets(config, max_count=1)
+        unseen_cnt = res.get('total_unseen', 0)
+        total_unseen_all += unseen_cnt
+        if step_result is None and (
+            res.get('imported', 0) > 0
+            or res.get('pending', 0) > 0
+            or res.get('skipped', 0) > 0
+            or res.get('duplicates', 0) > 0
+            or res.get('failed', 0) > 0
+        ):
+            step_result = res
+            target_config = config
+
+    if step_result is None:
+        return {
+            'completed': True,
+            'processed': 0,
+            'remaining': 0,
+            'total_unseen': total_unseen_all,
+            'imported': 0,
+            'pending': 0,
+            'skipped': 0,
+            'failed': 0,
+            'mailbox_name': '',
+            'last_subject': '',
+            'last_sender': '',
+            'message': 'Scan complete. No unseen emails remaining.',
+        }
+
+    remaining = max(0, total_unseen_all - 1)
+    completed = remaining == 0
+
+    return {
+        'completed': completed,
+        'processed': 1,
+        'remaining': remaining,
+        'total_unseen': total_unseen_all,
+        'imported': step_result.get('imported', 0),
+        'pending': step_result.get('pending', 0),
+        'skipped': step_result.get('skipped', 0),
+        'duplicates': step_result.get('duplicates', 0),
+        'failed': step_result.get('failed', 0),
+        'mailbox_name': target_config.name if target_config else '',
+        'last_subject': step_result.get('last_subject', ''),
+        'last_sender': step_result.get('last_sender', ''),
+        'message': f"Scanned: {step_result.get('last_subject', '(No subject)')}",
+    }
