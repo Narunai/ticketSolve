@@ -87,6 +87,7 @@ When working on this project, consult these reference documents as needed:
 | `references/deployment.md` | Deploying changes to the VPS, service management |
 | `references/coding-patterns.md` | Writing templates, handling forms, i18n, permissions |
 | `references/database-schema.md` | Understanding models, relationships, field choices |
+| `references/risk-analysis.md` | Security risk factors, controls, and mitigation roadmap |
 
 ## Common Mistakes
 
