@@ -55,7 +55,7 @@ ticketSolve/
 │   ├── nginx.conf          # Nginx reverse proxy config
 │   ├── gunicorn.service    # Django systemd service
 │   └── *.service/*.timer   # Background worker services
-├── db.sqlite3              # Django database
+├── PostgreSQL 16           # Django main database (ticketsolve_db on Docker local & AWS Lightsail VPS)
 ├── requirements.txt        # Python dependencies
 └── LightsailDefaultKey-ap-southeast-1.pem  # SSH key
 ```

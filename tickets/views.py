@@ -2084,11 +2084,16 @@ class ResendEmailView(LoginRequiredMixin, SystemStaffRequiredMixin, View):
         sent_count = 0
         err_msg = ""
         try:
+            # Clean up message body lines for resend paragraph building if needed
+            clean_paragraphs = [
+                line.strip() for line in email_log.message.split('\n')
+                if line.strip() and not line.startswith(('Dear ', 'Regards,', 'TicketSolve Service Desk', 'This is an automated', 'Details'))
+            ]
             _, resend_html = build_formal_email(
                 heading=email_log.subject.removeprefix('[TicketSolve] ').strip(),
                 greeting='Dear Recipient,',
-                introduction='This TicketSolve notification is being resent following an earlier delivery failure.',
-                paragraphs=[email_log.message],
+                introduction='This notification is being resent following an earlier delivery attempt.',
+                paragraphs=clean_paragraphs if clean_paragraphs else [email_log.message],
                 notice='This is a resent service notification. Please retain it according to your organization\'s information-handling requirements.',
             )
             email = EmailMultiAlternatives(
