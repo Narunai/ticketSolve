@@ -500,7 +500,7 @@
     <main class="flex-1 flex flex-col min-w-0 overflow-y-auto">
         <!-- Top bar (only if logged in) -->
         {% if user.is_authenticated %}
-        <header class="h-13 px-5 border-b border-slate-800/80 flex items-center justify-between shrink-0 glass-panel relative z-20 md:bg-transparent md:border-b-0 md:backdrop-filter-none">
+        <header class="h-16 px-6 pt-3.5 pb-2 border-b border-slate-800/80 flex items-center justify-between shrink-0 glass-panel relative z-20 md:bg-transparent md:border-b-0 md:backdrop-filter-none">
             <div class="flex items-center gap-3">
                 <h1 class="text-base font-bold text-white tracking-tight">{% block header_title %}{{ t.dashboard }}{% endblock %}</h1>
             </div>
