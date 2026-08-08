@@ -274,3 +274,25 @@ MEDIA_ROOT = BASE_DIR / 'media'
 # threshold are streamed to a temporary file by Django.
 DATA_UPLOAD_MAX_MEMORY_SIZE = 60 * 1024 * 1024
 FILE_UPLOAD_MAX_MEMORY_SIZE = 2_621_440
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'WARNING',
+    },
+    'loggers': {
+        'django.request': {
+            'handlers': ['console'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+    },
+}
+
