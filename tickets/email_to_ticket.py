@@ -616,19 +616,45 @@ def import_email_to_tickets(config):
                         _mark_seen(client, uid)
                     continue
 
-                receipt, skipped_attachments = _queue_email_for_approval(
-                    config,
-                    message,
-                    matched_keywords=matched,
-                )
-                result['pending'] += 1
-                logger.info(
-                    "Queued IMAP message %s for approval as receipt #%s (keywords=%s, skipped_attachments=%s)",
-                    message.message_id,
-                    receipt.pk,
-                    ','.join(matched),
-                    len(skipped_attachments),
-                )
+                sender_email_clean = (message.sender_email or '').strip().casefold()
+                has_routing_rule = config.inbound_routing_rules.filter(
+                    is_active=True,
+                    sender_email__iexact=sender_email_clean,
+                    assignee__is_active=True,
+                ).exists()
+                is_known_contact = InboundEmailContact.objects.filter(
+                    smtp_configuration=config,
+                    email__iexact=sender_email_clean
+                ).exists()
+                from .models import CustomUser
+                is_registered_user = CustomUser.objects.filter(
+                    email__iexact=sender_email_clean
+                ).exists()
+
+                if has_routing_rule or is_known_contact or is_registered_user:
+                    ticket, skipped_attachments = _create_ticket(
+                        config,
+                        message,
+                        matched_keywords=matched,
+                    )
+                    result['imported'] += 1
+                    logger.info(
+                        "Auto-imported IMAP message %s directly as Ticket #%s (known contact/rule)",
+                        message.message_id,
+                        ticket.pk,
+                    )
+                else:
+                    receipt, skipped_attachments = _queue_email_for_approval(
+                        config,
+                        message,
+                        matched_keywords=matched,
+                    )
+                    result['pending'] += 1
+                    logger.info(
+                        "Queued IMAP message %s for approval as receipt #%s (new contact)",
+                        message.message_id,
+                        receipt.pk,
+                    )
                 if config.mark_processed_as_read:
                     _mark_seen(client, uid)
             except Exception as exc:

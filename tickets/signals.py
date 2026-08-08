@@ -64,6 +64,7 @@ def log_and_send_email(subject, message, recipient_list, action_type, ticket=Non
         if not should_send_email_notification(email, ticket=ticket, event_type=action_type, new_status=new_status):
             print(f"[Notification Filtered] Skipped email to {email} based on notification rules.")
             EmailLog.objects.create(
+                ticket=ticket,
                 recipient=email,
                 recipient_type=EmailLog.RECIPIENT_TO,
                 delivery_group=delivery_group,
@@ -95,6 +96,7 @@ def log_and_send_email(subject, message, recipient_list, action_type, ticket=Non
             sent_count = 0
 
         EmailLog.objects.create(
+            ticket=ticket,
             recipient=email,
             recipient_type=EmailLog.RECIPIENT_TO,
             delivery_group=delivery_group,
@@ -285,6 +287,9 @@ def send_ticket_notifications(sender, instance, created, **kwargs):
             
         if instance.assigned_to and instance.assigned_to.email:
             recipients.add(instance.assigned_to.email)
+
+        if is_email_ticket and email_source.get('sender_email'):
+            recipients.add(email_source['sender_email'])
 
         client_admins = CustomUser.objects.filter(company=instance.company, role=CustomUser.CLIENT_ADMIN)
         for admin in client_admins:
