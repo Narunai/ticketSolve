@@ -8,7 +8,7 @@ from django.views.generic import CreateView, UpdateView, DetailView, TemplateVie
 from django.urls import reverse, reverse_lazy
 
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.http import FileResponse, JsonResponse
+from django.http import FileResponse, JsonResponse, HttpResponse
 from django.views.decorators.http import require_POST
 from .models import Ticket, CustomUser, Company, EmailLog, TicketAuditLog, SecurityAuditLog, ReportViewLog, MonthlyReportSchedule, TicketAutomationConfig, SMTPConfiguration, InboundEmailReceipt, InboundEmailAttachment, InboundEmailContact, InboundEmailRoutingRule, EmailToTicketSchedule, EmailToTicketRunLog, InAppNotification, get_smtp_connection, get_smtp_from_email, TicketComment, TicketAttachment, CommentAttachment, TicketCategory, ResolutionCategory, ModuleCategory, TicketStatusConfig, CompanyTicketConfig, CompanyTicketField, NotificationConfig, should_send_email_notification, BackupLog, BackupSchedule
 from .backup_service import perform_full_backup, perform_incremental_backup, perform_system_data_backup, get_backup_file_path, FileLock
@@ -1266,6 +1266,10 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         # Query Parameter Filtering
         status_filter = self.request.GET.get('status')
         priority_filter = self.request.GET.get('priority')
+        search_query = self.request.GET.get('q', '').strip()
+        category_filter = self.request.GET.get('category_id')
+        company_filter = self.request.GET.get('company_id')
+        assigned_filter = self.request.GET.get('assigned_to_id')
 
         filtered_tickets = tickets
         valid_statuses = [
@@ -1284,9 +1288,37 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             filtered_tickets = filtered_tickets.filter(priority=priority_filter)
             context['selected_priority'] = priority_filter
 
+        if search_query:
+            from django.db.models import Q
+            id_match = int(search_query.lstrip('#')) if search_query.lstrip('#').isdigit() else None
+            search_condition = Q(title__icontains=search_query) | Q(description__icontains=search_query)
+            if id_match:
+                search_condition |= Q(id=id_match)
+            filtered_tickets = filtered_tickets.filter(search_condition)
+            context['search_query'] = search_query
+
+        if category_filter and category_filter.isdigit():
+            filtered_tickets = filtered_tickets.filter(ticket_category_id=int(category_filter))
+            context['selected_category_id'] = int(category_filter)
+
+        if company_filter and company_filter.isdigit():
+            filtered_tickets = filtered_tickets.filter(company_id=int(company_filter))
+            context['selected_company_id'] = int(company_filter)
+
+        if assigned_filter:
+            if assigned_filter == 'unassigned':
+                filtered_tickets = filtered_tickets.filter(assigned_to=None)
+                context['selected_assigned_to_id'] = 'unassigned'
+            elif assigned_filter.isdigit():
+                filtered_tickets = filtered_tickets.filter(assigned_to_id=int(assigned_filter))
+                context['selected_assigned_to_id'] = int(assigned_filter)
+
         context['latest_tickets'] = filtered_tickets.order_by('-created_at')[:5]
         context['users_count'] = users.count()
         context['companies_count'] = companies.count()
+        context['categories'] = TicketCategory.objects.filter(is_active=True)
+        context['companies'] = companies
+        context['assignees'] = users
         
         context['tickets'] = filtered_tickets.order_by('-created_at')
         return context
@@ -2361,7 +2393,7 @@ def _email_logs_for_user(user):
 
 
 def _is_filtered_email_log(log):
-    return 'Filtered' in log.error_message or 'ข้ามการส่ง' in log.error_message
+    return 'Filtered' in log.error_message or 'Filtered out' in log.error_message
 
 
 def _build_email_log_group(logs):
@@ -2864,7 +2896,7 @@ class GeneratePDFReportView(LoginRequiredMixin, AdminRequiredMixin, View):
             filename = f"Monthly_Report_{context['company_name']}.pdf"
             response['Content-Disposition'] = f'inline; filename="{filename}"'
             return response
-        return HttpResponse("เกิดข้อผิดพลาดในการสร้างไฟล์ PDF", status=500)
+        return HttpResponse("An error occurred while generating the PDF file.", status=500)
 
 # View to generate and send PDF report via email immediately (to entire company or to a specific individual)
 class SendMonthlyReportView(LoginRequiredMixin, AdminRequiredMixin, View):
@@ -2882,7 +2914,7 @@ class SendMonthlyReportView(LoginRequiredMixin, AdminRequiredMixin, View):
         pdf_bytes = generate_pdf('tickets/report_pdf_template.html', context)
 
         if not pdf_bytes:
-            messages.error(request, "เกิดข้อผิดพลาดในการสร้างไฟล์รายงาน PDF")
+            messages.error(request, "An error occurred while generating the PDF report file.")
             return redirect('monthly_report')
 
         # Resolve recipient users list based on company and recipient_user_id parameter
@@ -2896,11 +2928,11 @@ class SendMonthlyReportView(LoginRequiredMixin, AdminRequiredMixin, View):
         if recipient_user_id:
             recipients = recipients.filter(id=recipient_user_id)
             if not recipients.exists():
-                messages.error(request, "ไม่พบผู้ใช้ปลายทางที่ระบุ")
+                messages.error(request, "Specified recipient user was not found.")
                 return redirect('monthly_report')
-            target_label = f"ผู้ใช้ {recipients.first().username}"
+            target_label = f"User {recipients.first().username}"
         else:
-            target_label = f"ทุกคนใน {context['company_name']}"
+            target_label = f"Everyone in {context['company_name']}"
 
         recipient_emails = list(recipients.exclude(email='').values_list('email', flat=True))
         cc_emails = list(
@@ -2909,7 +2941,7 @@ class SendMonthlyReportView(LoginRequiredMixin, AdminRequiredMixin, View):
         cc_emails = list(dict.fromkeys(email for email in cc_emails if email not in recipient_emails))
 
         if not recipient_emails:
-            messages.error(request, f"ไม่พบอีเมลผู้ใช้งานของ {target_label} สำหรับการจัดส่งรายงาน")
+            messages.error(request, f"No email address found for {target_label} to deliver report.")
             return redirect('monthly_report')
 
         subject, body, html_body = _monthly_report_email_content(context)
@@ -4356,7 +4388,10 @@ class DownloadBackupView(LoginRequiredMixin, SystemStaffRequiredMixin, View):
             messages.error(request, f"Backup file '{log.filename}' is not available on server for download.")
             return redirect('backup_list')
 
-        response = FileResponse(open(file_path, 'rb'), as_attachment=True, filename=log.filename)
+        with open(file_path, 'rb') as f:
+            file_data = f.read()
+        response = HttpResponse(file_data, content_type='application/octet-stream')
+        response['Content-Disposition'] = f'attachment; filename="{log.filename}"'
         return response
 
 

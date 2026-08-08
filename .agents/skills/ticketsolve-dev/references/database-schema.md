@@ -2,7 +2,20 @@
 
 All models are in `tickets/models.py` (1746 lines, 30+ models).
 
-## Core Models
+## Database Engine Configuration (Dual-Engine)
+
+The project supports both PostgreSQL 16+ (Production High-Concurrency) and SQLite3 (Local Development) via environment variables in `ticket_system/settings.py`:
+
+- `DB_ENGINE`: `postgresql` or `sqlite` (Default: `postgresql` in production, `sqlite` in development)
+- `DB_NAME`: Database name (e.g. `ticketsolve_db`)
+- `DB_USER`: Database user (e.g. `ticketsolve_user`)
+- `DB_PASSWORD`: Database password
+- `DB_HOST`: Host address (e.g. `localhost` or RDS Endpoint)
+- `DB_PORT`: Database port (e.g. `5432`)
+- `DB_SSLMODE`: SSL mode (e.g. `prefer` or `require`)
+- `DB_CONN_MAX_AGE`: Connection Pooling age in seconds (Default: 600)
+
+Backup functionality (`tickets/backup_service.py`) automatically adapts between PostgreSQL JSON dump (`call_command('dumpdata')`) and SQLite Online Backup API.
 
 ### Company (Line 11)
 

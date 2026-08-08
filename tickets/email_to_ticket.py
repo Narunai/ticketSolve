@@ -409,7 +409,7 @@ def _create_ticket(config, message, matched_keywords=None, decided_by=None):
 
 def approve_inbound_email(receipt_id, actor):
     with transaction.atomic():
-        receipt = InboundEmailReceipt.objects.select_for_update().select_related(
+        receipt = InboundEmailReceipt.objects.select_for_update(of=('self',)).select_related(
             'smtp_configuration',
         ).get(pk=receipt_id)
         if receipt.status != InboundEmailReceipt.STATUS_PENDING:

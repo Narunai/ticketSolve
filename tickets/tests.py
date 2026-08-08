@@ -17,7 +17,21 @@ from .admin import CustomUserAdmin, TicketAdmin
 User = get_user_model()
 
 class MultiTenantTicketTests(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        from unittest import mock
+        cls._close_old_conn_patch = mock.patch('django.db.close_old_connections', lambda: None)
+        cls._close_old_conn_patch.start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._close_old_conn_patch.stop()
+        super().tearDownClass()
+
     def setUp(self):
+        connection.max_age = None
+        connection.is_usable = lambda: True
         # 1. Create Companies
         self.company_a = Company.objects.create(name="Company A")
         self.company_b = Company.objects.create(name="Company B")
@@ -752,11 +766,11 @@ class MultiTenantTicketTests(TestCase):
         self.assertTrue(config2.is_active)
         
         # Verify connection and from_email are resolved dynamically
-        connection = get_smtp_connection()
-        self.assertIsNotNone(connection)
-        self.assertEqual(connection.host, "smtp.office365.com")
-        self.assertEqual(connection.port, 587)
-        self.assertEqual(connection.username, "narunai@company.com")
+        smtp_conn = get_smtp_connection()
+        self.assertIsNotNone(smtp_conn)
+        self.assertEqual(smtp_conn.host, "smtp.office365.com")
+        self.assertEqual(smtp_conn.port, 587)
+        self.assertEqual(smtp_conn.username, "narunai@company.com")
         
         from_email = get_smtp_from_email("default@test.com")
         self.assertEqual(from_email, "narunai@company.com")
@@ -2123,7 +2137,11 @@ class MultiTenantTicketTests(TestCase):
         log_to_download = BackupLog.objects.first()
         dl_res = self.client.get(reverse('backup_download', args=[log_to_download.id]))
         self.assertIn(dl_res.status_code, [200, 302])
-        dl_res.close()
+        if hasattr(dl_res, 'file_to_stream') and dl_res.file_to_stream and not dl_res.file_to_stream.closed:
+            dl_res.file_to_stream.close()
+        del dl_res
+        import gc; gc.collect()
+        connection.ensure_connection()
 
         # 5. Test Delete Backup Log View
         log_to_delete = BackupLog.objects.first()
@@ -2237,10 +2255,10 @@ class MultiTenantTicketTests(TestCase):
 
         with tempfile.TemporaryDirectory() as base_dir, tempfile.TemporaryDirectory() as backup_dir:
             source_db = os.path.join(base_dir, 'db.sqlite3')
-            connection = sqlite3.connect(source_db)
+            raw_sqlite_conn = sqlite3.connect(source_db)
             try:
-                connection.execute('PRAGMA foreign_keys = ON')
-                connection.executescript(
+                raw_sqlite_conn.execute('PRAGMA foreign_keys = ON')
+                raw_sqlite_conn.executescript(
                     '''
                     CREATE TABLE tickets_company (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2282,11 +2300,14 @@ class MultiTenantTicketTests(TestCase):
                     INSERT INTO tickets_inboundemailreceipt(ticket_id, subject) VALUES (1, 'Preserved log');
                     '''
                 )
-                connection.commit()
+                raw_sqlite_conn.commit()
             finally:
-                connection.close()
+                raw_sqlite_conn.close()
 
-            with override_settings(BASE_DIR=Path(base_dir)), mock.patch(
+            with override_settings(
+                BASE_DIR=Path(base_dir),
+                DATABASES={'default': {'ENGINE': 'django.db.backends.sqlite3', 'NAME': source_db}},
+            ), mock.patch(
                 'tickets.backup_service.BACKUP_DIR',
                 backup_dir,
             ):

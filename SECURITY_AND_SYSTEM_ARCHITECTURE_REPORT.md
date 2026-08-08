@@ -170,7 +170,7 @@ Migration `0030_security_baseline` ทำสามอย่างแบบอั
 | สูง | Backup อยู่ VPS เดียวกับระบบ จึงไม่ทนต่อ disk/VPS/account failure | ทำ encrypted off-host copy ไป S3 คนละ credential/account, เปิด versioning/Object Lock และทดสอบ restore รายไตรมาส |
 | สูง | ยังไม่มี MFA สำหรับบัญชี System Admin | เพิ่ม WebAuthn/TOTP, recovery codes และบังคับ MFA สำหรับ privileged roles |
 | กลาง | CSP ยังเป็น Report-Only เพราะ template มี inline script/style และ Tailwind CDN | self-host frontend assets, ย้าย inline handlers/scripts, ใช้ nonce/hash แล้วเปลี่ยนเป็น enforcing CSP |
-| กลาง | SQLite กับหลาย Gunicorn workers/schedulers มีข้อจำกัด concurrency และ HA | ย้าย production ไป PostgreSQL พร้อม TLS, restricted DB user และ automated backup |
+| กลาง (แก้ไขแล้ว) | SQLite กับหลาย Gunicorn workers/schedulers มีข้อจำกัด concurrency และ HA | **ดำเนินการแก้ไขแล้ว**: ระบบปรับรองรับ PostgreSQL 16+ Dual-Engine via Environment Variables (`DB_ENGINE`) พร้อม Connection Pooling และ Database-Agnostic Backup Service (`tickets/backup_service.py`) |
 | กลาง | SMTP/IMAP แบบรหัสผ่านยังขึ้นกับ provider policy | ใช้ OAuth2/Google Workspace/Microsoft Graph และหมุน app password ที่ยังจำเป็น |
 | กลาง | ไม่มี malware sandbox/AV สำหรับไฟล์แนบ | เพิ่ม ClamAV หรือ object-storage scanning/quarantine ก่อนให้ดาวน์โหลด |
 | กลาง | Audit log อยู่ฐานข้อมูลเดียวและผู้มีสิทธิ์สูงอาจกระทบ evidence | ส่ง structured security logs ไป CloudWatch/SIEM แบบ append-only พร้อม alert |

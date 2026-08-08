@@ -17,6 +17,12 @@ TicketSolve is a multi-tenant IT support ticket management system built with:
 
 Production URL: `https://tikketsolve-systemoneit.uk`
 
+## Model Routing Strategy
+
+The AI development workflow for TicketSolve strictly follows model specialization:
+- **Claude Opus 4.6**: Architecture design, problem analysis, high-level planning, security auditing, and design decisions.
+- **Gemini Flash 3.6 High**: Rapid document reading, code implementation, file editing, test execution, log inspection, and general tasks.
+
 ## Quick Start
 
 ### Project Structure (Key Files)

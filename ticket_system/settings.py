@@ -120,15 +120,38 @@ TEMPLATES = [
 WSGI_APPLICATION = 'ticket_system.wsgi.application'
 
 
-# Database
-# https://docs.djangoproject.com/en/6.0/ref/settings/#databases
+# Database (Dynamic PostgreSQL & SQLite3 Configuration)
+# https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+DB_ENGINE = os.environ.get('DB_ENGINE', 'postgresql' if IS_PRODUCTION else 'sqlite').lower()
+
+if 'test' in sys.argv:
+    from django.db.backends.base.base import BaseDatabaseWrapper
+    BaseDatabaseWrapper.close_if_unusable_or_obsolete = lambda self: None
+
+if DB_ENGINE in ('postgresql', 'postgres', 'django.db.backends.postgresql'):
+    is_testing = 'test' in sys.argv
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.environ.get('DB_NAME', 'ticketsolve_db'),
+            'USER': os.environ.get('DB_USER', 'ticketsolve_user'),
+            'PASSWORD': os.environ.get('DB_PASSWORD', ''),
+            'HOST': os.environ.get('DB_HOST', '127.0.0.1'),
+            'PORT': os.environ.get('DB_PORT', '5432'),
+            'CONN_MAX_AGE': None if (is_testing or IS_PRODUCTION) else 600,
+            'OPTIONS': {
+                'sslmode': os.environ.get('DB_SSLMODE', 'prefer' if IS_PRODUCTION else 'disable'),
+            }
+        }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 
 # Password validation
@@ -230,7 +253,10 @@ EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'noreply@localhost').strip()
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '').replace(' ', '').strip()
 EMAIL_SERVICE = os.environ.get('EMAIL_SERVICE', 'smtp' if EMAIL_HOST_PASSWORD else 'console').lower()
 
-if EMAIL_SERVICE == 'smtp' and EMAIL_HOST_PASSWORD:
+if 'test' in sys.argv:
+    EMAIL_BACKEND = 'django.core.mail.backends.locmem.EmailBackend'
+    DEFAULT_FROM_EMAIL = f"TicketSolve Support <{EMAIL_HOST_USER}>"
+elif EMAIL_SERVICE == 'smtp' and EMAIL_HOST_PASSWORD:
     EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
     EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
     EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 587))

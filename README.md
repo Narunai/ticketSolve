@@ -2,22 +2,26 @@
 
 **TicketSolve** คือระบบบริหารจัดการตั๋วแจ้งซ่อมและสนับสนุนงานบริการ IT (IT Service Desk & Support Ticket Management System) ในรูปแบบ Multi-Tenant รองรับการทำงานหลายบริษัทในระบบเดียว มีระบบสิทธิ์การใช้งาน 5 ระดับ, ระบบปรับแต่งฟิลด์และหน้าตาตามบริษัท, ระบบแจ้งเตือนทางอีเมลพร้อมสถิติการส่ง, ระบบนำอีเมลเข้าเป็น Ticket, ระบบย้ายสถานะอัตโนมัติ (Status Automation), ระบบรายงานประจำเดือน PDF, และระบบสำรองข้อมูลอัตโนมัติบน AWS VPS ทุก 2 ชั่วโมง
 
-**อัปเดตล่าสุด**: 2 สิงหาคม 2026
+**อัปเดตล่าสุด**: 8 สิงหาคม 2026
 
 > เอกสารภาพรวมสถาปัตยกรรม การควบคุมความปลอดภัย ผลการแก้ไข และแผนผังระบบ:
 > [SECURITY_AND_SYSTEM_ARCHITECTURE_REPORT.md](SECURITY_AND_SYSTEM_ARCHITECTURE_REPORT.md)
+> 
+> เอกสารวิเคราะห์ความเสี่ยงสำคัญและแผนยกระดับความปลอดภัย:
+> [RISK_ANALYSIS_AND_MITIGATION_PLAN.md](RISK_ANALYSIS_AND_MITIGATION_PLAN.md)
 
 ---
 
 ## 🏗️ 1. เทคโนโลยีและสถาปัตยกรรมระบบ (Tech Stack & Architecture)
 
 * **Backend**: Python 3.12+, Django 5.x
-* **Database**: SQLite3 พร้อม SQLite Online Backup API
+* **Database**: Dynamic Dual-Engine (PostgreSQL 16+ Enterprise High-Concurrency / SQLite3 Local & Development)
+* **AI Integration**: Google Gemini API via `google-genai` (Integrated AI Support Chatbot & Admin Panel at `/chatbot-admin/`)
 * **Frontend**: HTML5, Vanilla CSS + Tailwind CSS (Glassmorphism Dark & Light Theme UI)
 * **Web Server & WSGI**: Nginx + Gunicorn
 * **PDF Engine**: xhtml2pdf (HTML/CSS to PDF Engine)
 * **Background Scheduler**: Systemd Service & Timer (`ticketsolve-scheduler`)
-* **Backup Storage**: AWS VPS filesystem (`/var/backups/ticketsolve`)
+* **Backup Storage**: Database-agnostic Backup Service (PostgreSQL Data Dump & SQLite Online Backup API) stored at AWS VPS filesystem (`/var/backups/ticketsolve`)
 
 ---
 

@@ -8,7 +8,9 @@ import zipfile
 from datetime import timedelta
 from django.utils import timezone
 from django.conf import settings
+from django.db import connection, models
 from django.db.models import Q
+from django.core.management import call_command
 
 from .models import BackupLog, Ticket, TicketComment
 
@@ -111,9 +113,14 @@ class FileLock:
         self.release()
 
 
+def is_postgresql_backend():
+    engine = settings.DATABASES.get('default', {}).get('ENGINE', '')
+    return 'postgresql' in engine or 'postgres' in engine
+
+
 def perform_full_backup():
     """
-    Creates a full backup of db.sqlite3 (via SQLite Online Backup API) and media.
+    Creates a full backup of the database (via PostgreSQL dump or SQLite Online Backup API) and media.
     Waits for active locks/queues (up to 60s) before execution.
     Saves to BACKUP_DIR on the AWS VPS for authorized local download.
     """
@@ -122,43 +129,60 @@ def perform_full_backup():
     archive_name = f"full_backup_{now_str}.tar.gz"
     backup_filepath = os.path.join(BACKUP_DIR, archive_name)
     temp_db_path = os.path.join(BACKUP_DIR, f"temp_db_{now_str}.sqlite3")
+    temp_json_path = os.path.join(BACKUP_DIR, f"temp_dump_{now_str}.json")
 
     with FileLock("system_backup.lock", timeout=60):
         try:
-            # 1. Perform safe online SQLite backup to temp_db_path to prevent WAL corruption
-            db_path = os.path.join(settings.BASE_DIR, "db.sqlite3")
-            if os.path.exists(db_path):
-                src_conn = sqlite3.connect(db_path)
-                dst_conn = sqlite3.connect(temp_db_path)
-                with dst_conn:
-                    src_conn.backup(dst_conn, pages=100, sleep=0.01)
-                dst_conn.close()
-                src_conn.close()
+            is_pg = is_postgresql_backend()
 
-            # 2. Package the database and media. Runtime secrets are kept
-            # outside application backups.
+            if is_pg:
+                # PostgreSQL Backup: Export full dataset to structured JSON dump
+                orig_close = connection.close
+                connection.close = lambda: None
+                try:
+                    with open(temp_json_path, 'w', encoding='utf-8') as f:
+                        call_command('dumpdata', database='default', indent=2, stdout=f)
+                finally:
+                    connection.close = orig_close
+                connection.ensure_connection()
+            else:
+                # SQLite Backup: Perform safe online SQLite backup to temp_db_path to prevent WAL corruption
+                db_path = os.path.join(settings.BASE_DIR, "db.sqlite3")
+                if os.path.exists(db_path):
+                    src_conn = sqlite3.connect(db_path)
+                    dst_conn = sqlite3.connect(temp_db_path)
+                    with dst_conn:
+                        src_conn.backup(dst_conn, pages=100, sleep=0.01)
+                    dst_conn.close()
+                    src_conn.close()
+
+            # Package the database and media
             with tarfile.open(backup_filepath, "w:gz") as tar:
-                if os.path.exists(temp_db_path):
+                if is_pg and os.path.exists(temp_json_path):
+                    tar.add(temp_json_path, arcname="db_dump.json")
+                elif os.path.exists(temp_db_path):
                     tar.add(temp_db_path, arcname="db.sqlite3")
-                elif os.path.exists(db_path):
-                    tar.add(db_path, arcname="db.sqlite3")
+                elif os.path.exists(os.path.join(settings.BASE_DIR, "db.sqlite3")):
+                    tar.add(os.path.join(settings.BASE_DIR, "db.sqlite3"), arcname="db.sqlite3")
 
                 media_path = os.path.join(settings.BASE_DIR, "media")
                 if os.path.exists(media_path):
                     tar.add(media_path, arcname="media")
 
-            # Clean up temporary online backup db file
-            if os.path.exists(temp_db_path):
-                try:
-                    os.remove(temp_db_path)
-                except OSError:
-                    pass
+            # Clean up temporary backup files
+            for p in (temp_db_path, temp_json_path):
+                if os.path.exists(p):
+                    try:
+                        os.remove(p)
+                    except OSError:
+                        pass
 
             file_size = os.path.getsize(backup_filepath)
             expired_count = cleanup_expired_backups()
 
+            db_type = "PostgreSQL" if is_pg else "SQLite"
             details = (
-                f"Full Backup ({file_size} bytes). Stored locally on the AWS VPS. "
+                f"Full Backup ({db_type}, {file_size} bytes). Stored locally on the AWS VPS. "
                 f"Expired local archives removed: {expired_count}."
             )
             log = BackupLog.objects.create(
@@ -170,11 +194,12 @@ def perform_full_backup():
             )
             return {"success": True, "log": log, "details": details, "file_path": backup_filepath}
         except Exception as e:
-            if os.path.exists(temp_db_path):
-                try:
-                    os.remove(temp_db_path)
-                except OSError:
-                    pass
+            for p in (temp_db_path, temp_json_path):
+                if os.path.exists(p):
+                    try:
+                        os.remove(p)
+                    except OSError:
+                        pass
             if os.path.exists(backup_filepath):
                 try:
                     os.remove(backup_filepath)
@@ -197,89 +222,111 @@ def perform_system_data_backup():
     archive_name = f"system_data_no_tickets_{now_str}.tar.gz"
     archive_path = os.path.join(BACKUP_DIR, archive_name)
     temp_db_path = os.path.join(BACKUP_DIR, f"temp_system_data_{now_str}.sqlite3")
+    temp_json_path = os.path.join(BACKUP_DIR, f"temp_system_data_{now_str}.json")
 
     with FileLock("system_backup.lock", timeout=60):
         try:
-            db_path = os.path.join(settings.BASE_DIR, "db.sqlite3")
-            if not os.path.isfile(db_path):
-                raise FileNotFoundError('The SQLite database file was not found.')
+            is_pg = is_postgresql_backend()
+            removed_ticket_count = Ticket.objects.count()
 
-            source_connection = sqlite3.connect(db_path)
-            destination_connection = sqlite3.connect(temp_db_path)
-            try:
-                with destination_connection:
-                    source_connection.backup(
-                        destination_connection,
-                        pages=100,
-                        sleep=0.01,
-                    )
-            finally:
-                destination_connection.close()
-                source_connection.close()
+            if is_pg:
+                # PostgreSQL Backup: Export system master data excluding ticket-specific models
+                excluded_models = [
+                    'tickets.ticket',
+                    'tickets.ticketcomment',
+                    'tickets.ticketattachment',
+                    'tickets.commentattachment',
+                    'tickets.ticketauditlog',
+                    'tickets.inappnotification',
+                ]
+                orig_close = connection.close
+                connection.close = lambda: None
+                try:
+                    with open(temp_json_path, 'w', encoding='utf-8') as f:
+                        call_command('dumpdata', database='default', exclude=excluded_models, indent=2, stdout=f)
+                finally:
+                    connection.close = orig_close
+                connection.ensure_connection()
+            else:
+                # SQLite Backup: Clone and sanitize SQLite database
+                db_path = os.path.join(settings.BASE_DIR, "db.sqlite3")
+                if not os.path.isfile(db_path):
+                    raise FileNotFoundError('The SQLite database file was not found.')
 
-            sanitized_connection = sqlite3.connect(temp_db_path)
-            try:
-                sanitized_connection.execute('PRAGMA foreign_keys = ON')
-                ticket_table = sanitized_connection.execute(
-                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='tickets_ticket'"
-                ).fetchone()
-                if not ticket_table:
-                    raise RuntimeError('The Ticket table was not found in the database snapshot.')
-
-                removed_ticket_count = sanitized_connection.execute(
-                    'SELECT COUNT(*) FROM tickets_ticket'
-                ).fetchone()[0]
-                table_names = {
-                    row[0]
-                    for row in sanitized_connection.execute(
-                        "SELECT name FROM sqlite_master WHERE type='table'"
-                    )
-                }
-                with sanitized_connection:
-                    # Django applies on_delete behavior through its ORM; the
-                    # generated SQLite foreign keys use NO ACTION. Reproduce
-                    # those policies explicitly in the cloned database only.
-                    if 'tickets_inboundemailreceipt' in table_names:
-                        sanitized_connection.execute(
-                            'UPDATE tickets_inboundemailreceipt SET ticket_id = NULL'
+                source_connection = sqlite3.connect(db_path)
+                destination_connection = sqlite3.connect(temp_db_path)
+                try:
+                    with destination_connection:
+                        source_connection.backup(
+                            destination_connection,
+                            pages=100,
+                            sleep=0.01,
                         )
-                    if 'tickets_inappnotification' in table_names:
-                        sanitized_connection.execute('DELETE FROM tickets_inappnotification')
-                    for dependent_table in (
-                        'tickets_commentattachment',
-                        'tickets_ticketcomment',
-                        'tickets_ticketattachment',
-                        'tickets_ticketauditlog',
-                    ):
-                        if dependent_table in table_names:
-                            sanitized_connection.execute(f'DELETE FROM {dependent_table}')
-                    sanitized_connection.execute('DELETE FROM tickets_ticket')
-                    if 'sqlite_sequence' in table_names:
-                        sanitized_connection.execute(
-                            "DELETE FROM sqlite_sequence WHERE name IN ("
-                            "'tickets_ticket', 'tickets_ticketcomment', "
-                            "'tickets_ticketattachment', 'tickets_commentattachment', "
-                            "'tickets_ticketauditlog', 'tickets_inappnotification')"
-                        )
+                finally:
+                    destination_connection.close()
+                    source_connection.close()
 
-                remaining_ticket_count = sanitized_connection.execute(
-                    'SELECT COUNT(*) FROM tickets_ticket'
-                ).fetchone()[0]
-                foreign_key_errors = sanitized_connection.execute(
-                    'PRAGMA foreign_key_check'
-                ).fetchall()
-                if remaining_ticket_count or foreign_key_errors:
-                    raise RuntimeError('Ticket data could not be removed safely from the snapshot.')
-                sanitized_connection.execute('VACUUM')
-            finally:
-                sanitized_connection.close()
+                sanitized_connection = sqlite3.connect(temp_db_path)
+                try:
+                    sanitized_connection.execute('PRAGMA foreign_keys = ON')
+                    ticket_table = sanitized_connection.execute(
+                        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='tickets_ticket'"
+                    ).fetchone()
+                    if not ticket_table:
+                        raise RuntimeError('The Ticket table was not found in the database snapshot.')
+
+                    removed_ticket_count = sanitized_connection.execute(
+                        'SELECT COUNT(*) FROM tickets_ticket'
+                    ).fetchone()[0]
+                    table_names = {
+                        row[0]
+                        for row in sanitized_connection.execute(
+                            "SELECT name FROM sqlite_master WHERE type='table'"
+                        )
+                    }
+                    with sanitized_connection:
+                        if 'tickets_inboundemailreceipt' in table_names:
+                            sanitized_connection.execute(
+                                'UPDATE tickets_inboundemailreceipt SET ticket_id = NULL'
+                            )
+                        if 'tickets_inappnotification' in table_names:
+                            sanitized_connection.execute('DELETE FROM tickets_inappnotification')
+                        for dependent_table in (
+                            'tickets_commentattachment',
+                            'tickets_ticketcomment',
+                            'tickets_ticketattachment',
+                            'tickets_ticketauditlog',
+                        ):
+                            if dependent_table in table_names:
+                                sanitized_connection.execute(f'DELETE FROM {dependent_table}')
+                        sanitized_connection.execute('DELETE FROM tickets_ticket')
+                        if 'sqlite_sequence' in table_names:
+                            sanitized_connection.execute(
+                                "DELETE FROM sqlite_sequence WHERE name IN ("
+                                "'tickets_ticket', 'tickets_ticketcomment', "
+                                "'tickets_ticketattachment', 'tickets_commentattachment', "
+                                "'tickets_ticketauditlog', 'tickets_inappnotification')"
+                            )
+
+                    remaining_ticket_count = sanitized_connection.execute(
+                        'SELECT COUNT(*) FROM tickets_ticket'
+                    ).fetchone()[0]
+                    foreign_key_errors = sanitized_connection.execute(
+                        'PRAGMA foreign_key_check'
+                    ).fetchall()
+                    if remaining_ticket_count or foreign_key_errors:
+                        raise RuntimeError('Ticket data could not be removed safely from the snapshot.')
+                    sanitized_connection.execute('VACUUM')
+                finally:
+                    sanitized_connection.close()
 
             manifest = {
                 'backup_type': 'SYSTEM_DATA_NO_TICKETS',
+                'database_engine': 'PostgreSQL' if is_pg else 'SQLite',
                 'created_at': timezone.now().isoformat(),
                 'removed_ticket_count': removed_ticket_count,
                 'included': [
-                    'SQLite schema',
+                    'Database master data schema and records',
                     'users and companies',
                     'roles and system configuration',
                     'SMTP/IMAP and Email-to-Ticket configuration',
@@ -297,18 +344,29 @@ def perform_system_data_backup():
                 ensure_ascii=False,
             ).encode('utf-8')
             with tarfile.open(archive_path, 'w:gz') as archive:
-                archive.add(temp_db_path, arcname='db.sqlite3')
+                if is_pg and os.path.exists(temp_json_path):
+                    archive.add(temp_json_path, arcname='system_data.json')
+                elif os.path.exists(temp_db_path):
+                    archive.add(temp_db_path, arcname='db.sqlite3')
+
                 manifest_info = tarfile.TarInfo('backup_manifest.json')
                 manifest_info.size = len(manifest_bytes)
                 manifest_info.mtime = int(timezone.now().timestamp())
                 archive.addfile(manifest_info, io.BytesIO(manifest_bytes))
 
-            os.remove(temp_db_path)
+            for p in (temp_db_path, temp_json_path):
+                if os.path.exists(p):
+                    try:
+                        os.remove(p)
+                    except OSError:
+                        pass
+
             file_size = os.path.getsize(archive_path)
             expired_count = cleanup_expired_backups()
+            db_label = "PostgreSQL" if is_pg else "SQLite"
             details = (
-                'System Data Backup without Tickets '
-                f'({file_size} bytes, removed {removed_ticket_count} Ticket row(s)). '
+                f'System Data Backup without Tickets ({db_label}) '
+                f'({file_size} bytes, excluded {removed_ticket_count} Ticket row(s)). '
                 'Includes database configuration/master data; excludes media and runtime secrets. '
                 f'Expired local archives removed: {expired_count}.'
             )

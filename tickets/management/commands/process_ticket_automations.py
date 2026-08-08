@@ -22,7 +22,7 @@ class Command(BaseCommand):
         skipped = 0
         for ticket_id in queryset.values_list('id', flat=True).iterator():
             with transaction.atomic():
-                ticket = Ticket.objects.select_for_update().select_related('company').get(pk=ticket_id)
+                ticket = Ticket.objects.select_for_update(of=('self',)).select_related('company').get(pk=ticket_id)
                 if ticket.status != Ticket.STATUS_OPEN:
                     skipped += 1
                     continue
