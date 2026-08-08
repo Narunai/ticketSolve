@@ -148,7 +148,8 @@ def _decode_payload(part):
 
 def _parse_message(uid, raw_email):
     parsed = email.message_from_bytes(raw_email)
-    subject = _decode_header(parsed.get('Subject')) or '(No subject)'
+    raw_subject = _decode_header(parsed.get('Subject')) or '(No subject)'
+    clean_subject = ' '.join(raw_subject.split())
     sender_name, sender_email = parseaddr(_decode_header(parsed.get('From')))
 
     plain_body = ''
@@ -190,7 +191,7 @@ def _parse_message(uid, raw_email):
     return InboundMessage(
         uid=uid,
         message_id=message_id[:512],
-        subject=subject[:255],
+        subject=clean_subject[:255],
         body=body,
         sender_name=(sender_name or '')[:255],
         sender_email=(sender_email or '')[:254],

@@ -52,6 +52,7 @@ def log_and_send_email(subject, message, recipient_list, action_type, ticket=Non
     Saves EmailLog to database for auditing and statistics, and sends emails to recipients individually
     to prevent invalid emails from blocking delivery to other recipients.
     """
+    subject = ' '.join((subject or '').split())
     recipients = list(set([e for e in recipient_list if e]))
     if not recipients:
         return
