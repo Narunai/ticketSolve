@@ -13,6 +13,7 @@
 │  └──────┬────────────────────────────┬─────────────────────────┘ │
 │         │                            │                           │
 │         │ /* → Unix Socket           │ /chatbot-admin, /api/*    │
+│         │                            │ → Django auth_request     │
 │         │                            │ → localhost:8001          │
 │         ▼                            ▼                           │
 │  ┌──────────────────┐    ┌──────────────────────┐               │
@@ -24,8 +25,8 @@
 │          │                          │                            │
 │          ▼                          ▼                            │
 │  ┌──────────────┐        ┌──────────────────┐                   │
-│  │  db.sqlite3  │        │   chatbot.db     │                   │
-│  │  (Django ORM)│        │   (raw SQLite)   │                   │
+│  │ PostgreSQL   │        │   chatbot.db     │                   │
+│  │ (production) │        │ /var/lib/...     │                   │
 │  └──────────────┘        └──────────────────┘                   │
 │                                                                  │
 │  ┌─────────────────────────────────────────────────────────────┐ │
@@ -50,7 +51,7 @@
 | `security.py` | 10KB | `EncryptedCharField` (Fernet), brute-force throttling |
 | `permissions.py` | 3KB | `PermissionRequiredMixin` derivatives for role checks |
 | `admin.py` | 10KB | Django admin customizations |
-| `backup_service.py` | 21KB | SQLite backup with `shutil`, scheduling |
+| `backup_service.py` | 21KB | PostgreSQL/SQLite + chatbot DB backup and scheduling |
 | `email_to_ticket.py` | 26KB | IMAP polling → auto-create tickets from inbound emails |
 | `email_formatting.py` | 1.4KB | HTML email template builder |
 
@@ -60,8 +61,8 @@
 |------|---------|
 | `main.py` | FastAPI app, routes: `/api/chat`, `/admin`, `/api/admin/*` |
 | `gemini_engine.py` | Google Gemini API integration (configurable model) |
-| `database.py` | SQLite for config, custom knowledge entries, chat history |
-| `security_sandbox.py` | Input sanitization, prompt injection protection |
+| `database.py` | Isolated SQLite config, custom knowledge and admin audit log |
+| `security_sandbox.py` | Curated-document allowlist and path containment |
 | `templates/admin_panel.html` | Jinja2 admin UI for chatbot config + knowledge base |
 | `static/widget.js` | Floating chat widget injected into Django `base.html` |
 
@@ -73,9 +74,10 @@
 | `/login/` | Gunicorn with rate limiting (10 req/min) |
 | `/static/` | Direct file serve from `/var/www/ticketSolve/staticfiles/` |
 | `/media/` | Returns 404 (downloads go through Django auth views) |
-| `/chatbot-admin` | FastAPI `:8001/admin` |
+| `/chatbot-admin` | Django System Admin auth subrequest → FastAPI `:8001/admin` |
 | `/chatbot-static/` | FastAPI `:8001/static/` |
-| `/api/` | FastAPI `:8001/api/` |
+| `/api/status`, `/api/chat` | Django authenticated-session subrequest → FastAPI; rate limited |
+| `/api/admin/` | Django System Admin/Sub Admin subrequest → FastAPI; same-origin POST |
 
 ### 4. Systemd Services
 
@@ -94,6 +96,9 @@
 - **CSRF**: Enabled globally; AJAX forms include `{% csrf_token %}`
 - **Gunicorn hardening**: `PrivateTmp`, `NoNewPrivileges`, `ProtectSystem=full`
 - **Media downloads**: Served through Django views (auth-gated), not nginx
+- **Chatbot authorization**: Nginx `auth_request` reuses Django session/RBAC and overwrites trusted identity headers
+- **Chatbot secrets**: DB is `/var/lib/ticketsolve-chatbot`; Fernet key is `/etc/ticketsolve/chatbot-fernet.key`; the decrypted API key is never returned to the browser
+- **Chatbot service sandbox**: dedicated system user, read-only project, capability drop, memory/task limits
 
 ### 6. Template System
 
@@ -113,5 +118,7 @@ The chatbot widget (`/chatbot-static/widget.js`) is loaded conditionally in `bas
 /var/www/ticketSolve/staticfiles/  # collectstatic output
 /var/www/ticketSolve/media/   # User uploads (attachments)
 /etc/ticketsolve/ticketsolve.env   # Production environment secrets
+/etc/ticketsolve/chatbot-fernet.key # Chatbot API-key encryption key
+/var/lib/ticketsolve-chatbot/chatbot.db # Chatbot runtime data
 /var/backups/ticketsolve/     # Database backups
 ```

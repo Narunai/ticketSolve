@@ -2,13 +2,13 @@
 
 เอกสารฉบับนี้อธิบายโครงสร้างชุดทดสอบ (Test Suite) และขั้นตอนการรันการทดสอบสำหรับระบบ **TicketSolve**
 
-**อัปเดตล่าสุด**: 2 สิงหาคม 2026
+**อัปเดตล่าสุด**: 12 สิงหาคม 2026
 
 ---
 
 ## 📌 1. ภาพรวมชุดทดสอบ (Test Suite Overview)
 
-ชุดทดสอบอยู่ใน `tickets/tests.py` ปัจจุบันมี test methods 98 รายการ ครอบคลุม:
+ชุดทดสอบ Django อยู่ใน `tickets/tests.py` และชุด FastAPI อยู่ใน `chatbot_service/test_gemini.py` ครอบคลุม:
 
 1. **Multi-Tenant Data Isolation**: ตรวจสอบว่าพนักงาน/ผู้บริหารแต่ละบริษัทเห็นเฉพาะ Ticket ในบริษัทตนเองเท่านั้น
 2. **Role-Based Access Control (RBAC)**: ตรวจสอบสิทธิ์การเข้าถึง URL และการทำรายการของผู้ใช้ทั้ง 5 บทบาท รวมถึงลำดับกลุ่มเมนู sidebar และการแสดงชื่อ/บริษัท/effective role ที่ถูกต้องแม้บัญชี superuser รุ่นเก่าจะมีค่า role ไม่ตรง
@@ -23,6 +23,8 @@
 11. **Simple Password**: approval scope, persistent password อย่าง `123456`, one-time display ของรหัสที่สุ่มใหม่, Argon2 storage, System Sub-Admin restrictions, tenant isolation, owner reset, การห้ามบัญชีที่ไม่ได้รับอนุมัติใช้รหัสง่าย และ lock 10 นาที
 12. **Email → Ticket**: ทดสอบ Approval queue, Approve/Reject, การไม่สร้าง Ticket ก่อนอนุมัติ, staged attachment authenticated download/cleanup, RBAC, contact directory, Message-ID deduplication, sender routing, timer gating และ run log ที่มี pending count
 13. **In-App Notifications**: ทดสอบกระดิ่งแจ้งเตือน, การเปิด Ticket/ทำเครื่องหมายอ่านแล้ว, Mark all read และป้องกันการอ่านแจ้งเตือนข้ามผู้ใช้หรือข้าม tenant
+14. **Chatbot Security**: ทดสอบ Django session/RBAC gateway, System Admin scope, same-origin mutation, API-key non-disclosure, per-user rate limit, payload/model allowlist, admin audit และ curated-document sandbox
+15. **New Feature Regression**: ทดสอบว่า Address Book ไม่ข้าม Email Approval, recipient preview ไม่ enumerate ข้าม tenant, Client User inject arbitrary email ไม่ได้ และ override ถูก validate/ใช้ครั้งเดียว
 
 ---
 
@@ -53,22 +55,27 @@ python manage.py test tickets.tests.MultiTenantTicketTests.test_imported_email_s
 
 ### 2.3 รันด้วย Pytest (ถ้าติดตั้งไว้)
 ```bash
-pytest
+python -m pytest chatbot_service -q
 ```
 
 ---
 
 ## 📊 3. สรุปผลการทดสอบล่าสุด (Latest Test Results)
 
-ผลที่ยืนยันล่าสุดวันที่ 8 สิงหาคม 2026:
+ผลที่ยืนยันล่าสุดวันที่ 12 สิงหาคม 2026:
 
 ```text
-Found 103 test(s).
-Ran 103 tests in 74.138s
+Found 106 test(s).
+Ran 106 tests in 49.962s
 OK
 System check identified no issues (0 silenced).
+
+Chatbot: 9 passed in 2.34s
+Template script-tag check: PASS
+pip-audit (main + chatbot): No known vulnerabilities found
 ```
 
-* **Discovered test methods**: 103
-* **Full suite**: ผ่านครบ 103/103 บน development environment (Django 5.2)
-* **Dependency audit**: `pip-audit -r requirements.txt` ไม่พบ known vulnerabilities
+* **Django suite**: ผ่านครบ 106/106 บน development environment (Django 5.2)
+* **FastAPI chatbot suite**: ผ่านครบ 9/9
+* **Deployment checks**: `check --deploy`, `makemigrations --check` และ template script-tag scan ผ่าน
+* **Dependency audit**: `pip-audit` ของ requirements ทั้งสองชุดไม่พบ known vulnerabilities หลังอัปเดต `cryptography==50.0.0`

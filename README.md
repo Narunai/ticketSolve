@@ -2,7 +2,7 @@
 
 **TicketSolve** คือระบบบริหารจัดการตั๋วแจ้งซ่อมและสนับสนุนงานบริการ IT (IT Service Desk & Support Ticket Management System) ในรูปแบบ Multi-Tenant รองรับการทำงานหลายบริษัทในระบบเดียว มีระบบสิทธิ์การใช้งาน 5 ระดับ, ระบบปรับแต่งฟิลด์และหน้าตาตามบริษัท, ระบบแจ้งเตือนทางอีเมลพร้อมสถิติการส่ง, ระบบนำอีเมลเข้าเป็น Ticket, ระบบย้ายสถานะอัตโนมัติ (Status Automation), ระบบรายงานประจำเดือน PDF, และระบบสำรองข้อมูลอัตโนมัติบน AWS VPS ทุก 2 ชั่วโมง
 
-**อัปเดตล่าสุด**: 8 สิงหาคม 2026
+**อัปเดตล่าสุด**: 12 สิงหาคม 2026
 
 > เอกสารภาพรวมสถาปัตยกรรม การควบคุมความปลอดภัย ผลการแก้ไข และแผนผังระบบ:
 > [SECURITY_AND_SYSTEM_ARCHITECTURE_REPORT.md](SECURITY_AND_SYSTEM_ARCHITECTURE_REPORT.md)
@@ -16,12 +16,12 @@
 
 * **Backend**: Python 3.12+, Django 5.x
 * **Database**: Dynamic Dual-Engine (PostgreSQL 16+ Enterprise High-Concurrency / SQLite3 Local & Development)
-* **AI Integration**: Google Gemini API via `google-genai` (Integrated AI Support Chatbot & Admin Panel at `/chatbot-admin/`)
+* **AI Integration**: FastAPI + Google Gemini ผ่าน Nginx `auth_request`; ใช้ Django session/RBAC เดียวกับระบบหลัก และ Admin Panel ที่ `/chatbot-admin/`
 * **Frontend**: HTML5, Vanilla CSS + Tailwind CSS (Glassmorphism Dark & Light Theme UI)
 * **Web Server & WSGI**: Nginx + Gunicorn
 * **PDF Engine**: xhtml2pdf (HTML/CSS to PDF Engine)
 * **Background Scheduler**: Systemd Service & Timer (`ticketsolve-scheduler`)
-* **Backup Storage**: Database-agnostic Backup Service (PostgreSQL Data Dump & SQLite Online Backup API) stored at AWS VPS filesystem (`/var/backups/ticketsolve`)
+* **Backup Storage**: Database-agnostic Backup Service (PostgreSQL data export, SQLite Online Backup และ Chatbot DB snapshot) ที่ `/var/backups/ticketsolve`
 
 ---
 
@@ -106,7 +106,9 @@ Backup archive เก็บที่ `/var/backups/ticketsolve` บน AWS VPS �
 * Dependency หลักตรึงเวอร์ชันและตรวจด้วย `pip-audit`; security headers และ login rate limit ถูกบังคับทั้ง Django/Nginx
 * `SECRET_KEY`, allowed hosts, CSRF origins, SMTP credentials และตำแหน่ง backup กำหนดผ่าน environment file นอก Git checkout
 * หน้า Backup Management แสดง Download เฉพาะ archive ที่มีข้อมูล; รายการขนาด 0 หรือไฟล์หายสามารถลบรายรายการด้วย **Delete empty record** หรือลบรายการ 0 MB ทั้งหมดด้วย **Delete all 0 MB**
-* **System Data (No Tickets)** สร้างทุก 7 วัน: เก็บ Users, Companies, roles, SMTP/IMAP, routing, schedules, categories และค่าระบบใน SQLite ที่ล้าง Ticket ออกจากสำเนาแล้ว โดยไม่รวม `media/` และ runtime secrets; System Admin สามารถสั่งทันทีด้วยปุ่ม **Run Manually: System Data (No Tickets)** โดยไม่กระทบรอบอัตโนมัติ
+* **System Data (No Tickets)** สร้างตามรอบที่ตั้งไว้: เก็บ Users, Companies, roles, SMTP/IMAP, routing, schedules, categories และค่าระบบจาก PostgreSQL/SQLite โดยไม่รวม Ticket/`media/` พร้อม snapshot ของ Chatbot config/knowledge/audit log; ไม่รวม runtime secrets และ System Admin สั่งทันทีได้โดยไม่กระทบรอบอัตโนมัติ
+* Chatbot API ต้อง login, หน้าและ API Admin จำกัดเฉพาะ System Admin/Sub Admin, CORS ใช้ explicit origins, มี request/rate limits และไม่ส่ง API key ที่ถอดรหัสกลับ browser
+* Email Approval Queue ถือว่า Address Book เป็นเพียงประวัติผู้ส่ง ไม่ใช่สิทธิ์ auto-import; อนุญาตอัตโนมัติเฉพาะ sender ที่เคย import สำเร็จ, ผู้ใช้ในระบบ หรือ routing rule ที่ active
 * SMTP Configuration แยกขอบเขตการใช้งานเป็นส่งอีเมล, Email → Ticket หรือทั้งสองฟังก์ชัน โดยมี active configuration แยกตาม feature
 * อีเมลแจ้งเตือนใช้แม่แบบทางการแบบ multipart (HTML + plain text) ร่วมกันทั้ง Ticket, Status, Deployment Approval, Comment, Account, Company และ Monthly Report พร้อมลิงก์ production ที่กำหนดผ่าน `PUBLIC_BASE_URL`
 * Monthly PDF Report ใช้รูปแบบเอกสารผู้บริหาร มีเลขอ้างอิง ขอบเขตและช่วงเวลารายงาน Executive Summary, Status/Priority Breakdown, Ticket Register และข้อความกำกับความลับ โดยลดไอคอนและสีที่ไม่จำเป็น

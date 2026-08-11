@@ -6,6 +6,10 @@ urlpatterns = [
     path('', RedirectView.as_view(url='dashboard/', permanent=False)),
     path('login/', views.CustomLoginView.as_view(), name='login'),
     path('logout/', views.custom_logout, name='logout'),
+    # These endpoints are reachable only as internal Nginx auth subrequests in
+    # production. They bind the isolated chatbot service to Django sessions.
+    path('_internal/chatbot-auth/user/', views.chatbot_user_auth, name='chatbot_user_auth'),
+    path('_internal/chatbot-auth/admin/', views.chatbot_admin_auth, name='chatbot_admin_auth'),
     path('account/password/', views.AccountPasswordView.as_view(), name='account_password'),
     path('dashboard/', views.DashboardView.as_view(), name='dashboard'),
     path('ticket/create/', views.TicketCreateView.as_view(), name='ticket_create'),

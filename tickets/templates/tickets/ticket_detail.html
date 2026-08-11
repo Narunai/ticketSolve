@@ -165,7 +165,9 @@
                 </div>
                 
                 <!-- Comment form -->
-                <form method="POST" enctype="multipart/form-data" id="comment-form" class="border-t border-slate-800 pt-5 space-y-4">
+                <form method="POST" enctype="multipart/form-data" id="comment-form" class="border-t border-slate-800 pt-5 space-y-4"
+                      data-ticket-pk="{{ ticket.pk }}" data-submit-label="{{ t.submit_comment }}"
+                      data-email-customization-enabled="{% if can_customize_email_recipients %}true{% else %}false{% endif %}">
                     {% csrf_token %}
                     <div>
                         <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">{{ t.write_comment }}</label>
@@ -468,6 +470,12 @@
 
 
 <script>
+function escapeDynamicHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, character => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    })[character]);
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     const realInput = document.getElementById('comment-real-file-input');
     const btnAddFile = document.getElementById('btn-comment-add-file');
@@ -512,14 +520,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 isOver ? 'bg-rose-500/10 border-rose-500/30 text-rose-300' : 'bg-slate-900/80 border-slate-700/80 text-slate-200'
             }`;
 
-            const ext = file.name.split('.').pop() || 'FILE';
+            const ext = escapeDynamicHtml(file.name.split('.').pop() || 'FILE');
+            const safeFileName = escapeDynamicHtml(file.name);
 
             div.innerHTML = `
                 <div class="flex items-center gap-2 min-w-0 pr-2">
                     <span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase ${
                         isOver ? 'bg-rose-500/20 text-rose-400' : 'bg-indigo-500/20 text-indigo-300'
                     }">${ext}</span>
-                    <span class="truncate font-medium text-xs">${file.name}</span>
+                    <span class="truncate font-medium text-xs">${safeFileName}</span>
                     <span class="text-[10px] text-slate-400 shrink-0">(${sizeMB} MB)</span>
                 </div>
                 <button type="button" data-index="${index}" class="remove-comment-file-btn p-1 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded transition-colors cursor-pointer shrink-0 font-bold">
@@ -557,7 +566,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (btnSubmit) {
             btnSubmit.disabled = false;
             btnSubmit.classList.remove('opacity-50', 'cursor-not-allowed');
-            if (submitBtnText) submitBtnText.textContent = '{{ t.submit_comment }}';
+            if (submitBtnText) submitBtnText.textContent = form?.dataset.submitLabel || 'Post Comment / Reply';
         }
         if (btnAddFile) btnAddFile.classList.remove('pointer-events-none', 'opacity-50');
         if (progressPanel) progressPanel.classList.add('hidden');
@@ -600,8 +609,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 return false;
             }
 
-            if (form.dataset.modalConfirmed !== "true") {
-                openEmailPreviewModal({{ ticket.pk }}, 'comment', {}, form);
+            if (form.dataset.emailCustomizationEnabled === "true" && form.dataset.modalConfirmed !== "true") {
+                openEmailPreviewModal(parseInt(form.dataset.ticketPk, 10), 'comment', {}, form);
                 return false;
             }
 
@@ -760,17 +769,20 @@ function openEmailPreviewModal(ticketId, actionType, extraParams = {}, targetFor
                     ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
                     : 'bg-amber-500/10 text-amber-400 border-amber-500/20';
                 const badgeText = rec.will_receive ? '✅ Will Receive Email' : '⚠️ Filtered by Notification Rules';
-                
+                const safeEmail = escapeDynamicHtml(rec.email);
+                const safeName = escapeDynamicHtml(rec.name);
+                const safeRole = escapeDynamicHtml(rec.role);
+                const safeReason = escapeDynamicHtml(rec.reason);
                 html += `
                 <label class="flex items-start gap-3 p-3 rounded-xl bg-slate-950/60 border border-slate-800 hover:border-slate-700 transition-colors cursor-pointer">
-                    <input type="checkbox" name="modal_selected_recipients" value="${rec.email}" ${rec.is_checked ? 'checked' : ''} class="mt-0.5 rounded bg-slate-900 border-slate-700 text-indigo-500 focus:ring-indigo-500 h-4 w-4 shrink-0">
+                    <input type="checkbox" name="modal_selected_recipients" value="${safeEmail}" ${rec.is_checked ? 'checked' : ''} class="mt-0.5 rounded bg-slate-900 border-slate-700 text-indigo-500 focus:ring-indigo-500 h-4 w-4 shrink-0">
                     <div class="min-w-0 flex-1 space-y-1">
                         <div class="flex items-center justify-between gap-2">
-                            <span class="font-semibold text-slate-200 text-xs truncate">${rec.name} <span class="text-[10px] text-indigo-400 font-normal">(${rec.role})</span></span>
+                            <span class="font-semibold text-slate-200 text-xs truncate">${safeName} <span class="text-[10px] text-indigo-400 font-normal">(${safeRole})</span></span>
                             <span class="text-[10px] font-medium px-2 py-0.5 rounded border ${badgeClass} shrink-0">${badgeText}</span>
                         </div>
-                        <div class="text-[11px] text-slate-400 font-mono truncate">${rec.email}</div>
-                        <div class="text-[10px] text-slate-500">${rec.reason}</div>
+                        <div class="text-[11px] text-slate-400 font-mono truncate">${safeEmail}</div>
+                        <div class="text-[10px] text-slate-500">${safeReason}</div>
                     </div>
                 </label>`;
             });

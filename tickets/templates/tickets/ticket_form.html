@@ -217,6 +217,12 @@
 </div>
 
 <script>
+function escapeDynamicHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, character => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    })[character]);
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     const fileInput = document.getElementById('real-file-input');
     const btnAddFile = document.getElementById('btn-add-file');
@@ -266,10 +272,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 isOver ? 'bg-rose-500/10 border-rose-500/30 text-rose-300' : 'bg-slate-900/60 border-slate-800 text-slate-300'
             }`;
             
+            const safeFileName = escapeDynamicHtml(file.name);
             fileItem.innerHTML = `
                 <div class="flex items-center gap-2.5 truncate pr-2">
                     <span class="text-base">${isOver ? '⚠️' : '📎'}</span>
-                    <span class="truncate font-medium text-slate-200">${file.name}</span>
+                    <span class="truncate font-medium text-slate-200">${safeFileName}</span>
                     <span class="text-[10px] text-slate-500 shrink-0">(${formatFileSize(file.size)})</span>
                 </div>
                 <button type="button" data-index="${index}" class="btn-remove-file p-1 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 rounded transition-colors" title="Remove file">
@@ -493,17 +500,20 @@ function openEmailPreviewModal(ticketId, actionType, extraParams = {}, targetFor
                     ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
                     : 'bg-amber-500/10 text-amber-400 border-amber-500/20';
                 const badgeText = rec.will_receive ? '✅ Will Receive Email' : '⚠️ Filtered by Notification Rules';
-                
+                const safeEmail = escapeDynamicHtml(rec.email);
+                const safeName = escapeDynamicHtml(rec.name);
+                const safeRole = escapeDynamicHtml(rec.role);
+                const safeReason = escapeDynamicHtml(rec.reason);
                 html += `
                 <label class="flex items-start gap-3 p-3 rounded-xl bg-slate-950/60 border border-slate-800 hover:border-slate-700 transition-colors cursor-pointer">
-                    <input type="checkbox" name="modal_selected_recipients" value="${rec.email}" ${rec.is_checked ? 'checked' : ''} class="mt-0.5 rounded bg-slate-900 border-slate-700 text-indigo-500 focus:ring-indigo-500 h-4 w-4 shrink-0">
+                    <input type="checkbox" name="modal_selected_recipients" value="${safeEmail}" ${rec.is_checked ? 'checked' : ''} class="mt-0.5 rounded bg-slate-900 border-slate-700 text-indigo-500 focus:ring-indigo-500 h-4 w-4 shrink-0">
                     <div class="min-w-0 flex-1 space-y-1">
                         <div class="flex items-center justify-between gap-2">
-                            <span class="font-semibold text-slate-200 text-xs truncate">${rec.name} <span class="text-[10px] text-indigo-400 font-normal">(${rec.role})</span></span>
+                            <span class="font-semibold text-slate-200 text-xs truncate">${safeName} <span class="text-[10px] text-indigo-400 font-normal">(${safeRole})</span></span>
                             <span class="text-[10px] font-medium px-2 py-0.5 rounded border ${badgeClass} shrink-0">${badgeText}</span>
                         </div>
-                        <div class="text-[11px] text-slate-400 font-mono truncate">${rec.email}</div>
-                        <div class="text-[10px] text-slate-500">${rec.reason}</div>
+                        <div class="text-[11px] text-slate-400 font-mono truncate">${safeEmail}</div>
+                        <div class="text-[10px] text-slate-500">${safeReason}</div>
                     </div>
                 </label>`;
             });

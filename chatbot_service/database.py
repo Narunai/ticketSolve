@@ -1,22 +1,29 @@
 import sqlite3
 import os
-import hashlib
-import secrets
 from pathlib import Path
 from cryptography.fernet import Fernet
 
-DB_PATH = Path(__file__).parent / "chatbot.db"
-SECRET_KEY_PATH = Path(__file__).parent / ".secret_key"
+SERVICE_DIR = Path(__file__).resolve().parent
+DB_PATH = Path(os.environ.get("CHATBOT_DB_PATH", SERVICE_DIR / "chatbot.db"))
+SECRET_KEY_PATH = Path(os.environ.get("CHATBOT_SECRET_KEY_FILE", SERVICE_DIR / ".secret_key"))
+
+
+def _ensure_private_parent(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
 
 def get_cipher():
     """Retrieve or generate encryption key for API Keys."""
+    _ensure_private_parent(SECRET_KEY_PATH)
     if not SECRET_KEY_PATH.exists():
         key = Fernet.generate_key()
-        with open(SECRET_KEY_PATH, "wb") as f:
-            f.write(key)
+        try:
+            descriptor = os.open(SECRET_KEY_PATH, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(descriptor, "wb") as key_file:
+                key_file.write(key)
+        except FileExistsError:
+            key = SECRET_KEY_PATH.read_bytes()
     else:
-        with open(SECRET_KEY_PATH, "rb") as f:
-            key = f.read()
+        key = SECRET_KEY_PATH.read_bytes()
     return Fernet(key)
 
 def encrypt_key(plain_text: str) -> str:
@@ -34,12 +41,12 @@ def decrypt_key(cipher_text: str) -> str:
     except Exception:
         return ""
 
-def hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode('utf-8')).hexdigest()
-
 def get_db():
-    conn = sqlite3.connect(DB_PATH)
+    _ensure_private_parent(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=10)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA busy_timeout = 10000")
     return conn
 
 def init_db():
@@ -55,15 +62,6 @@ def init_db():
         api_key_enc TEXT DEFAULT '',
         model_name TEXT DEFAULT 'gemini-flash-latest',
         system_prompt TEXT DEFAULT 'You are an AI Assistant for the TicketSolve system. Respond politely, concisely, accurately, and strictly in English based on the system documentation provided.'
-    )
-    """)
-
-    # Admin User Table
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS admin_users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT UNIQUE NOT NULL,
-        password_hash TEXT NOT NULL
     )
     """)
 
@@ -86,6 +84,17 @@ def init_db():
         user_id TEXT DEFAULT 'guest',
         role TEXT NOT NULL,
         message TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS admin_audit_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        actor_id TEXT NOT NULL,
+        action TEXT NOT NULL,
+        target_id TEXT DEFAULT '',
+        details TEXT DEFAULT '',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
     """)
@@ -115,12 +124,6 @@ TicketSolve is a Multi-Tenant Issue & Ticket Management System built for organiz
 """
         cursor.execute("INSERT INTO custom_knowledge (title, content) VALUES (?, ?)", ("TicketSolve Main System Guide", default_guide))
 
-    # Seed Default Admin (Username: admin, Password: adminpassword)
-    cursor.execute("SELECT COUNT(*) FROM admin_users")
-    if cursor.fetchone()[0] == 0:
-        default_hash = hash_password("adminpassword")
-        cursor.execute("INSERT INTO admin_users (username, password_hash) VALUES (?, ?)", ("admin", default_hash))
-
     conn.commit()
     conn.close()
 
@@ -139,13 +142,29 @@ def get_config():
         }
     return {"is_active": True, "api_key": "", "model_name": "gemini-flash-latest", "system_prompt": ""}
 
+
+def get_admin_config():
+    """Return configuration metadata without exposing the decrypted API key."""
+    config = get_config()
+    return {
+        "is_active": config["is_active"],
+        "api_key_configured": bool(config["api_key"]),
+        "model_name": config["model_name"],
+        "system_prompt": config["system_prompt"],
+    }
+
+
 def update_config(is_active: bool, api_key: str = None, model_name: str = None, system_prompt: str = None):
     conn = get_db()
     cursor = conn.cursor()
-    
-    current = get_config()
+    cursor.execute("SELECT api_key_enc, model_name, system_prompt FROM system_config WHERE id = 1")
+    current = cursor.fetchone()
+    if current is None:
+        conn.close()
+        raise RuntimeError("Chatbot configuration has not been initialized.")
+
     new_is_active = 1 if is_active else 0
-    new_api_key_enc = encrypt_key(api_key) if api_key is not None else encrypt_key(current["api_key"])
+    new_api_key_enc = encrypt_key(api_key) if api_key is not None else current["api_key_enc"]
     new_model = model_name if model_name is not None else current["model_name"]
     new_prompt = system_prompt if system_prompt is not None else current["system_prompt"]
 
@@ -171,8 +190,10 @@ def add_custom_knowledge_entry(title: str, content: str):
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("INSERT INTO custom_knowledge (title, content) VALUES (?, ?)", (title, content))
+    entry_id = cursor.lastrowid
     conn.commit()
     conn.close()
+    return entry_id
 
 def update_custom_knowledge_entry(entry_id: int, title: str, content: str, is_active: bool = True):
     conn = get_db()
@@ -182,13 +203,29 @@ def update_custom_knowledge_entry(entry_id: int, title: str, content: str, is_ac
         SET title = ?, content = ?, is_active = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
     """, (title, content, 1 if is_active else 0, entry_id))
+    updated = cursor.rowcount > 0
     conn.commit()
     conn.close()
+    return updated
 
 def delete_custom_knowledge_entry(entry_id: int):
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("DELETE FROM custom_knowledge WHERE id = ?", (entry_id,))
+    deleted = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return deleted
+
+
+def record_admin_audit(actor_id: str, action: str, target_id: str = "", details: str = ""):
+    """Record administrative changes without storing credentials or prompt content."""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO admin_audit_log (actor_id, action, target_id, details) VALUES (?, ?, ?, ?)",
+        (str(actor_id)[:100], str(action)[:100], str(target_id)[:100], str(details)[:1000]),
+    )
     conn.commit()
     conn.close()
 

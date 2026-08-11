@@ -2,7 +2,7 @@
 
 เอกสารฉบับนี้อธิบายฟีเจอร์การทำงานทั้งหมดของระบบ **TicketSolve** รวมถึงโครงสร้างสิทธิ์การใช้งานของแต่ละบทบาทผู้ใช้
 
-**อัปเดตล่าสุด**: 2 สิงหาคม 2026
+**อัปเดตล่าสุด**: 12 สิงหาคม 2026
 
 ---
 
@@ -44,13 +44,15 @@
   * บันทึกประวัติการส่งอีเมลทุกฉบับ (To, CC, Subject, Event Type, Timestamp, Status)
   * หากส่งไม่สำเร็จ สามารถกดปุ่ม **🔄 Resend** เพื่อส่งใหม่อีกครั้งได้จากหน้า Log
 * **Feature Scope**: บัญชีแต่ละรายการเลือกใช้สำหรับส่งอีเมล, Email → Ticket หรือทั้งสองฟังก์ชันได้
+* **One-time Recipient Preview**: ก่อนอัปเดต Ticket/ส่ง Comment โดย Ticket Staff จะแสดงรายชื่อผู้รับตาม rule และปรับรายการสำหรับ submission นั้นครั้งเดียว; server ตรวจรูปแบบ/จำกัด 20 รายการ และไม่บันทึก override เป็นค่าถาวร
 
 ### 📥 1.5 Email → Ticket
 * อ่านอีเมลที่ยังไม่อ่านผ่าน IMAP SSL แล้วเก็บใน Approval queue ก่อนสร้าง Ticket ใน company ที่กำหนด
 * เลือก ticket creator/default assignee และกรอง subject ด้วย keyword ไทย/อังกฤษ
 * ป้องกันการสร้างซ้ำด้วย Message-ID และมี import receipts สำหรับ Pending/Imported/Rejected/Skipped/Failed
 * System Admin ตรวจเนื้อหาและไฟล์แนบผ่าน authenticated download แล้ว Approve เพื่อสร้าง Ticket ทันที หรือ Reject พร้อมเหตุผล; อีเมล Pending ไม่อยู่ใน Dashboard/รายงาน
-* เก็บสมุดรายชื่อผู้ส่งอัตโนมัติแยก mailbox พร้อม display name, จำนวนข้อความ, first/last seen และ subject ล่าสุด
+* เก็บสมุดรายชื่อผู้ส่งอัตโนมัติแยก mailbox พร้อม display name, จำนวนข้อความ, first/last seen และ subject ล่าสุด; การอยู่ในสมุดรายชื่อเพียงอย่างเดียวไม่ถือว่าได้รับอนุมัติ
+* Auto-import เฉพาะ sender ที่เคย Imported สำเร็จ, email ของ user ในระบบ หรือมี Sender routing rule ที่ active; sender ใหม่/เคย Rejected ยังเข้า Approval queue
 * แสดงชื่อ/อีเมลผู้ส่งจริงบน Ticket และมีตาราง receipt รายอีเมล 100 รายการล่าสุดพร้อมเหตุผลที่นำเข้าหรือคัดออก
 * Approval queue, Email import details, Execution logs และ Email contacts อยู่ในการ์ดเดียวกันและเลือกดูผ่านแท็บที่รองรับคีย์บอร์ด
 * รองรับไฟล์แนบภายใต้ขีดจำกัด 10 MB ต่อไฟล์, 10 ไฟล์ และรวม 50 MB
@@ -72,12 +74,22 @@
 
 ### 💾 1.7 ระบบสำรองข้อมูล (AWS VPS Backup)
 * **Configurable Incremental Backup**: บันทึก Ticket ที่ถูกสร้าง/แก้ไข หรือมี Comments/ไฟล์แนบใหม่ตามช่วงที่ตั้ง (1, 2, 4, 6, 12 หรือ 24 ชั่วโมง; ค่าเริ่มต้น 2 ชั่วโมง) เป็น `.zip` ไว้ที่ `/var/backups/ticketsolve`
-* **Full Backup**: ใช้ SQLite Online Backup API สำรองฐานข้อมูลและบีบอัดร่วมกับ `media/` เป็น `.tar.gz` บน AWS VPS โดยไม่รวม secrets
-* **System Data (No Tickets)**: สำรองฐานข้อมูลส่วน Users, Companies, roles, SMTP/IMAP, routing, schedules, categories และค่าระบบตามรอบที่ตั้ง โดยล้าง Ticket/ข้อมูลลูกที่ cascade ออกจากสำเนา และไม่รวม `media/` หรือ runtime secrets
+* **Full Backup**: สำรอง PostgreSQL/SQLite ตาม engine, `media/` และ snapshot ของ Chatbot DB เป็น `.tar.gz` บน AWS VPS โดยไม่รวม secrets
+* **System Data (No Tickets)**: สำรอง Users, Companies, roles, SMTP/IMAP, routing, schedules, categories, ค่าระบบ และ Chatbot config/knowledge/audit โดยไม่รวม Ticket, `media/` หรือ runtime secrets
 * **Backup Timer**: System Admin ตั้งรอบและเปิด/ปิด Incremental, Full และ System Data แยกกันได้จากหน้า Backup; จำกัด Incremental ขั้นต่ำ 1 ชั่วโมง และ Full/System Data ขั้นต่ำ 1 วัน พร้อม failure backoff 30 นาที ส่วน System Sub Admin ดูสถานะได้แต่แก้ timer ไม่ได้
 * **Retention**: ลบ archive ที่เก่ากว่า `BACKUP_RETENTION_DAYS` ซึ่งมีค่าเริ่มต้น 30 วัน
 * **Backup Management UI (`/backups/`)**: กดสำรองข้อมูล, ดาวน์โหลด archive, ดูสถิติ และลบทั้ง archive/log; รายการไม่มีข้อมูลหรือไฟล์หายมีปุ่ม **Delete empty record** และปุ่มรวม **Delete all 0 MB**
 * **Access Control**: `SYSTEM_ADMIN`, `SYSTEM_SUB_ADMIN` และ Django superuser เข้าหน้า Backup ได้ แต่การแก้ Backup Timer จำกัดเฉพาะ `SYSTEM_ADMIN`/superuser และทุกการบันทึกใช้ `POST` + CSRF
+
+---
+
+### 1.8 AI Support Chatbot
+* Widget โหลดเฉพาะผู้ใช้ที่ login และ `/api/chat` ผ่าน Nginx auth subrequest ไปตรวจ Django session ทุก request
+* หน้า `/chatbot-admin/` และ API แก้ config/knowledge จำกัดเฉพาะ System Admin, System Sub-Admin หรือ Django superuser
+* Gemini API key เข้ารหัสด้วย Fernet, เก็บ key นอก Git และไม่แสดงค่าที่ถอดรหัสกลับหน้าเว็บ
+* ใช้เฉพาะ curated support guide กับ knowledge ที่ System Admin เพิ่ม ไม่อ่าน report, source code, `.env` หรือ user uploads
+* จำกัดข้อความ, model allowlist, same-origin admin POST, CORS origin allowlist, 20 chat requests/minute/user พร้อม edge limit และ systemd resource sandbox
+* เก็บ admin audit metadata โดยไม่เก็บ API key, prompt หรือเนื้อหา knowledge ลง audit detail
 
 ---
 
@@ -99,6 +111,8 @@ Sidebar แสดงชื่อผู้ใช้ บริษัท/ส่ว�
 | ตั้งค่าและลบข้อมูล Backup | ✅ | ✅ | ❌ | ❌ | ❌ |
 | จัดการตั้งค่า SMTP Server | ✅ | ❌ | ❌ | ❌ | ❌ |
 | ลบ Ticket ออกจากระบบ (Delete Ticket) | ✅ | ✅ | ❌ | ❌ | ❌ |
+| ใช้งาน AI Chatbot | ✅ | ✅ | ✅ | ✅ | ✅ |
+| จัดการ AI Chatbot config/knowledge | ✅ | ✅ | ❌ | ❌ | ❌ |
 
 ### หลักการสำคัญของสิทธิ์
 

@@ -3,7 +3,9 @@
 {% block header_title %}{% if form.instance.pk %}{{ t.edit_ticket_title }}{% else %}Create{% endif %} {{ t.notification_settings }}{% endblock %}
 
 {% block content %}
-<div class="max-w-3xl mx-auto space-y-6">
+<div id="notification-config-root" class="max-w-3xl mx-auto space-y-6"
+     data-company-hierarchy="{{ company_hierarchy_json|default:'{}'|escape }}"
+     data-user-company-map="{{ user_company_json|default:'{}'|escape }}">
 
     <div class="glass-panel p-6 md:p-8 rounded-2xl border border-slate-800/80 shadow-2xl">
         <div class="border-b border-slate-800 pb-4 mb-6">
@@ -147,8 +149,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const targetUsersSelect = document.getElementById('id_target_users');
     const companySelect = document.getElementById('id_company');
 
-    const companyHierarchy = {{ company_hierarchy_json|default:"{}"|safe }};
-    const userCompanyMap = {{ user_company_json|default:"{}"|safe }};
+    const configRoot = document.getElementById('notification-config-root');
+    const companyHierarchy = JSON.parse(configRoot?.dataset.companyHierarchy || '{}');
+    const userCompanyMap = JSON.parse(configRoot?.dataset.userCompanyMap || '{}');
 
     function toggleCustomStatus() {
         if (!modeSelect || !customContainer) return;

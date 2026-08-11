@@ -24,9 +24,10 @@
 | **1. สำรองข้อมูลบน VPS เดียวกับแอปพลิเคชัน (Single Point of Failure Backup)** | **สูง (High)** | เสียหายร้ายแรง (Data Loss) | ปานกลาง | สำรองข้อมูลบน VPS `/var/backups/` | ทำ Encrypted Off-site Backup ไปยัง AWS S3 พร้อม S3 Object Lock & Versioning |
 | **2. ไม่มี Multi-Factor Authentication (MFA) สำหรับ System Admin** | **สูง (High)** | บัญชีผู้ดูแลถูกบุกรุก (Account Takeover) | ปานกลาง | มี Login Throttling + Argon2 | เพิ่ม TOTP / WebAuthn MFA สำหรับสิทธิ์ `SYSTEM_ADMIN` และ `SYSTEM_SUB_ADMIN` |
 | **3. Content Security Policy (CSP) เป็นเพียง Report-Only Mode** | **กลาง (Medium)** | ความเสี่ยง XSS / Script Injection | ปานกลาง | CSP Header เป็น Report-Only | ย้าย inline script/style, เพิ่ม `nonce` token และเปลี่ยนเป็น Enforcing CSP |
-| **4. ข้อจำกัด Concurrency และ High Availability ของ SQLite** | **กลาง (Medium)** | ระบบชะงักเมื่อมีการใช้งานพร้อมกันสูง | ต่ำ-ปานกลาง | SQLite3 + Online Backup API | ย้ายฐานข้อมูล Production ไปยัง PostgreSQL + TLS & Connection Pooling |
+| **4. Database High Availability** | **ต่ำ-กลาง (Low-Med)** | PostgreSQL บน VPS ยังเป็น single instance | ต่ำ-ปานกลาง | Production ใช้ PostgreSQL; SQLite เหลือ local/chatbot config | ติดตาม lock/connection และย้ายไป managed HA/PgBouncer เมื่อ load/RTO ต้องการ |
 | **5. ไม่มี Malware / Anti-Virus Scanning สำหรับไฟล์แนบ** | **กลาง (Medium)** | ไฟล์แนบติดไวรัส/มัลแวร์กระจายสู่ผู้ใช้ | ปานกลาง | ตรวจ Signature & Extension Allowlist | เชื่อมต่อ ClamAV ICAP / File Quarantine Service ก่อนอนุญาตให้ดาวน์โหลด |
-| **6. Audit Log จัดเก็บรวมในฐานข้อมูลเดียวกับระบบ** | **ต่ำ-กลาง (Low-Med)** | ผู้มีสิทธิ์สูงอาจดัดแปลงประวัติ Audit | ต่ำ | เก็บใน SQLite ตาราง `SecurityAuditLog` | ส่ง Structured Audit Logs ไปยัง AWS CloudWatch / External SIEM แบบ Append-Only |
+| **6. Audit Log ยังอยู่บน VPS เดียว** | **ต่ำ-กลาง (Low-Med)** | ผู้มีสิทธิ์ระดับ OS อาจดัดแปลง evidence | ต่ำ | Django SecurityAuditLog + Chatbot admin_audit_log | ส่ง Structured Audit Logs ไปยัง AWS CloudWatch / External SIEM แบบ Append-Only |
+| **7. AI provider usage/cost** | **ต่ำ-กลาง (Low-Med)** | request จำนวนมากทำให้ quota/cost สูง | ปานกลาง | ต้อง login, 30 req/min/IP, จำกัด input/output, curated knowledge | เพิ่ม per-user quota, billing alert และ usage dashboard |
 
 ---
 
@@ -69,15 +70,16 @@
 
 ---
 
-### 🗄️ 3.4 4. การย้ายฐานข้อมูลไป PostgreSQL (Enterprise Scalability & HA)
+### 🗄️ 3.4 4. PostgreSQL Scalability & HA
 
-* **ความเสี่ยงปัจจุบัน**:
-  - SQLite3 ทำงานได้ดีสำหรับแอปพลิเคชันขนาดกลาง แต่มีข้อจำกัดเรื่อง Write-Lock Concurrency เมื่อมี Gunicorn Workers และ Background Schedulers ทำงานพร้อมกันหลาย Process
+* **สถานะปัจจุบัน**:
+  - Django production รองรับและตั้งค่าเริ่มต้นเป็น PostgreSQL แล้ว; SQLite ใช้สำหรับ local development และฐานข้อมูล config ของ chatbot ที่แยก workload
+  - PostgreSQL ยังอยู่บน VPS เดียว จึงลด write contention แต่ยังไม่ใช่ high availability
 * **แผนดำเนินการแก้ไข (Mitigation Plan)**:
-  1. ติดตั้ง PostgreSQL 16+ บน Managed Database (เช่น AWS RDS PostgreSQL) หรือ VPS แยกต่างหาก
-  2. เปิดใช้งาน TLS/SSL Connection จาก Django มายัง Database
-  3. ตั้งค่า `CONN_MAX_AGE` และ Connection Pooling (PgBouncer)
-  4. ทำ Data Migration ด้วย `python manage.py dumpdata` และ `loaddata`
+  1. ติดตาม connection count, locks, query latency และ backup restore time
+  2. ใช้ TLS `require` เมื่อแยก database ออกจาก localhost
+  3. เพิ่ม PgBouncer เมื่อพบ connection pressure จาก workers
+  4. ย้ายไป Managed PostgreSQL/standby เมื่อ RTO/RPO และ load จริงต้องการ HA
 
 ---
 
@@ -96,7 +98,7 @@
 ### 📜 3.6 6. ระบบบันทึก Log ความปลอดภัยแบบภายนอก (Append-Only Centralized Logging)
 
 * **ความเสี่ยงปัจจุบัน**:
-  - ประวัติความปลอดภัย (`SecurityAuditLog`) ถูกจัดเก็บในตาราง SQLite เดียวกับข้อมูลระบบ
+  - ประวัติความปลอดภัยอยู่ใน main database และ chatbot admin audit อยู่ใน isolated SQLite บน VPS เดียวกัน
   - หากผู้บุกรุกสิทธิ์สูงสามารถยึดฐานข้อมูลได้ อาจพยายามแก้ไขหรือลบประวัติการบุกรุก (Tampering)
 * **แผนดำเนินการแก้ไข (Mitigation Plan)**:
   1. กำหนดโครงสร้าง Log เป็น JSON Standard (Structured Logging)

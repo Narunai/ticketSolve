@@ -43,7 +43,7 @@
                     <div class="message bot">Hello! I am your TicketSolve AI Assistant. How can I help you with system guides or features today?</div>
                 </div>
                 <div class="chat-input-area">
-                    <input type="text" id="gemini-chat-input" placeholder="Type your question here..." autocomplete="off">
+                    <input type="text" id="gemini-chat-input" maxlength="2000" placeholder="Type your question here..." autocomplete="off">
                     <button id="gemini-chat-send">Send</button>
                 </div>
             </div>
@@ -66,7 +66,13 @@
     // Check system status from Microservice
     async function checkStatus() {
         try {
-            const res = await fetch(`${apiBaseUrl}/status`);
+            const res = await fetch(`${apiBaseUrl}/status`, { credentials: 'same-origin' });
+            if (!res.ok) {
+                toggleBtn.style.display = 'none';
+                chatWindow.classList.add('hidden');
+                isChatActive = false;
+                return;
+            }
             const data = await res.json();
             if (!data.is_active) {
                 toggleBtn.style.display = 'none';
@@ -133,12 +139,13 @@
             const res = await fetch(`${apiBaseUrl}/chat`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
                 body: JSON.stringify({ message: text })
             });
             const data = await res.json();
             
             const botMsgElem = document.getElementById(botLoadingId);
-            if (data.status === 'success') {
+            if (res.ok && data.status === 'success') {
                 botMsgElem.innerHTML = formatMarkdown(data.response);
                 botMsgElem.classList.remove('loading');
             } else {

@@ -45,40 +45,11 @@ sudo install -m 600 -o root -g root \
     "$ENV_FILE" "${ENV_FILE}.predeploy.${ENV_BACKUP_TIMESTAMP}"
 
 EXISTING_FIELD_KEYS="$(sudo sed -n 's/^FIELD_ENCRYPTION_KEYS=//p' "$ENV_FILE" | head -n 1)"
-HAS_ENCRYPTED_FIELD_VALUES="$(venv/bin/python - <<'PY'
-import os
-import sqlite3
-
-db_path = os.path.join(os.getcwd(), 'db.sqlite3')
-if not os.path.isfile(db_path):
-    print('no')
-else:
-    connection = sqlite3.connect(db_path)
-    try:
-        table_exists = connection.execute(
-            "SELECT 1 FROM sqlite_master WHERE type='table' "
-            "AND name='tickets_smtpconfiguration'"
-        ).fetchone()
-        encrypted_exists = bool(table_exists and connection.execute(
-            "SELECT 1 FROM tickets_smtpconfiguration "
-            "WHERE password LIKE 'enc:v1:%' LIMIT 1"
-        ).fetchone())
-        print('yes' if encrypted_exists else 'no')
-    finally:
-        connection.close()
-PY
-)"
-
-if [ -z "$EXISTING_FIELD_KEYS" ] && [ "$HAS_ENCRYPTED_FIELD_VALUES" = "yes" ]; then
-    echo "Refusing deployment: encrypted SMTP/IMAP values exist but FIELD_ENCRYPTION_KEYS is missing."
-    echo "Restore the previous key from ${ENV_FILE}.predeploy.${ENV_BACKUP_TIMESTAMP} or the approved secret store."
-    exit 1
-fi
-
 if [ -z "$EXISTING_FIELD_KEYS" ]; then
-    GENERATED_FIELD_KEY="$(venv/bin/python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')"
-    echo "FIELD_ENCRYPTION_KEYS=${GENERATED_FIELD_KEY}" | sudo tee -a "$ENV_FILE" >/dev/null
-    echo "Generated an independent field-encryption key. Back it up in the approved secret store."
+    echo "Refusing deployment: FIELD_ENCRYPTION_KEYS is missing from the production environment."
+    echo "Restore the approved key from the secret store or ${ENV_FILE}.predeploy.${ENV_BACKUP_TIMESTAMP}."
+    echo "The deploy helper never generates a replacement because that could make encrypted SMTP/IMAP data unrecoverable."
+    exit 1
 fi
 
 EXISTING_SECRET="$(sudo sed -n 's/^SECRET_KEY=//p' "$ENV_FILE" | head -n 1)"
@@ -131,6 +102,35 @@ run_manage static collectstatic --noinput
 
 pip install -r chatbot_service/requirements.txt
 
+# Keep chatbot runtime data and encryption material outside the Git checkout.
+# Preserve the original encrypted configuration when upgrading an older install.
+sudo systemctl stop ticket-chatbot.service 2>/dev/null || true
+if ! id -u ticketsolve-chatbot >/dev/null 2>&1; then
+    sudo useradd --system --home-dir /nonexistent --shell /usr/sbin/nologin ticketsolve-chatbot
+fi
+sudo usermod -a -G ticketsolve-chatbot ubuntu
+sudo install -d -m 750 -o ticketsolve-chatbot -g ticketsolve-chatbot /var/lib/ticketsolve-chatbot
+if [ ! -f /var/lib/ticketsolve-chatbot/chatbot.db ] && [ -f chatbot_service/chatbot.db ]; then
+    sudo install -m 600 -o ticketsolve-chatbot -g ticketsolve-chatbot \
+        chatbot_service/chatbot.db /var/lib/ticketsolve-chatbot/chatbot.db
+fi
+if [ ! -f /etc/ticketsolve/chatbot-fernet.key ]; then
+    if [ -f chatbot_service/.secret_key ]; then
+        sudo install -m 640 -o root -g ticketsolve-chatbot \
+            chatbot_service/.secret_key /etc/ticketsolve/chatbot-fernet.key
+    else
+        CHATBOT_KEY_TMP="$(mktemp)"
+        venv/bin/python -c \
+            'import pathlib, sys; from cryptography.fernet import Fernet; pathlib.Path(sys.argv[1]).write_bytes(Fernet.generate_key())' \
+            "$CHATBOT_KEY_TMP"
+        sudo install -m 640 -o root -g ticketsolve-chatbot \
+            "$CHATBOT_KEY_TMP" /etc/ticketsolve/chatbot-fernet.key
+        rm -f "$CHATBOT_KEY_TMP"
+    fi
+fi
+sudo chown ticketsolve-chatbot:ticketsolve-chatbot /var/lib/ticketsolve-chatbot/chatbot.db 2>/dev/null || true
+sudo chmod 640 /var/lib/ticketsolve-chatbot/chatbot.db 2>/dev/null || true
+
 sudo cp deployment/gunicorn.service /etc/systemd/system/gunicorn.service
 sudo cp deployment/ticketsolve-scheduler.service /etc/systemd/system/ticketsolve-scheduler.service
 sudo cp deployment/ticketsolve-scheduler.timer /etc/systemd/system/ticketsolve-scheduler.timer
@@ -150,6 +150,10 @@ if [ ! -L "/etc/nginx/sites-enabled/ticketsolve" ]; then
     sudo ln -s /etc/nginx/sites-available/ticketsolve /etc/nginx/sites-enabled/ticketsolve
 fi
 
+if ! sudo nginx -V 2>&1 | grep -q -- '--with-http_auth_request_module'; then
+    echo "Refusing deployment: Nginx auth_request module is required for chatbot authorization."
+    exit 1
+fi
 sudo nginx -t
 sudo systemctl restart nginx
 

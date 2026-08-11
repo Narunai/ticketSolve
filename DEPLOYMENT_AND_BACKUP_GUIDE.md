@@ -2,7 +2,7 @@
 
 เอกสารฉบับนี้อธิบายขั้นตอนการติดตั้งระบบ **TicketSolve** บน AWS Lightsail รวมถึงการตั้งค่า Nginx, Gunicorn, Systemd Timer และ Local VPS Backup
 
-**อัปเดตล่าสุด**: 2 สิงหาคม 2026
+**อัปเดตล่าสุด**: 12 สิงหาคม 2026
 
 ---
 
@@ -67,15 +67,15 @@ sudo systemctl restart nginx
 * **Retention**: ลบ archive ที่เก่ากว่า `BACKUP_RETENTION_DAYS` (ค่าเริ่มต้น 30 วัน)
 
 ### 3.2 📦 Full System Backup (สำรองข้อมูลทั้งระบบ)
-* **การทำงาน**: สำรองฐานข้อมูลผ่าน SQLite Online Backup API แล้วบีบอัดร่วมกับ `media/`
+* **การทำงาน**: สำรอง Django database ตาม engine (PostgreSQL export หรือ SQLite Online Backup), `media/` และ transaction-consistent snapshot ของ `/var/lib/ticketsolve-chatbot/chatbot.db`
 * **ไฟล์ที่สร้าง**: `full_backup_YYYY-MM-DD_HH-MM-SS.tar.gz`
 * **Secrets**: ไม่รวม `/etc/ticketsolve/ticketsolve.env` ใน archive ต้องสำรอง secrets แยกต่างหาก
 * **ตารางเวลา**: เลือกได้ทุก 1, 3, 7, 14 หรือ 30 วัน (ค่าเริ่มต้น 1 วัน) และเปิด/ปิดงานอัตโนมัติได้
 
 ### 3.3 🧩 System Data Backup (ไม่รวม Ticket)
-* **การทำงาน**: ใช้ SQLite Online Backup API สร้างสำเนาฐานข้อมูล จากนั้นลบ Ticket ในสำเนาเท่านั้น โดยให้ foreign-key `CASCADE`/`SET_NULL` จัดการข้อมูลที่สัมพันธ์กัน ฐานข้อมูลจริงไม่ถูกแก้ไข
-* **ข้อมูลที่คงไว้**: Users, Companies, roles, SMTP/IMAP, Email-to-Ticket configuration, routing, schedules, categories และข้อมูลระบบอื่น
-* **ไฟล์ที่สร้าง**: `system_data_no_tickets_YYYY-MM-DD_HH-MM-SS.tar.gz` ภายในมี `db.sqlite3` และ `backup_manifest.json`
+* **การทำงาน**: PostgreSQL export จะ exclude ticket models; SQLite ใช้ Online Backup แล้วลบ Ticket ในสำเนาเท่านั้น ฐานข้อมูลจริงไม่ถูกแก้ไข
+* **ข้อมูลที่คงไว้**: Users, Companies, roles, SMTP/IMAP, Email-to-Ticket configuration, routing, schedules, categories, ข้อมูลระบบอื่น และ Chatbot config/knowledge/admin audit
+* **ไฟล์ที่สร้าง**: `system_data_no_tickets_YYYY-MM-DD_HH-MM-SS.tar.gz` ภายในมี `system_data.json` หรือ `db.sqlite3`, `chatbot/chatbot.db` (ถ้าติดตั้ง) และ `backup_manifest.json`
 * **ข้อมูลที่ไม่รวม**: Ticket rows, ข้อมูลลูกที่ถูก cascade, `media/` และ `/etc/ticketsolve/ticketsolve.env`
 * **ตารางเวลา**: เลือกได้ทุก 1, 3, 7, 14 หรือ 30 วัน (ค่าเริ่มต้น 7 วัน) และเปิด/ปิดงานอัตโนมัติได้
 * **สั่งจากหน้าเว็บ**: ปุ่ม Manual ของทั้งสามประเภทสร้าง backup ทันทีได้โดยไม่เปลี่ยน timer อัตโนมัติ; Incremental Manual ใช้ look-back window ตาม timer ที่ตั้ง
@@ -232,14 +232,19 @@ sudo systemctl list-timers ticketsolve-email-to-ticket.timer
 
 ## 🔐 6. Production Security และไฟล์แนบ
 
-สคริปต์ deploy จะสร้าง `FIELD_ENCRYPTION_KEYS` แบบ Fernet แยกจาก `SECRET_KEY` เมื่อยังไม่มีค่า
-key นี้ใช้ถอดรหัส SMTP/IMAP password ในฐานข้อมูล จึงต้องสำรองไว้ใน secret manager ที่ได้รับอนุมัติ
+สคริปต์ deploy จะ **ไม่สร้างหรือแทนที่ `FIELD_ENCRYPTION_KEYS`** หากไม่มีค่าจะหยุดแบบ fail-closed
+key นี้ใช้ถอดรหัส SMTP/IMAP password ในฐานข้อมูล จึงต้อง provision/สำรองไว้ใน secret manager ที่ได้รับอนุมัติ
 และห้ามรวมใน Git หรือ backup archive หาก key สูญหายจะไม่สามารถกู้ credential ที่เข้ารหัสไว้ได้
-ก่อนเปลี่ยน secret สคริปต์จะสร้างสำเนา environment แบบ root-only (`0600`) และตรวจฐานข้อมูลแบบ raw;
-หากพบ ciphertext แต่ไม่มี `FIELD_ENCRYPTION_KEYS` จะหยุด deploy ทันทีแทนการสร้าง key ใหม่ที่ถอดข้อมูลเดิมไม่ได้
+ก่อน deploy สคริปต์จะสร้างสำเนา environment แบบ root-only (`0600`); หากไม่มี
+`FIELD_ENCRYPTION_KEYS` จะหยุดทันทีเพื่อไม่ให้ encrypted data สูญหาย
+
+Chatbot ใช้ Fernet key แยกที่ `/etc/ticketsolve/chatbot-fernet.key` และ runtime DB ที่
+`/var/lib/ticketsolve-chatbot/chatbot.db` สคริปต์จะ migrate legacy files โดยรักษา key เดิม,
+สร้าง dedicated user และตรวจว่า Nginx มี `auth_request` module ห้ามลบ/สร้าง key ใหม่เมื่อ DB เดิมยังใช้งาน
 
 * Nginx ให้บริการเฉพาะ `/static/`; `/media/` ตอบ `404`
 * Ticket และ Comment attachments ต้องดาวน์โหลดผ่าน authenticated Django endpoints ซึ่งตรวจ tenant/Ticket visibility ก่อนทุกครั้ง
+* Chatbot `/api/chat` ต้องมี Django session; `/chatbot-admin` และ `/api/admin/*` ต้องเป็น System Admin/Sub Admin และ admin mutation ต้อง same-origin
 * Production บังคับ HTTPS, secure session/CSRF cookies, HSTS, `X-Content-Type-Options: nosniff` และ referrer policy
 * Login ถูกจำกัดทั้ง Nginx และ application, logout ใช้ POST + CSRF, password hash ใหม่ใช้ Argon2
 * SMTP/IMAP password เข้ารหัสในฐานข้อมูล และ Security events แสดงในหน้า Logs

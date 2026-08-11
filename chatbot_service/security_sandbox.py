@@ -3,20 +3,19 @@ from pathlib import Path
 from typing import List
 import database
 
-# Root workspace path
-BASE_DIR = Path(__file__).resolve().parent.parent
+# Only this curated directory is exposed to the model. Repository reports,
+# deployment documents, source code, and user uploads are intentionally out of
+# scope because they can contain operational details or untrusted instructions.
+SERVICE_DIR = Path(__file__).resolve().parent
 
-# Default Whitelisted Directories & Files (Only public-accessible documentation)
 ALLOWED_PATHS: List[Path] = [
-    BASE_DIR / "docs",
-    BASE_DIR / "media" / "public_docs",
-    BASE_DIR / "README.md",
-    BASE_DIR / "testing_guide.md",
-    BASE_DIR / "simple_feature_summary_report.md"
+    SERVICE_DIR / "knowledge",
 ]
 
 FORBIDDEN_EXTENSIONS = {".env", ".sqlite3", ".py", ".pem", ".key", ".sh", ".zip", ".git"}
 FORBIDDEN_FILENAMES = {"db.sqlite3", ".env", "LightsailDefaultKey-ap-southeast-1.pem"}
+ALLOWED_DOCUMENT_EXTENSIONS = {".md", ".txt"}
+MAX_CONTEXT_CHARACTERS = 50000
 
 def is_path_safe(target_path: str) -> bool:
     """
@@ -27,7 +26,11 @@ def is_path_safe(target_path: str) -> bool:
         resolved_path = Path(target_path).resolve()
         
         # Check forbidden filenames and extensions
-        if resolved_path.name in FORBIDDEN_FILENAMES or resolved_path.suffix.lower() in FORBIDDEN_EXTENSIONS:
+        if (
+            resolved_path.name in FORBIDDEN_FILENAMES
+            or resolved_path.suffix.lower() in FORBIDDEN_EXTENSIONS
+            or (resolved_path.is_file() and resolved_path.suffix.lower() not in ALLOWED_DOCUMENT_EXTENSIONS)
+        ):
             return False
 
         # Check if resolved path is inside any allowed path
@@ -82,12 +85,12 @@ def get_allowed_documents_content() -> str:
     if not context_chunks:
         return "No system guide documentation available."
     
-    return "\n".join(context_chunks)
+    return "\n".join(context_chunks)[:MAX_CONTEXT_CHARACTERS]
 
 if __name__ == "__main__":
     print("Testing Security Sandbox...")
-    print("Is README.md safe?", is_path_safe(str(BASE_DIR / "README.md")))
-    print("Is .env safe?", is_path_safe(str(BASE_DIR / ".env")))
+    print("Is system guide safe?", is_path_safe(str(SERVICE_DIR / "knowledge" / "system_guide.md")))
+    print("Is .env safe?", is_path_safe(str(SERVICE_DIR.parent / ".env")))
     print("Is /etc/passwd safe?", is_path_safe("/etc/passwd"))
     print("\n--- Knowledge Base Content Preview ---")
     print(get_allowed_documents_content()[:300])

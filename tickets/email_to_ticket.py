@@ -349,6 +349,15 @@ def _resolve_ticket_route(config, message):
     return routing_rule, assignee, ticket_company, ticket_creator, creator_source
 
 
+def _is_approved_sender(config, sender_email):
+    """An address-book entry alone must never bypass the approval queue."""
+    return InboundEmailReceipt.objects.filter(
+        smtp_configuration=config,
+        sender_email__iexact=(sender_email or '').strip().casefold(),
+        status=InboundEmailReceipt.STATUS_IMPORTED,
+    ).exists()
+
+
 def _create_ticket(config, message, matched_keywords=None, decided_by=None):
     accepted, skipped = _validated_attachments(message)
     routing_rule, assignee, ticket_company, ticket_creator, creator_source = (
@@ -636,16 +645,16 @@ def import_email_to_tickets(config, max_count=None):
                     sender_email__iexact=sender_email_clean,
                     assignee__is_active=True,
                 ).exists()
-                is_known_contact = InboundEmailContact.objects.filter(
-                    smtp_configuration=config,
-                    email__iexact=sender_email_clean
-                ).exists()
+                # Merely appearing in the address book is not approval. A
+                # sender becomes trusted only after one of their messages was
+                # imported (manually or by an explicit routing/user rule).
+                is_approved_contact = _is_approved_sender(config, sender_email_clean)
                 from .models import CustomUser
                 is_registered_user = CustomUser.objects.filter(
                     email__iexact=sender_email_clean
                 ).exists()
 
-                if has_routing_rule or is_known_contact or is_registered_user:
+                if has_routing_rule or is_approved_contact or is_registered_user:
                     ticket, skipped_attachments = _create_ticket(
                         config,
                         message,
@@ -653,7 +662,7 @@ def import_email_to_tickets(config, max_count=None):
                     )
                     result['imported'] += 1
                     logger.info(
-                        "Auto-imported IMAP message %s directly as Ticket #%s (known contact/rule)",
+                        "Auto-imported IMAP message %s directly as Ticket #%s (approved sender/rule)",
                         message.message_id,
                         ticket.pk,
                     )

@@ -71,6 +71,12 @@ ssh -i LightsailDefaultKey-ap-southeast-1.pem -o StrictHostKeyChecking=no \
 
 ## Full Deployment (Model/Migration Changes)
 
+Use full deployment for any chatbot authorization, Nginx, service unit, database
+path or encryption-key change. The deploy script migrates legacy chatbot data to
+`/var/lib/ticketsolve-chatbot`, preserves the legacy Fernet key under `/etc`,
+installs the dedicated service account and validates Nginx `auth_request` support.
+Do not replace either encryption key during deployment.
+
 When `models.py` changes require new migrations:
 
 ```bash

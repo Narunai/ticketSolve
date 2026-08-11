@@ -1,7 +1,7 @@
 # รายงานความปลอดภัยและสถาปัตยกรรมระบบ TicketSolve
 
-วันที่ประเมินและปรับปรุง: 2 สิงหาคม 2026
-ขอบเขต: source code, Django settings, RBAC/tenant isolation, Email integration, backup, Nginx, Gunicorn/systemd, dependencies และ automated tests
+วันที่ประเมินและปรับปรุง: 12 สิงหาคม 2026
+ขอบเขต: source code, Django/FastAPI, RBAC/tenant isolation, Email integration, AI chatbot, backup, Nginx, Gunicorn/systemd, dependencies และ automated tests
 
 > สถานะของเอกสาร: เป็นการวาง baseline และปรับให้สอดคล้องกับแนวปฏิบัติสากล ไม่ใช่ใบรับรอง ISO 27001, SOC 2 หรือการรับรอง OWASP ASVS จากหน่วยงานภายนอก การรับรองอย่างเป็นทางการยังต้องมี governance, evidence, penetration test และ auditor อิสระ
 
@@ -20,8 +20,11 @@
 - เพิ่ม Security Audit Log โดยไม่เก็บ username/IP ของ anonymous login เป็นข้อความตรง แต่เก็บ HMAC fingerprint
 - เพิ่ม Simple Password แบบ admin-approved สำหรับผู้สูงอายุหรือผู้ใช้ที่ไม่ถนัดเทคโนโลยี: อนุญาตรหัสอย่าง `123456` เฉพาะบัญชีที่ได้รับอนุมัติ, เก็บเป็น Argon2 hash, ใช้ต่อเนื่องได้ และ lock 10 นาทีหลังผิดครบ 5 ครั้ง โดยไม่เปิดทางให้ดึงรหัสเดิมย้อนหลัง
 - เพิ่ม security headers, HSTS preload, authenticated-page no-store และ hardening ของ Nginx/Gunicorn service
-- ตรึงเวอร์ชัน production dependencies และตรวจพบ **0 known vulnerabilities** ด้วย `pip-audit` ณ วันที่รายงาน
-- เพิ่ม security regression tests, Simple Password, Email approval/RBAC และ PDF ภาษาไทย; ชุดทดสอบรวม 98 รายการ
+- ปิด unauthenticated Chatbot Admin/API โดยใช้ Nginx `auth_request` ผูก Django session/RBAC, จำกัด CORS/origin/rate/body, ไม่ส่ง Gemini API key กลับ browser และย้าย DB/key ออกจาก Git checkout
+- แก้ Email Approval regression: Address Book ไม่เท่ากับการอนุมัติ ผู้ส่งจะ auto-import ได้เมื่อเคย import สำเร็จ, เป็น user ในระบบ หรือมี routing rule เท่านั้น
+- ปิด tenant enumeration และ stored-XSS ใน Email Recipient Preview พร้อมตรวจ email override, จำกัด 20 รายการ และไม่ให้ Client User ส่ง ticket content ไป arbitrary email
+- ตรึงเวอร์ชัน production dependencies, อัปเดต `cryptography` จาก 49.0.0 ไป 50.0.0 ตาม advisory และตรวจพบ **0 known vulnerabilities** ด้วย `pip-audit` ณ วันที่รายงาน
+- เพิ่ม security regression tests, Simple Password, Email approval/RBAC, PDF ภาษาไทย และ Chatbot security; Django 106 tests + FastAPI 9 tests
 
 ## 2. มาตรฐานอ้างอิงและเป้าหมาย
 
@@ -48,7 +51,8 @@
 10. Monthly PDF report: preview, ส่งทันที, To/CC, schedule รายเดือน และฝังฟอนต์ Sarabun สำหรับภาษาไทย
 11. Audit/logs: Ticket audit, email delivery, email import details, execution log, backup log และ security audit
 12. Backup บน AWS VPS: incremental, full และ system data without tickets พร้อม schedule/manual/download/delete/retention
-13. Operations: Nginx TLS, Gunicorn, systemd services/timers และ deployment script
+13. AI support chatbot: Gemini guidance จาก curated knowledge, authenticated widget, System Admin panel และ isolated audit/data store
+14. Operations: Nginx TLS, Gunicorn, FastAPI/Uvicorn, systemd services/timers และ deployment script
 
 ### 3.2 แผนผังสถาปัตยกรรม
 
@@ -57,7 +61,7 @@ flowchart LR
     U[ผู้ใช้ผ่าน HTTPS] --> N[Nginx TLS / rate limit]
     N --> G[Gunicorn]
     G --> D[Django TicketSolve]
-    D --> DB[(SQLite Database)]
+    D --> DB[(PostgreSQL production / SQLite development)]
     D --> M[(Private media files)]
     D --> SMTP[SMTP provider]
     IMAP[IMAP mailbox] --> E[Email-to-Ticket worker]
@@ -70,6 +74,10 @@ flowchart LR
     S --> DB
     S --> B[(AWS VPS backup directory)]
     D --> B
+    N -->|auth_request| D
+    N -->|Authenticated identity headers| C[FastAPI Chatbot]
+    C --> CDB[(Chatbot SQLite)]
+    C --> GEM[Google Gemini API]
     K[/etc/ticketsolve/ticketsolve.env] -. secrets .-> G
     K -. secrets .-> E
     K -. secrets .-> S
@@ -90,23 +98,29 @@ flowchart TB
         Auth[Authentication + RBAC]
         Views[Django views/services]
         Worker[Background workers]
+        Chatbot[FastAPI chatbot]
     end
     subgraph Data[Protected data boundary]
-        SQLite[(SQLite)]
+        Database[(PostgreSQL / SQLite)]
+        ChatbotDB[(Chatbot SQLite)]
         Media[(Attachments)]
         Backup[(Backup archives)]
         Secrets[(Root-owned env file)]
     end
     Browser -->|TLS, CSRF, secure cookie| Nginx --> Auth --> Views
     Mail -->|IMAPS| Worker
-    Auth --> SQLite
-    Views --> SQLite
+    Auth --> Database
+    Views --> Database
     Views -->|authorized download only| Media
-    Worker --> SQLite
+    Worker --> Database
     Worker --> Media
     Worker --> Backup
     Secrets -. encryption/SMTP keys .-> Views
     Secrets -.-> Worker
+    Nginx -->|auth subrequest| Auth
+    Nginx -->|verified user ID and role| Chatbot
+    Chatbot --> ChatbotDB
+    Chatbot -->|curated support context only| Gemini[Google Gemini]
 ```
 
 ### 3.4 ลำดับสิทธิ์และ tenant isolation
@@ -159,9 +173,10 @@ Migration `0030_security_baseline` ทำสามอย่างแบบอั
 | `python manage.py check` | ผ่าน: 0 issues |
 | `python manage.py check --deploy` | ผ่าน: 0 issues |
 | `python manage.py makemigrations --check` | ผ่าน: no changes detected |
-| Security regression tests | 5/5 ผ่าน |
-| Full regression suite | 89 tests (ให้ดูผลรอบสุดท้ายใน `testing_guide.md`) |
-| `pip-audit -r requirements.txt` | No known vulnerabilities found ณ 2 ส.ค. 2026 |
+| Django regression suite | 106/106 ผ่าน |
+| FastAPI Chatbot suite | 9/9 ผ่าน |
+| `check --deploy` / migration check / template-script check | ผ่าน |
+| `pip-audit` main + chatbot requirements | No known vulnerabilities found ณ 12 ส.ค. 2026 |
 
 ## 7. ความเสี่ยงคงเหลือและลำดับถัดไป
 

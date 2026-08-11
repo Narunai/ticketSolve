@@ -8,8 +8,9 @@ from django.views.generic import CreateView, UpdateView, DetailView, TemplateVie
 from django.urls import reverse, reverse_lazy
 
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.validators import validate_email
 from django.http import FileResponse, JsonResponse, HttpResponse
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_GET, require_POST
 from .models import Ticket, CustomUser, Company, EmailLog, TicketAuditLog, SecurityAuditLog, ReportViewLog, MonthlyReportSchedule, TicketAutomationConfig, SMTPConfiguration, InboundEmailReceipt, InboundEmailAttachment, InboundEmailContact, InboundEmailRoutingRule, EmailToTicketSchedule, EmailToTicketRunLog, InAppNotification, get_smtp_connection, get_smtp_from_email, TicketComment, TicketAttachment, CommentAttachment, TicketCategory, ResolutionCategory, ModuleCategory, TicketStatusConfig, CompanyTicketConfig, CompanyTicketField, NotificationConfig, should_send_email_notification, BackupLog, BackupSchedule
 from .backup_service import perform_full_backup, perform_incremental_backup, perform_system_data_backup, get_backup_file_path, FileLock
 from .email_to_ticket_scheduler import run_email_to_ticket_cycle
@@ -44,6 +45,62 @@ import os
 import shutil
 import datetime
 import uuid
+
+
+@require_GET
+def chatbot_user_auth(request):
+    """Internal Nginx auth subrequest for authenticated chatbot users."""
+    if not request.user.is_authenticated:
+        return HttpResponse(status=401)
+
+    response = HttpResponse(status=204)
+    response["X-Chatbot-User"] = str(request.user.pk)
+    response["X-Chatbot-Role"] = (
+        "SUPERUSER" if request.user.is_superuser else request.user.role
+    )
+    return response
+
+
+@require_GET
+def chatbot_admin_auth(request):
+    """Internal Nginx auth subrequest for the chatbot administration API."""
+    if not request.user.is_authenticated:
+        return HttpResponse(status=401)
+    if not is_system_staff(request.user):
+        return HttpResponse(status=403)
+
+    response = HttpResponse(status=204)
+    response["X-Chatbot-User"] = str(request.user.pk)
+    response["X-Chatbot-Role"] = (
+        "SUPERUSER" if request.user.is_superuser else request.user.role
+    )
+    return response
+
+
+def _one_time_email_recipients(request):
+    """Validate and bound a one-submission recipient override."""
+    selected = request.POST.getlist('selected_recipients')
+    extra_raw = request.POST.get('extra_recipients', '')
+    if len(extra_raw) > 4000:
+        raise ValidationError('The additional recipient list is too long.')
+    extra = [
+        value.strip()
+        for value in extra_raw.replace(';', ',').split(',')
+        if value.strip()
+    ]
+    candidates = selected + extra
+    if len(candidates) > 20:
+        raise ValidationError('A maximum of 20 one-time email recipients is allowed.')
+
+    recipients = []
+    seen = set()
+    for candidate in candidates:
+        email = str(candidate).strip().casefold()
+        validate_email(email)
+        if email not in seen:
+            seen.add(email)
+            recipients.append(email)
+    return recipients
 
 from django.conf import settings
 from django.contrib import messages
@@ -1394,12 +1451,13 @@ class TicketUpdateView(LoginRequiredMixin, TicketStaffRequiredMixin, UpdateView)
         return context
 
     def form_valid(self, form):
-        selected_recipients = self.request.POST.getlist('selected_recipients')
         extra_recipients_raw = self.request.POST.get('extra_recipients', '')
-        extra_emails = [e.strip() for e in extra_recipients_raw.replace(';', ',').split(',') if e.strip() and '@' in e]
-
         if 'selected_recipients' in self.request.POST or extra_recipients_raw:
-            custom_recipients = list(set([e for e in selected_recipients + extra_emails if e]))
+            try:
+                custom_recipients = _one_time_email_recipients(self.request)
+            except ValidationError as exc:
+                form.add_error(None, exc)
+                return self.form_invalid(form)
             self.object._custom_recipient_emails = custom_recipients
             form.instance._custom_recipient_emails = custom_recipients
 
@@ -1477,6 +1535,7 @@ class TicketDetailView(LoginRequiredMixin, DetailView):
             models.Q(message__icontains=f"#{self.object.id}")
         ).order_by('-sent_at')
         context['default_recipients'] = get_ticket_default_recipients(self.object)
+        context['can_customize_email_recipients'] = is_ticket_staff(self.request.user)
         return context
 
 
@@ -1485,13 +1544,16 @@ class TicketDetailView(LoginRequiredMixin, DetailView):
         content = request.POST.get('content', '').strip()
         files = request.FILES.getlist('attachments') or request.FILES.getlist('comment_attachments')
 
-        selected_recipients = request.POST.getlist('selected_recipients')
         extra_recipients_raw = request.POST.get('extra_recipients', '')
-        extra_emails = [e.strip() for e in extra_recipients_raw.replace(';', ',').split(',') if e.strip() and '@' in e]
-
         custom_recipients = None
-        if 'selected_recipients' in request.POST or extra_recipients_raw:
-            custom_recipients = list(set([e for e in selected_recipients + extra_emails if e]))
+        if is_ticket_staff(request.user) and (
+            'selected_recipients' in request.POST or extra_recipients_raw
+        ):
+            try:
+                custom_recipients = _one_time_email_recipients(request)
+            except ValidationError as exc:
+                messages.error(request, f"Unable to post comment: {'; '.join(exc.messages)}")
+                return redirect('ticket_detail', pk=self.object.id)
 
         max_size = 10 * 1024 * 1024  # 10 MB
         if len(files) > 10:
@@ -1623,16 +1685,35 @@ class TicketEmailRecipientPreviewView(LoginRequiredMixin, View):
         if not visible_tickets_for(request.user, Ticket.objects.filter(pk=ticket.pk)).exists():
             return JsonResponse({'status': 'error', 'message': 'Permission denied'}, status=403)
 
-        action_type = request.GET.get('action_type', 'update')  # 'comment' or 'update'
+        action_type = request.GET.get('action_type', 'update')
+        if action_type not in {'comment', 'update'}:
+            return JsonResponse({'status': 'error', 'message': 'Invalid action type'}, status=400)
+        if action_type == 'update' and not is_ticket_staff(request.user):
+            return JsonResponse({'status': 'error', 'message': 'Permission denied'}, status=403)
+
         new_status = request.GET.get('status') or ticket.status
+        valid_statuses = {value for value, _label in Ticket.STATUS_CHOICES}
+        if new_status not in valid_statuses:
+            return JsonResponse({'status': 'error', 'message': 'Invalid ticket status'}, status=400)
         assigned_to_id = request.GET.get('assigned_to')
 
         assigned_user = None
         if assigned_to_id:
+            allowed_assignees = CustomUser.objects.filter(is_active=True)
+            if not is_system_staff(request.user):
+                if not request.user.company_id:
+                    allowed_assignees = allowed_assignees.none()
+                else:
+                    allowed_assignees = allowed_assignees.filter(
+                        company_id__in=request.user.company.get_all_subsidiary_ids()
+                    )
             try:
-                assigned_user = CustomUser.objects.get(pk=assigned_to_id)
+                assigned_user = allowed_assignees.get(pk=assigned_to_id)
             except (CustomUser.DoesNotExist, ValueError):
-                assigned_user = ticket.assigned_to
+                return JsonResponse(
+                    {'status': 'error', 'message': 'Invalid assignee'},
+                    status=400,
+                )
         else:
             assigned_user = ticket.assigned_to
 
@@ -2027,11 +2108,13 @@ class ConfirmDeploymentView(LoginRequiredMixin, TicketStaffRequiredMixin, View):
         )
         user = request.user
 
-        selected_recipients = request.POST.getlist('selected_recipients')
         extra_recipients_raw = request.POST.get('extra_recipients', '')
-        extra_emails = [e.strip() for e in extra_recipients_raw.replace(';', ',').split(',') if e.strip() and '@' in e]
         if 'selected_recipients' in request.POST or extra_recipients_raw:
-            custom_recipients = list(set([e for e in selected_recipients + extra_emails if e]))
+            try:
+                custom_recipients = _one_time_email_recipients(request)
+            except ValidationError as exc:
+                messages.error(request, f"Unable to confirm deployment: {'; '.join(exc.messages)}")
+                return redirect('ticket_detail', pk=ticket.pk)
             ticket._custom_recipient_emails = custom_recipients
 
         if ticket.status == Ticket.STATUS_DEPLOYMENT_REQUESTED:

@@ -18,6 +18,9 @@ BACKUP_DIR = os.path.abspath(
     os.environ.get("BACKUP_DIR", os.path.join(settings.BASE_DIR, "backups"))
 )
 BACKUP_RETENTION_DAYS = max(1, int(os.environ.get("BACKUP_RETENTION_DAYS", "30")))
+CHATBOT_DB_PATH = os.path.abspath(
+    os.environ.get("CHATBOT_DB_PATH", "/var/lib/ticketsolve-chatbot/chatbot.db")
+)
 
 
 def get_backup_file_path(filename):
@@ -118,6 +121,21 @@ def is_postgresql_backend():
     return 'postgresql' in engine or 'postgres' in engine
 
 
+def _snapshot_chatbot_database(destination_path):
+    """Create a transaction-consistent copy of the optional chatbot SQLite DB."""
+    if not os.path.isfile(CHATBOT_DB_PATH):
+        return False
+    source = sqlite3.connect(f"file:{CHATBOT_DB_PATH}?mode=ro", uri=True, timeout=10)
+    destination = sqlite3.connect(destination_path)
+    try:
+        with destination:
+            source.backup(destination, pages=100, sleep=0.01)
+    finally:
+        destination.close()
+        source.close()
+    return True
+
+
 def perform_full_backup():
     """
     Creates a full backup of the database (via PostgreSQL dump or SQLite Online Backup API) and media.
@@ -130,6 +148,7 @@ def perform_full_backup():
     backup_filepath = os.path.join(BACKUP_DIR, archive_name)
     temp_db_path = os.path.join(BACKUP_DIR, f"temp_db_{now_str}.sqlite3")
     temp_json_path = os.path.join(BACKUP_DIR, f"temp_dump_{now_str}.json")
+    temp_chatbot_path = os.path.join(BACKUP_DIR, f"temp_chatbot_{now_str}.sqlite3")
 
     with FileLock("system_backup.lock", timeout=60):
         try:
@@ -156,6 +175,8 @@ def perform_full_backup():
                     dst_conn.close()
                     src_conn.close()
 
+            chatbot_included = _snapshot_chatbot_database(temp_chatbot_path)
+
             # Package the database and media
             with tarfile.open(backup_filepath, "w:gz") as tar:
                 if is_pg and os.path.exists(temp_json_path):
@@ -164,13 +185,15 @@ def perform_full_backup():
                     tar.add(temp_db_path, arcname="db.sqlite3")
                 elif os.path.exists(os.path.join(settings.BASE_DIR, "db.sqlite3")):
                     tar.add(os.path.join(settings.BASE_DIR, "db.sqlite3"), arcname="db.sqlite3")
+                if chatbot_included:
+                    tar.add(temp_chatbot_path, arcname="chatbot/chatbot.db")
 
                 media_path = os.path.join(settings.BASE_DIR, "media")
                 if os.path.exists(media_path):
                     tar.add(media_path, arcname="media")
 
             # Clean up temporary backup files
-            for p in (temp_db_path, temp_json_path):
+            for p in (temp_db_path, temp_json_path, temp_chatbot_path):
                 if os.path.exists(p):
                     try:
                         os.remove(p)
@@ -183,6 +206,7 @@ def perform_full_backup():
             db_type = "PostgreSQL" if is_pg else "SQLite"
             details = (
                 f"Full Backup ({db_type}, {file_size} bytes). Stored locally on the AWS VPS. "
+                f"Chatbot data included: {'yes' if chatbot_included else 'not installed'}. "
                 f"Expired local archives removed: {expired_count}."
             )
             log = BackupLog.objects.create(
@@ -194,7 +218,7 @@ def perform_full_backup():
             )
             return {"success": True, "log": log, "details": details, "file_path": backup_filepath}
         except Exception as e:
-            for p in (temp_db_path, temp_json_path):
+            for p in (temp_db_path, temp_json_path, temp_chatbot_path):
                 if os.path.exists(p):
                     try:
                         os.remove(p)
@@ -223,6 +247,7 @@ def perform_system_data_backup():
     archive_path = os.path.join(BACKUP_DIR, archive_name)
     temp_db_path = os.path.join(BACKUP_DIR, f"temp_system_data_{now_str}.sqlite3")
     temp_json_path = os.path.join(BACKUP_DIR, f"temp_system_data_{now_str}.json")
+    temp_chatbot_path = os.path.join(BACKUP_DIR, f"temp_system_chatbot_{now_str}.sqlite3")
 
     with FileLock("system_backup.lock", timeout=60):
         try:
@@ -320,6 +345,7 @@ def perform_system_data_backup():
                 finally:
                     sanitized_connection.close()
 
+            chatbot_included = _snapshot_chatbot_database(temp_chatbot_path)
             manifest = {
                 'backup_type': 'SYSTEM_DATA_NO_TICKETS',
                 'database_engine': 'PostgreSQL' if is_pg else 'SQLite',
@@ -331,6 +357,8 @@ def perform_system_data_backup():
                     'roles and system configuration',
                     'SMTP/IMAP and Email-to-Ticket configuration',
                     'routing, schedules, categories, and non-ticket records',
+                    'chatbot configuration, curated knowledge, and chatbot admin audit log'
+                    if chatbot_included else 'chatbot data not installed',
                 ],
                 'excluded': [
                     'Ticket rows and database rows deleted by Ticket foreign-key cascades',
@@ -348,13 +376,15 @@ def perform_system_data_backup():
                     archive.add(temp_json_path, arcname='system_data.json')
                 elif os.path.exists(temp_db_path):
                     archive.add(temp_db_path, arcname='db.sqlite3')
+                if chatbot_included:
+                    archive.add(temp_chatbot_path, arcname='chatbot/chatbot.db')
 
                 manifest_info = tarfile.TarInfo('backup_manifest.json')
                 manifest_info.size = len(manifest_bytes)
                 manifest_info.mtime = int(timezone.now().timestamp())
                 archive.addfile(manifest_info, io.BytesIO(manifest_bytes))
 
-            for p in (temp_db_path, temp_json_path):
+            for p in (temp_db_path, temp_json_path, temp_chatbot_path):
                 if os.path.exists(p):
                     try:
                         os.remove(p)
@@ -367,7 +397,8 @@ def perform_system_data_backup():
             details = (
                 f'System Data Backup without Tickets ({db_label}) '
                 f'({file_size} bytes, excluded {removed_ticket_count} Ticket row(s)). '
-                'Includes database configuration/master data; excludes media and runtime secrets. '
+                f"Includes database configuration/master data and chatbot data: {'yes' if chatbot_included else 'not installed'}; "
+                'excludes media and runtime secrets. '
                 f'Expired local archives removed: {expired_count}.'
             )
             log = BackupLog.objects.create(
@@ -385,7 +416,7 @@ def perform_system_data_backup():
                 'removed_ticket_count': removed_ticket_count,
             }
         except Exception as exc:
-            for path in (temp_db_path, archive_path):
+            for path in (temp_db_path, temp_json_path, temp_chatbot_path, archive_path):
                 if os.path.exists(path):
                     try:
                         os.remove(path)

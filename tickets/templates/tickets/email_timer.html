@@ -3,7 +3,9 @@
 {% block header_title %}Email Timer{% endblock %}
 
 {% block content %}
-<div class="max-w-7xl mx-auto space-y-5">
+<div id="email-timer-root" class="max-w-7xl mx-auto space-y-5"
+     data-editing-rule="{% if editing_rule %}true{% else %}false{% endif %}"
+     data-scan-step-url="{% url 'email_timer_scan_step' %}">
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
             <h1 class="text-xl font-bold text-white">Email → Ticket Timer</h1>
@@ -552,13 +554,14 @@
         });
 
         let initialTab = 'routing';
-        {% if not editing_rule %}
-        try {
-            initialTab = localStorage.getItem('email_timer_log_tab') || 'routing';
-        } catch (error) {
-            initialTab = 'routing';
+        const emailTimerRoot = document.getElementById('email-timer-root');
+        if (emailTimerRoot?.dataset.editingRule !== 'true') {
+            try {
+                initialTab = localStorage.getItem('email_timer_log_tab') || 'routing';
+            } catch (error) {
+                initialTab = 'routing';
+            }
         }
-        {% endif %}
         activateEmailLogTab(initialTab, false);
     })();
 
@@ -770,8 +773,8 @@ async function startProgressiveEmailScan() {
 
     logMessage("Connected to server. Fetching first batch...");
 
-    const csrfToken = '{{ csrf_token }}';
-    const scanStepUrl = "{% url 'email_timer_scan_step' %}";
+    const csrfToken = document.querySelector('input[name="csrfmiddlewaretoken"]')?.value || '';
+    const scanStepUrl = document.getElementById('email-timer-root')?.dataset.scanStepUrl || '';
 
     try {
         let completed = false;

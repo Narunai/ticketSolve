@@ -265,7 +265,7 @@ SQLite database managed by `chatbot_service/database.py`.
 ### `system_config`
 - `is_active` (INTEGER): Master chatbot toggle (1 = ON, 0 = OFF)
 - `api_key_enc` (TEXT): Encrypted Gemini API key (Fernet)
-- `model_name` (TEXT): Gemini model identifier (e.g. `gemini-1.5-flash`)
+- `model_name` (TEXT): allowlisted Gemini model identifier (recommended `gemini-3.6-flash`)
 - `system_prompt` (TEXT): Master system instruction prompt
 
 ### `custom_knowledge`
@@ -275,9 +275,9 @@ SQLite database managed by `chatbot_service/database.py`.
 - `is_active` (INTEGER): Active toggle
 - `updated_at` (TIMESTAMP)
 
-### `admin_users`
-- `username` (TEXT UNIQUE)
-- `password_hash` (TEXT SHA-256)
+Chatbot authentication does not have a separate password table. Nginx verifies
+the existing Django session and System Admin/Sub Admin role before proxying admin
+requests.
 
 ### `chat_history`
 - `session_id` (TEXT)
@@ -286,3 +286,9 @@ SQLite database managed by `chatbot_service/database.py`.
 - `message` (TEXT)
 - `created_at` (TIMESTAMP)
 
+### `admin_audit_log`
+- `actor_id` (TEXT): Django user primary key supplied by the trusted auth subrequest
+- `action` (TEXT): config/knowledge administrative action
+- `target_id` (TEXT): knowledge entry ID when applicable
+- `details` (TEXT): bounded metadata only; never API key or prompt/knowledge content
+- `created_at` (TIMESTAMP)

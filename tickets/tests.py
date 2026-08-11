@@ -105,6 +105,26 @@ class MultiTenantTicketTests(TestCase):
         all_to = [to_addr for m in mail.outbox for to_addr in m.to]
         self.assertIn(self.user_a.email, all_to)
 
+    def test_chatbot_auth_subrequests_enforce_session_and_system_role(self):
+        user_auth_url = reverse('chatbot_user_auth')
+        admin_auth_url = reverse('chatbot_admin_auth')
+
+        self.assertEqual(self.client.get(user_auth_url).status_code, 401)
+        self.assertEqual(self.client.get(admin_auth_url).status_code, 401)
+
+        self.client.login(username='user_a', password='password123')
+        user_response = self.client.get(user_auth_url)
+        self.assertEqual(user_response.status_code, 204)
+        self.assertEqual(user_response['X-Chatbot-User'], str(self.user_a.pk))
+        self.assertEqual(user_response['X-Chatbot-Role'], User.CLIENT_USER)
+        self.assertEqual(self.client.get(admin_auth_url).status_code, 403)
+
+        self.client.logout()
+        self.client.login(username='system_admin', password='password123')
+        admin_response = self.client.get(admin_auth_url)
+        self.assertEqual(admin_response.status_code, 204)
+        self.assertEqual(admin_response['X-Chatbot-Role'], 'SUPERUSER')
+
 
     def test_data_isolation_regular_user_a_cannot_see_b_data(self):
         # Log in as user_b
@@ -914,13 +934,10 @@ class MultiTenantTicketTests(TestCase):
                 smtp_configuration=config,
                 message_id='<email-to-ticket-1@example.com>',
             )
-            self.assertEqual(pending_receipt.status, InboundEmailReceipt.STATUS_PENDING)
-            self.assertIsNone(pending_receipt.ticket)
-            self.assertEqual(pending_receipt.attachments.count(), 1)
-            imported_ticket, _ = approve_inbound_email(
-                pending_receipt.pk,
-                self.system_admin,
-            )
+            self.assertEqual(pending_receipt.status, InboundEmailReceipt.STATUS_IMPORTED)
+            self.assertIsNotNone(pending_receipt.ticket)
+            self.assertEqual(pending_receipt.attachments.count(), 0)
+            imported_ticket = pending_receipt.ticket
             fallback_ticket, _ = _create_ticket(
                 config,
                 InboundMessage(
@@ -933,8 +950,8 @@ class MultiTenantTicketTests(TestCase):
             )
 
         self.assertTrue(first['success'])
-        self.assertEqual(first['pending'], 1)
-        self.assertEqual(first['imported'], 0)
+        self.assertEqual(first['pending'], 0)
+        self.assertEqual(first['imported'], 1)
         self.assertEqual(second['duplicates'], 1)
         self.assertEqual(Ticket.objects.count(), ticket_count + 2)
         imported_ticket.refresh_from_db()
@@ -975,8 +992,8 @@ class MultiTenantTicketTests(TestCase):
         )
         self.assertEqual(receipt.status, InboundEmailReceipt.STATUS_IMPORTED)
         self.assertEqual(receipt.ticket, imported_ticket)
-        self.assertEqual(receipt.decided_by, self.system_admin)
-        self.assertIsNotNone(receipt.decided_at)
+        self.assertIsNone(receipt.decided_by)
+        self.assertIsNone(receipt.decided_at)
         self.assertEqual(receipt.attachments.count(), 0)
         contact = InboundEmailContact.objects.get(
             smtp_configuration=config,
@@ -991,6 +1008,46 @@ class MultiTenantTicketTests(TestCase):
         )
         self.assertContains(contact_response, 'External User')
         self.assertContains(contact_response, 'external@example.com')
+
+    def test_address_book_entry_does_not_bypass_email_approval(self):
+        from .email_to_ticket import _is_approved_sender
+        from .models import (
+            InboundEmailContact,
+            InboundEmailReceipt,
+            SMTPConfiguration,
+        )
+
+        config = SMTPConfiguration.objects.create(
+            name='Approval mailbox',
+            provider='GMAIL',
+            username='approval@example.com',
+            password='app-password',
+            feature_scope=SMTPConfiguration.FEATURE_EMAIL_TO_TICKET,
+            incoming_host='imap.gmail.com',
+            email_to_ticket_company=self.company_a,
+            email_to_ticket_creator=self.user_a,
+            is_active=True,
+        )
+        sender = 'new.sender@example.com'
+        InboundEmailContact.objects.create(
+            smtp_configuration=config,
+            email=sender,
+            display_name='New Sender',
+        )
+        self.assertFalse(_is_approved_sender(config, sender))
+
+        receipt = InboundEmailReceipt.objects.create(
+            smtp_configuration=config,
+            message_id='<rejected-sender@example.com>',
+            sender_email=sender,
+            subject='Rejected request',
+            status=InboundEmailReceipt.STATUS_REJECTED,
+        )
+        self.assertFalse(_is_approved_sender(config, sender))
+
+        receipt.status = InboundEmailReceipt.STATUS_IMPORTED
+        receipt.save(update_fields=['status'])
+        self.assertTrue(_is_approved_sender(config, sender))
 
     def test_email_to_ticket_manual_import_requires_system_admin(self):
         from unittest import mock
@@ -1202,8 +1259,8 @@ class MultiTenantTicketTests(TestCase):
 
             ticket_count = Ticket.objects.count()
             response = self.client.post(approve_url)
-            self.assertRedirects(response, reverse('email_timer'))
             pending.refresh_from_db()
+            self.assertRedirects(response, reverse('ticket_detail', args=[pending.ticket_id]))
             self.assertEqual(pending.status, InboundEmailReceipt.STATUS_IMPORTED)
             self.assertIsNotNone(pending.ticket)
             self.assertEqual(pending.ticket.title, first_message.subject)
@@ -2693,6 +2750,22 @@ class MultiTenantTicketTests(TestCase):
         self.assertEqual(data_update['status'], 'success')
         self.assertEqual(data_update['new_status'], Ticket.STATUS_RESOLVED)
 
+        # A tenant administrator cannot use the preview endpoint to enumerate
+        # an assignee or email address from another company.
+        cross_tenant = self.client.get(
+            reverse('ticket_email_preview_recipients', args=[self.ticket_a.pk]),
+            {'action_type': 'update', 'assigned_to': self.user_b.pk},
+        )
+        self.assertEqual(cross_tenant.status_code, 400)
+        self.assertNotIn(self.user_b.email, cross_tenant.content.decode('utf-8'))
+
+        self.client.force_login(self.user_a)
+        unauthorized_update = self.client.get(
+            reverse('ticket_email_preview_recipients', args=[self.ticket_a.pk]),
+            {'action_type': 'update'},
+        )
+        self.assertEqual(unauthorized_update.status_code, 403)
+
 
 
     def test_one_time_email_recipient_preview_and_customization(self):
@@ -2741,6 +2814,22 @@ class MultiTenantTicketTests(TestCase):
         self.assertEqual(update_resp.status_code, 302)
         status_logs = EmailLog.objects.filter(recipient=extra_status_email)
         self.assertTrue(status_logs.exists())
+
+    def test_regular_user_cannot_inject_one_time_email_recipient(self):
+        from tickets.models import EmailLog
+
+        external_email = 'outside-recipient@example.net'
+        self.client.force_login(self.user_a)
+        response = self.client.post(
+            reverse('ticket_detail', args=[self.ticket_a.pk]),
+            {
+                'content': 'A normal customer follow-up.',
+                'selected_recipients': [external_email],
+                'extra_recipients': external_email,
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(EmailLog.objects.filter(recipient=external_email).exists())
 
     def test_non_superuser_system_admin_cannot_edit_django_superuser(self):
         app_admin = User.objects.create_user(
