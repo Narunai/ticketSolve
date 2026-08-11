@@ -110,8 +110,17 @@ sudo systemctl stop ticket-chatbot.service 2>/dev/null || true
 if ! id -u ticketsolve-chatbot >/dev/null 2>&1; then
     sudo useradd --system --home-dir /nonexistent --shell /usr/sbin/nologin ticketsolve-chatbot
 fi
-sudo usermod -a -G ticketsolve-chatbot ubuntu
-sudo install -d -m 750 -o ticketsolve-chatbot -g ticketsolve-chatbot /var/lib/ticketsolve-chatbot
+if ! getent group ticketsolve-backup >/dev/null 2>&1; then
+    sudo groupadd --system ticketsolve-backup
+fi
+sudo usermod -a -G ticketsolve-backup ubuntu
+# Older releases used chatbot group membership for backup access, which also
+# exposed the Fernet key to the Django/Gunicorn user. Remove that broad grant.
+if id -nG ubuntu | tr ' ' '\n' | grep -qx 'ticketsolve-chatbot'; then
+    sudo gpasswd --delete ubuntu ticketsolve-chatbot
+fi
+# setgid preserves the backup-only group when SQLite creates sidecar files.
+sudo install -d -m 2750 -o ticketsolve-chatbot -g ticketsolve-backup /var/lib/ticketsolve-chatbot
 sudo install -d -m 750 -o root -g ticketsolve-chatbot "$CHATBOT_ENV_DIR"
 if [ ! -f /var/lib/ticketsolve-chatbot/chatbot.db ] && [ -f chatbot_service/chatbot.db ]; then
     sudo install -m 600 -o ticketsolve-chatbot -g ticketsolve-chatbot \
@@ -137,7 +146,7 @@ if [ ! -f "$CHATBOT_KEY_FILE" ]; then
 fi
 sudo chown root:ticketsolve-chatbot "$CHATBOT_KEY_FILE"
 sudo chmod 640 "$CHATBOT_KEY_FILE"
-sudo chown ticketsolve-chatbot:ticketsolve-chatbot /var/lib/ticketsolve-chatbot/chatbot.db 2>/dev/null || true
+sudo chown ticketsolve-chatbot:ticketsolve-backup /var/lib/ticketsolve-chatbot/chatbot.db 2>/dev/null || true
 sudo chmod 640 /var/lib/ticketsolve-chatbot/chatbot.db 2>/dev/null || true
 
 sudo cp deployment/gunicorn.service /etc/systemd/system/gunicorn.service

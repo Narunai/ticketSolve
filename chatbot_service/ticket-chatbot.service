@@ -7,6 +7,7 @@ Wants=network-online.target
 Type=simple
 User=ticketsolve-chatbot
 Group=ticketsolve-chatbot
+SupplementaryGroups=ticketsolve-backup
 WorkingDirectory=/var/www/ticketSolve/chatbot_service
 ExecStart=/var/www/ticketSolve/venv/bin/uvicorn main:app --host 127.0.0.1 --port 8001
 Restart=always

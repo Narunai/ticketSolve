@@ -32,7 +32,7 @@ flowchart LR
 
 | Item | Production path | Permission/purpose |
 |---|---|---|
-| Runtime database | `/var/lib/ticketsolve-chatbot/chatbot.db` | SQLite; owner `ticketsolve-chatbot`, mode `0640` |
+| Runtime database | `/var/lib/ticketsolve-chatbot/chatbot.db` | SQLite; service owner + backup-only group, mode `0640` |
 | Fernet key | `/etc/ticketsolve-chatbot/fernet.key` | แยก directory จาก Django secrets; root-owned และอ่านได้เฉพาะ chatbot group |
 | Curated documents | `chatbot_service/knowledge/` | read-only, `.md`/`.txt` only |
 
@@ -58,6 +58,8 @@ Fernet key ดังนั้นต้องสำรอง key ใน approved 
 - Provider error ถูกเก็บเป็น log แบบไม่เปิดเผยรายละเอียดภายในแก่ผู้ใช้
 - systemd ใช้ dedicated user, read-only filesystem, no-new-privileges, capability drop,
   memory/tasks/file-descriptor limits
+- Gunicorn user ไม่อยู่ใน chatbot secret group; การอ่าน DB เพื่อ backup ใช้
+  `ticketsolve-backup` group แยก จึงอ่าน Fernet key ไม่ได้
 
 ## Operations
 
