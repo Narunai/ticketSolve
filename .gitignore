@@ -10,9 +10,9 @@ venv/
 .vscode/
 .deploy-tmp/
 media/
+staticfiles/
 backups/*.zip
 backups/*.tar.gz
 chatbot_service/chatbot.db
 chatbot_service/.secret_key
-
 

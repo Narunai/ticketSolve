@@ -6,6 +6,13 @@ from cryptography.fernet import Fernet
 SERVICE_DIR = Path(__file__).resolve().parent
 DB_PATH = Path(os.environ.get("CHATBOT_DB_PATH", SERVICE_DIR / "chatbot.db"))
 SECRET_KEY_PATH = Path(os.environ.get("CHATBOT_SECRET_KEY_FILE", SERVICE_DIR / ".secret_key"))
+DEFAULT_MODEL = "gemini-3.6-flash"
+RETIRED_MODELS = (
+    "gemini-1.5-flash",
+    "gemini-1.5-pro",
+    "gemini-2.0-flash",
+    "gemini-2.0-flash-lite",
+)
 
 
 def _ensure_private_parent(path: Path) -> None:
@@ -60,7 +67,7 @@ def init_db():
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         is_active INTEGER DEFAULT 1,
         api_key_enc TEXT DEFAULT '',
-        model_name TEXT DEFAULT 'gemini-flash-latest',
+        model_name TEXT DEFAULT 'gemini-3.6-flash',
         system_prompt TEXT DEFAULT 'You are an AI Assistant for the TicketSolve system. Respond politely, concisely, accurately, and strictly in English based on the system documentation provided.'
     )
     """)
@@ -104,8 +111,24 @@ def init_db():
     if cursor.fetchone()[0] == 0:
         cursor.execute("""
             INSERT INTO system_config (id, is_active, api_key_enc, model_name, system_prompt)
-            VALUES (1, 1, '', 'gemini-flash-latest', 'You are an AI Assistant for the TicketSolve system. Respond politely, concisely, and accurately based strictly on the system documentation provided.')
-        """)
+            VALUES (1, 1, '', ?, 'You are an AI Assistant for the TicketSolve system. Respond politely, concisely, and accurately based strictly on the system documentation provided.')
+        """, (DEFAULT_MODEL,))
+
+    # Keep upgraded installations on a supported stable model without changing
+    # the encrypted API key or an administrator-authored system prompt.
+    placeholders = ", ".join("?" for _ in RETIRED_MODELS)
+    cursor.execute(
+        f"UPDATE system_config SET model_name = ? WHERE model_name IN ({placeholders})",
+        (DEFAULT_MODEL, *RETIRED_MODELS),
+    )
+    if cursor.rowcount:
+        cursor.execute(
+            """
+            INSERT INTO admin_audit_log (actor_id, action, target_id, details)
+            VALUES ('system', 'MODEL_AUTO_MIGRATED', 'system_config:1', ?)
+            """,
+            (f"Retired Gemini model migrated to {DEFAULT_MODEL}",),
+        )
 
     # Seed Default Knowledge Base Guide if empty
     cursor.execute("SELECT COUNT(*) FROM custom_knowledge")
@@ -140,7 +163,7 @@ def get_config():
             "model_name": row["model_name"],
             "system_prompt": row["system_prompt"]
         }
-    return {"is_active": True, "api_key": "", "model_name": "gemini-flash-latest", "system_prompt": ""}
+    return {"is_active": True, "api_key": "", "model_name": DEFAULT_MODEL, "system_prompt": ""}
 
 
 def get_admin_config():

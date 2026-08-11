@@ -70,12 +70,12 @@ Ran 106 tests in 49.962s
 OK
 System check identified no issues (0 silenced).
 
-Chatbot: 9 passed in 2.34s
+Chatbot: 10 passed in 2.97s
 Template script-tag check: PASS
 pip-audit (main + chatbot): No known vulnerabilities found
 ```
 
 * **Django suite**: ผ่านครบ 106/106 บน development environment (Django 5.2)
-* **FastAPI chatbot suite**: ผ่านครบ 9/9
+* **FastAPI chatbot suite**: ผ่านครบ 10/10
 * **Deployment checks**: `check --deploy`, `makemigrations --check` และ template script-tag scan ผ่าน
 * **Dependency audit**: `pip-audit` ของ requirements ทั้งสองชุดไม่พบ known vulnerabilities หลังอัปเดต `cryptography==50.0.0`

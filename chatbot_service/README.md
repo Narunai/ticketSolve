@@ -51,6 +51,8 @@ Fernet key ดังนั้นต้องสำรอง key ใน approved 
 - จำกัดข้อความผู้ใช้ 2,000 ตัวอักษร, system prompt 8,000 ตัวอักษร และ knowledge
   30,000 ตัวอักษรต่อรายการ
 - โมเดลที่รองรับเป็น allowlist; ค่าแนะนำคือ `gemini-3.6-flash`
+- การเริ่ม service จะย้ายค่าเดิม `gemini-1.5-*`/`gemini-2.0-*` ไป `gemini-3.6-flash`
+  อัตโนมัติ โดยไม่เปลี่ยน encrypted API key หรือ custom prompt
 - Repository README, deployment report, `.env`, source code และ user uploads ไม่ถูกส่ง
   ให้โมเดล ใช้เฉพาะ curated guide กับ knowledge ที่ System Admin เพิ่ม
 - Provider error ถูกเก็บเป็น log แบบไม่เปิดเผยรายละเอียดภายในแก่ผู้ใช้

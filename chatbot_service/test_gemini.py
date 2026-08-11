@@ -152,6 +152,26 @@ def test_admin_rejects_decommissioned_model(chatbot_client):
     assert response.status_code == 400
 
 
+def test_startup_migrates_retired_model_without_changing_api_key(chatbot_client):
+    database.update_config(
+        is_active=True,
+        api_key="existing-encrypted-key",
+        model_name="gemini-2.0-flash",
+    )
+
+    database.init_db()
+
+    config = database.get_config()
+    assert config["model_name"] == database.DEFAULT_MODEL
+    assert config["api_key"] == "existing-encrypted-key"
+    with sqlite3.connect(database.DB_PATH) as connection:
+        audit = connection.execute(
+            "SELECT action, details FROM admin_audit_log ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+    assert audit[0] == "MODEL_AUTO_MIGRATED"
+    assert database.DEFAULT_MODEL in audit[1]
+
+
 def test_document_sandbox_excludes_repository_and_secrets():
     repository_root = security_sandbox.SERVICE_DIR.parent
     assert security_sandbox.is_path_safe(
