@@ -33,7 +33,7 @@ flowchart LR
 | Item | Production path | Permission/purpose |
 |---|---|---|
 | Runtime database | `/var/lib/ticketsolve-chatbot/chatbot.db` | SQLite; owner `ticketsolve-chatbot`, mode `0640` |
-| Fernet key | `/etc/ticketsolve/chatbot-fernet.key` | root-owned, readable only by chatbot group |
+| Fernet key | `/etc/ticketsolve-chatbot/fernet.key` | แยก directory จาก Django secrets; root-owned และอ่านได้เฉพาะ chatbot group |
 | Curated documents | `chatbot_service/knowledge/` | read-only, `.md`/`.txt` only |
 
 API key ถูกเข้ารหัสด้วย Fernet แต่หน้า Admin แสดงเพียงสถานะว่า “configured” และไม่ส่ง

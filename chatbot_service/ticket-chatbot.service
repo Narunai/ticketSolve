@@ -14,7 +14,7 @@ RestartSec=3
 Environment="PYTHONUNBUFFERED=1"
 Environment="PYTHONDONTWRITEBYTECODE=1"
 Environment="CHATBOT_DB_PATH=/var/lib/ticketsolve-chatbot/chatbot.db"
-Environment="CHATBOT_SECRET_KEY_FILE=/etc/ticketsolve/chatbot-fernet.key"
+Environment="CHATBOT_SECRET_KEY_FILE=/etc/ticketsolve-chatbot/fernet.key"
 Environment="CHATBOT_ALLOWED_ORIGINS=https://tikketsolve-systemoneit.uk,https://www.tikketsolve-systemoneit.uk"
 Environment="CHATBOT_ALLOWED_HOSTS=tikketsolve-systemoneit.uk,www.tikketsolve-systemoneit.uk,127.0.0.1,localhost"
 Environment="CHATBOT_USER_RATE_PER_MINUTE=20"
@@ -38,7 +38,7 @@ LockPersonality=true
 CapabilityBoundingSet=
 AmbientCapabilities=
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
-ReadOnlyPaths=/var/www/ticketSolve /etc/ticketsolve/chatbot-fernet.key
+ReadOnlyPaths=/var/www/ticketSolve /etc/ticketsolve-chatbot/fernet.key
 ReadWritePaths=/var/lib/ticketsolve-chatbot
 MemoryMax=512M
 TasksMax=64

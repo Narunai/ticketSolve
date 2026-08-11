@@ -21,6 +21,7 @@
 - เพิ่ม Simple Password แบบ admin-approved สำหรับผู้สูงอายุหรือผู้ใช้ที่ไม่ถนัดเทคโนโลยี: อนุญาตรหัสอย่าง `123456` เฉพาะบัญชีที่ได้รับอนุมัติ, เก็บเป็น Argon2 hash, ใช้ต่อเนื่องได้ และ lock 10 นาทีหลังผิดครบ 5 ครั้ง โดยไม่เปิดทางให้ดึงรหัสเดิมย้อนหลัง
 - เพิ่ม security headers, HSTS preload, authenticated-page no-store และ hardening ของ Nginx/Gunicorn service
 - ปิด unauthenticated Chatbot Admin/API โดยใช้ Nginx `auth_request` ผูก Django session/RBAC, จำกัด CORS/origin/rate/body, ไม่ส่ง Gemini API key กลับ browser และย้าย DB/key ออกจาก Git checkout
+- แยก Chatbot Fernet key ไป dedicated `/etc/ticketsolve-chatbot` boundary เพื่อไม่ต้องให้ service account อ่าน Django production secrets
 - แก้ Email Approval regression: Address Book ไม่เท่ากับการอนุมัติ ผู้ส่งจะ auto-import ได้เมื่อเคย import สำเร็จ, เป็น user ในระบบ หรือมี routing rule เท่านั้น
 - ปิด tenant enumeration และ stored-XSS ใน Email Recipient Preview พร้อมตรวจ email override, จำกัด 20 รายการ และไม่ให้ Client User ส่ง ticket content ไป arbitrary email
 - ตรึงเวอร์ชัน production dependencies, อัปเดต `cryptography` จาก 49.0.0 ไป 50.0.0 ตาม advisory และตรวจพบ **0 known vulnerabilities** ด้วย `pip-audit` ณ วันที่รายงาน

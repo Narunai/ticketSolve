@@ -238,7 +238,7 @@ key นี้ใช้ถอดรหัส SMTP/IMAP password ในฐาน�
 ก่อน deploy สคริปต์จะสร้างสำเนา environment แบบ root-only (`0600`); หากไม่มี
 `FIELD_ENCRYPTION_KEYS` จะหยุดทันทีเพื่อไม่ให้ encrypted data สูญหาย
 
-Chatbot ใช้ Fernet key แยกที่ `/etc/ticketsolve/chatbot-fernet.key` และ runtime DB ที่
+Chatbot ใช้ Fernet key แยกจาก Django secrets ที่ `/etc/ticketsolve-chatbot/fernet.key` และ runtime DB ที่
 `/var/lib/ticketsolve-chatbot/chatbot.db` สคริปต์จะ migrate legacy files โดยรักษา key เดิม,
 สร้าง dedicated user และตรวจว่า Nginx มี `auth_request` module ห้ามลบ/สร้าง key ใหม่เมื่อ DB เดิมยังใช้งาน
 

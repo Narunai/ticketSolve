@@ -6,6 +6,8 @@ set -euo pipefail
 PROJECT_DIR="/var/www/ticketSolve"
 ENV_DIR="/etc/ticketsolve"
 ENV_FILE="${ENV_DIR}/ticketsolve.env"
+CHATBOT_ENV_DIR="/etc/ticketsolve-chatbot"
+CHATBOT_KEY_FILE="${CHATBOT_ENV_DIR}/fernet.key"
 BACKUP_DIR="/var/backups/ticketsolve"
 
 # Prevent background workers from loading new model code before migrations finish.
@@ -110,24 +112,31 @@ if ! id -u ticketsolve-chatbot >/dev/null 2>&1; then
 fi
 sudo usermod -a -G ticketsolve-chatbot ubuntu
 sudo install -d -m 750 -o ticketsolve-chatbot -g ticketsolve-chatbot /var/lib/ticketsolve-chatbot
+sudo install -d -m 750 -o root -g ticketsolve-chatbot "$CHATBOT_ENV_DIR"
 if [ ! -f /var/lib/ticketsolve-chatbot/chatbot.db ] && [ -f chatbot_service/chatbot.db ]; then
     sudo install -m 600 -o ticketsolve-chatbot -g ticketsolve-chatbot \
         chatbot_service/chatbot.db /var/lib/ticketsolve-chatbot/chatbot.db
 fi
-if [ ! -f /etc/ticketsolve/chatbot-fernet.key ]; then
-    if [ -f chatbot_service/.secret_key ]; then
+if [ ! -f "$CHATBOT_KEY_FILE" ]; then
+    if [ -f /etc/ticketsolve/chatbot-fernet.key ]; then
+        # Upgrade older secure deployments without rotating the encryption key.
         sudo install -m 640 -o root -g ticketsolve-chatbot \
-            chatbot_service/.secret_key /etc/ticketsolve/chatbot-fernet.key
+            /etc/ticketsolve/chatbot-fernet.key "$CHATBOT_KEY_FILE"
+    elif [ -f chatbot_service/.secret_key ]; then
+        sudo install -m 640 -o root -g ticketsolve-chatbot \
+            chatbot_service/.secret_key "$CHATBOT_KEY_FILE"
     else
         CHATBOT_KEY_TMP="$(mktemp)"
         venv/bin/python -c \
             'import pathlib, sys; from cryptography.fernet import Fernet; pathlib.Path(sys.argv[1]).write_bytes(Fernet.generate_key())' \
             "$CHATBOT_KEY_TMP"
         sudo install -m 640 -o root -g ticketsolve-chatbot \
-            "$CHATBOT_KEY_TMP" /etc/ticketsolve/chatbot-fernet.key
+            "$CHATBOT_KEY_TMP" "$CHATBOT_KEY_FILE"
         rm -f "$CHATBOT_KEY_TMP"
     fi
 fi
+sudo chown root:ticketsolve-chatbot "$CHATBOT_KEY_FILE"
+sudo chmod 640 "$CHATBOT_KEY_FILE"
 sudo chown ticketsolve-chatbot:ticketsolve-chatbot /var/lib/ticketsolve-chatbot/chatbot.db 2>/dev/null || true
 sudo chmod 640 /var/lib/ticketsolve-chatbot/chatbot.db 2>/dev/null || true
 
