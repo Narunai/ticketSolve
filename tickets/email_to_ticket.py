@@ -199,12 +199,23 @@ def _parse_message(uid, raw_email):
     )
 
 
+def _configured_keywords(raw_value):
+    """Return bounded, case-insensitive CSV keywords for safe scan-time use."""
+    keywords = []
+    seen = set()
+    for raw_item in (raw_value or '')[:4000].split(','):
+        item = raw_item.strip().casefold()
+        if not item or len(item) > 100 or item in seen:
+            continue
+        seen.add(item)
+        keywords.append(item)
+        if len(keywords) >= 100:
+            break
+    return keywords
+
+
 def _issue_keywords(config):
-    configured = [
-        item.strip().casefold()
-        for item in config.issue_keywords.split(',')
-        if item.strip()
-    ]
+    configured = _configured_keywords(config.issue_keywords)
     built_in = [item.casefold() for item in DEFAULT_ISSUE_KEYWORDS]
     return list(dict.fromkeys(built_in + configured))
 
@@ -212,9 +223,17 @@ def _issue_keywords(config):
 def _is_issue_message(config, message):
     if message.subject.strip().casefold().startswith('[ticketsolve]'):
         return False, ['system-generated']
+    subject = message.subject.casefold()
+    if config.ignore_keyword_filter_enabled:
+        ignored = [
+            keyword
+            for keyword in _configured_keywords(config.ignore_keywords)
+            if keyword in subject
+        ]
+        if ignored:
+            return False, [f'ignored:{keyword}' for keyword in ignored]
     if not config.filter_issue_only:
         return True, []
-    subject = message.subject.casefold()
     matched = [keyword for keyword in _issue_keywords(config) if keyword in subject]
     return bool(matched), matched
 
@@ -611,12 +630,26 @@ def import_email_to_tickets(config, max_count=None):
                         _mark_seen(client, uid)
                     continue
 
-                _record_contact(config, message)
                 is_issue, matched = _is_issue_message(config, message)
                 if not is_issue:
                     if matched == ['system-generated']:
                         skip_details = (
                             'Skipped a TicketSolve-generated message to prevent an email loop.'
+                        )
+                    elif matched and all(
+                        keyword.startswith('ignored:') for keyword in matched
+                    ):
+                        ignored_matches = [
+                            keyword.split(':', 1)[1] for keyword in matched
+                        ]
+                        displayed_matches = ignored_matches[:10]
+                        remaining_count = len(ignored_matches) - len(displayed_matches)
+                        remaining_label = (
+                            f' (+{remaining_count} more)' if remaining_count else ''
+                        )
+                        skip_details = (
+                            'Skipped by the ignore keyword filter because the subject '
+                            f"matched: {', '.join(displayed_matches)}{remaining_label}."
                         )
                     else:
                         skip_details = 'Skipped because the subject did not match any issue keyword.'
@@ -639,6 +672,7 @@ def import_email_to_tickets(config, max_count=None):
                         _mark_seen(client, uid)
                     continue
 
+                _record_contact(config, message)
                 sender_email_clean = (message.sender_email or '').strip().casefold()
                 has_routing_rule = config.inbound_routing_rules.filter(
                     is_active=True,

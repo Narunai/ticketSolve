@@ -1109,7 +1109,15 @@ class SMTPConfiguration(models.Model):
     issue_keywords = models.TextField(
         blank=True,
         default='',
+        max_length=4000,
         help_text='Optional comma-separated subject keywords',
+    )
+    ignore_keyword_filter_enabled = models.BooleanField(default=False)
+    ignore_keywords = models.TextField(
+        blank=True,
+        default='',
+        max_length=4000,
+        help_text='Optional comma-separated subject keywords that must never create tickets',
     )
     mark_processed_as_read = models.BooleanField(default=True)
     max_emails_per_fetch = models.PositiveSmallIntegerField(default=30)
@@ -1164,6 +1172,20 @@ class SMTPConfiguration(models.Model):
                 errors['max_emails_per_fetch'] = 'Maximum emails per fetch must be between 1 and 100.'
             if self.fetch_days_back < 1 or self.fetch_days_back > 90:
                 errors['fetch_days_back'] = 'Fetch days back must be between 1 and 90.'
+            for field_name in ('issue_keywords', 'ignore_keywords'):
+                keywords = [
+                    item.strip()
+                    for item in (getattr(self, field_name, '') or '').split(',')
+                    if item.strip()
+                ]
+                if len(keywords) > 100:
+                    errors[field_name] = 'A keyword list can contain at most 100 entries.'
+                elif any(len(keyword) > 100 for keyword in keywords):
+                    errors[field_name] = 'Each keyword must be 100 characters or fewer.'
+            if self.ignore_keyword_filter_enabled and not self.ignore_keywords.strip():
+                errors['ignore_keywords'] = (
+                    'Add at least one ignore keyword before enabling this filter.'
+                )
         if errors:
             raise ValidationError(errors)
 
@@ -1749,4 +1771,3 @@ def get_ticket_default_recipients(ticket, action_type=None):
                         })
 
     return recipients
-

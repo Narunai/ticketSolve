@@ -48,7 +48,7 @@
 
 ### 📥 1.5 Email → Ticket
 * อ่านอีเมลที่ยังไม่อ่านผ่าน IMAP SSL แล้วเก็บใน Approval queue ก่อนสร้าง Ticket ใน company ที่กำหนด
-* เลือก ticket creator/default assignee และกรอง subject ด้วย keyword ไทย/อังกฤษ
+* เลือก ticket creator/default assignee และกรอง subject ด้วย keyword ไทย/อังกฤษ พร้อม Ignore Keyword Filter ที่มีลำดับสูงกว่า include filter และบันทึกคำที่ตรง/เหตุผลเป็น Skipped
 * ป้องกันการสร้างซ้ำด้วย Message-ID และมี import receipts สำหรับ Pending/Imported/Rejected/Skipped/Failed
 * System Admin ตรวจเนื้อหาและไฟล์แนบผ่าน authenticated download แล้ว Approve เพื่อสร้าง Ticket ทันที หรือ Reject พร้อมเหตุผล; อีเมล Pending ไม่อยู่ใน Dashboard/รายงาน
 * เก็บสมุดรายชื่อผู้ส่งอัตโนมัติแยก mailbox พร้อม display name, จำนวนข้อความ, first/last seen และ subject ล่าสุด; การอยู่ในสมุดรายชื่อเพียงอย่างเดียวไม่ถือว่าได้รับอนุมัติ

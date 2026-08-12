@@ -129,6 +129,7 @@ Backup archive เก็บที่ `/var/backups/ticketsolve` บน AWS VPS �
 * Ticket ที่สร้างจากอีเมลจะแสดงการ์ด **Email sender** แยกจาก internal creator เพื่อให้ติดตามผู้แจ้งตัวจริงได้
 * Sender → Assignee routing กำหนดผู้ดูแลตามอีเมลผู้ส่งได้ทุกบริษัท โดย Ticket จะอยู่ในบริษัทของผู้ดูแลเพื่อรักษา tenant isolation; หากไม่มีกฎหรือผู้ดูแลในกฎไม่ active จะใช้ค่า Company/Creator/Default Assignee จาก SMTP
 * Custom subject keywords เป็นคำเพิ่มเติมจากคำมาตรฐาน เช่น `ปัญหา` และ `issue` ไม่ได้แทนที่คำมาตรฐาน
+* Ignore Subject Keywords ตั้งค่าแยกต่อ mailbox หรือพร้อมกันทุก mailbox ได้ โดยมีลำดับสูงกว่า issue keywords; รายการที่ตรงจะเป็น `Skipped` พร้อมคำที่ตรงและเหตุผลใน Email import details โดยไม่สร้าง Contact, Approval หรือ Ticket
 * อ่านเฉพาะข้อความ `UNSEEN` ย้อนหลังตามจำนวนวันที่กำหนด และจำกัดจำนวนต่อรอบ
 * กรอง subject ด้วย keyword ไทย/อังกฤษก่อนสร้าง Ticket ได้
 * กำหนด target company, ticket creator และ default assignee ต่อ mailbox

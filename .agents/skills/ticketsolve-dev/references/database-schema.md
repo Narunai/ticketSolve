@@ -186,6 +186,8 @@ Outbound email server configuration.
 | `host`, `port`, `username` | Standard SMTP fields | |
 | `password` | **EncryptedCharField** | Fernet encryption |
 | `use_tls`, `use_ssl` | BooleanField | |
+| `filter_issue_only`, `issue_keywords` | Boolean + Text | Required subject-keyword filter; bounded CSV |
+| `ignore_keyword_filter_enabled`, `ignore_keywords` | Boolean + Text | Higher-priority subject ignore filter; bounded CSV |
 | `is_active` | BooleanField | Only one active per company |
 
 ### NotificationConfig (Line 1532)

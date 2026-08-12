@@ -172,6 +172,17 @@ def language_processor(request):
         'outlook_step_4': 'Scroll down to "App passwords" and click "Create a new app password".',
         'outlook_step_5': 'Microsoft will immediately generate a random 16-character password.',
         'outlook_step_6': 'Copy this password and paste it into the App Password field in TicketSolve settings.',
+        'keyword_ignore_filters': 'Keyword / Ignore Filters',
+        'email_import_filters': 'Email Import Filters',
+        'email_import_filters_desc': 'Choose required subject keywords and keywords that must always be ignored.',
+        'ignore_keyword_filter': 'Ignore Subject Keyword Filter',
+        'ignore_keyword_filter_desc': 'Matching email subjects are logged as skipped and never create or queue tickets.',
+        'ignore_subject_keywords': 'Ignored Subject Keywords (Comma-separated)',
+        'ignore_keywords_placeholder': 'e.g. newsletter, promotion, automatic reply, out of office',
+        'ignore_filter_priority_help': 'Ignore keywords take priority over required issue keywords.',
+        'quick_ignore_presets': 'Common ignore keywords:',
+        'clear_ignore_keywords': 'Clear Ignore Keywords',
+        'save_email_filters': 'Save Email Filters',
     }
     
     return {

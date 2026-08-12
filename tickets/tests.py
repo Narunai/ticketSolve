@@ -10,7 +10,7 @@ from django.utils import timezone
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import connection
 
-from .models import Company, Ticket, CustomUser, EmailLog, MonthlyReportSchedule, TicketAuditLog, TicketAutomationConfig
+from .models import Company, Ticket, CustomUser, EmailLog, MonthlyReportSchedule, TicketAuditLog, TicketAutomationConfig, SMTPConfiguration
 
 from .admin import CustomUserAdmin, TicketAdmin
 
@@ -3311,6 +3311,17 @@ class SimplePasswordTests(TestCase):
         self.assertIsNotNone(decoded_hdr)
 
     def test_keyword_filter_save_view(self):
+        SMTPConfiguration.objects.create(
+            name='Keyword filter mailbox',
+            provider='GMAIL',
+            host='smtp.gmail.com',
+            username='keyword-filter@example.com',
+            password='app-password',
+            feature_scope=SMTPConfiguration.FEATURE_EMAIL_TO_TICKET,
+            incoming_host='imap.gmail.com',
+            email_to_ticket_company=self.company_a,
+            email_to_ticket_creator=self.user_a,
+        )
         self.client.force_login(self.system_admin)
         response = self.client.post(
             reverse('email_keyword_filter_save'),
@@ -3318,11 +3329,151 @@ class SimplePasswordTests(TestCase):
                 'mailbox_id': 'all',
                 'filter_issue_only': 'on',
                 'issue_keywords': 'ปัญหา, ticket, help, urgent',
+                'ignore_keyword_filter_enabled': 'on',
+                'ignore_keywords': 'newsletter, Automatic Reply, newsletter',
             },
             follow=True,
         )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Keyword Filter Settings updated')
+        configs = SMTPConfiguration.objects.filter(
+            feature_scope__in=[
+                SMTPConfiguration.FEATURE_EMAIL_TO_TICKET,
+                SMTPConfiguration.FEATURE_BOTH,
+            ]
+        )
+        self.assertTrue(configs.exists())
+        for config in configs:
+            self.assertTrue(config.ignore_keyword_filter_enabled)
+            self.assertEqual(
+                config.ignore_keywords,
+                'newsletter, Automatic Reply',
+            )
+
+    def test_ignore_keyword_filter_validation_and_permission(self):
+        from django.contrib.messages import get_messages
+
+        mailbox = SMTPConfiguration.objects.create(
+            name='Ignore validation mailbox',
+            provider='GMAIL',
+            host='smtp.gmail.com',
+            username='ignore-validation@example.com',
+            password='app-password',
+            feature_scope=SMTPConfiguration.FEATURE_EMAIL_TO_TICKET,
+            incoming_host='imap.gmail.com',
+            email_to_ticket_company=self.company_a,
+            email_to_ticket_creator=self.user_a,
+        )
+
+        self.client.force_login(self.user_a)
+        denied = self.client.post(
+            reverse('email_keyword_filter_save'),
+            {
+                'mailbox_id': str(mailbox.pk),
+                'ignore_keyword_filter_enabled': 'on',
+                'ignore_keywords': 'newsletter',
+            },
+        )
+        self.assertEqual(denied.status_code, 403)
+
+        self.client.force_login(self.system_admin)
+        invalid = self.client.post(
+            reverse('email_keyword_filter_save'),
+            {
+                'mailbox_id': str(mailbox.pk),
+                'ignore_keyword_filter_enabled': 'on',
+                'ignore_keywords': '',
+            },
+        )
+        self.assertRedirects(invalid, reverse('email_timer'))
+        self.assertIn(
+            'Add at least one ignore keyword',
+            ' '.join(str(message) for message in get_messages(invalid.wsgi_request)),
+        )
+        mailbox.refresh_from_db()
+        self.assertFalse(mailbox.ignore_keyword_filter_enabled)
+
+    def test_ignore_keyword_filter_skips_email_and_records_reason(self):
+        from email.message import EmailMessage as RawEmailMessage
+        from unittest import mock
+        from .email_to_ticket import (
+            InboundMessage,
+            _is_issue_message,
+            import_email_to_tickets,
+        )
+        from .models import InboundEmailContact, InboundEmailReceipt
+
+        config = SMTPConfiguration.objects.create(
+            name='Ignore filter mailbox',
+            provider='GMAIL',
+            host='smtp.gmail.com',
+            username='ignore-filter@example.com',
+            password='app-password',
+            feature_scope=SMTPConfiguration.FEATURE_EMAIL_TO_TICKET,
+            incoming_host='imap.gmail.com',
+            email_to_ticket_company=self.company_a,
+            email_to_ticket_creator=self.user_a,
+            filter_issue_only=False,
+            ignore_keyword_filter_enabled=True,
+            ignore_keywords='automatic reply, โฆษณา',
+            is_active=True,
+        )
+        decision = _is_issue_message(
+            config,
+            InboundMessage(
+                uid=b'701',
+                message_id='<ignore-decision@example.com>',
+                subject='AUTOMATIC REPLY: Issue VPN failed',
+                body='This contains an issue keyword but must be ignored.',
+            ),
+        )
+        self.assertEqual(decision, (False, ['ignored:automatic reply']))
+
+        raw_message = RawEmailMessage()
+        raw_message['Subject'] = 'Automatic Reply: Issue VPN failed'
+        raw_message['From'] = 'Auto Responder <robot@example.com>'
+        raw_message['Message-ID'] = '<ignored-email@example.com>'
+        raw_message.set_content('Automated response.')
+
+        imap_client = mock.Mock()
+        imap_client.select.return_value = ('OK', [b'1'])
+
+        def imap_uid(command, *args):
+            if command == 'search':
+                return 'OK', [b'701']
+            if command == 'fetch':
+                if args[-1] == '(RFC822.SIZE)':
+                    return 'OK', [(b'701 (RFC822.SIZE 512)', b'')]
+                return 'OK', [(b'701 (BODY[] {1})', raw_message.as_bytes()), b')']
+            if command == 'store':
+                return 'OK', [b'701']
+            raise AssertionError(f'Unexpected IMAP UID command: {command}')
+
+        imap_client.uid.side_effect = imap_uid
+        ticket_count = Ticket.objects.count()
+        with mock.patch(
+            'tickets.email_to_ticket.imaplib.IMAP4_SSL',
+            return_value=imap_client,
+        ):
+            result = import_email_to_tickets(config)
+
+        self.assertTrue(result['success'])
+        self.assertEqual(result['skipped'], 1)
+        self.assertEqual(Ticket.objects.count(), ticket_count)
+        receipt = InboundEmailReceipt.objects.get(
+            smtp_configuration=config,
+            message_id='<ignored-email@example.com>',
+        )
+        self.assertEqual(receipt.status, InboundEmailReceipt.STATUS_SKIPPED)
+        self.assertEqual(receipt.matched_keywords, ['ignored:automatic reply'])
+        self.assertIn('ignore keyword filter', receipt.details)
+        self.assertIn('automatic reply', receipt.details)
+        self.assertFalse(
+            InboundEmailContact.objects.filter(
+                smtp_configuration=config,
+                email='robot@example.com',
+            ).exists()
+        )
 
 
 

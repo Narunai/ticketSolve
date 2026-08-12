@@ -102,6 +102,30 @@ def _one_time_email_recipients(request):
             recipients.append(email)
     return recipients
 
+
+def _normalize_email_filter_keywords(raw_value):
+    """Validate and normalize bounded, case-insensitive CSV keyword lists."""
+    raw_value = raw_value or ''
+    if len(raw_value) > 4000:
+        raise ValidationError('Keyword lists cannot exceed 4,000 characters.')
+
+    normalized = []
+    seen = set()
+    for raw_item in raw_value.split(','):
+        item = raw_item.strip()
+        if not item:
+            continue
+        if len(item) > 100:
+            raise ValidationError('Each keyword must be 100 characters or fewer.')
+        folded = item.casefold()
+        if folded in seen:
+            continue
+        seen.add(folded)
+        normalized.append(item)
+        if len(normalized) > 100:
+            raise ValidationError('A keyword list can contain at most 100 entries.')
+    return ', '.join(normalized)
+
 from django.conf import settings
 from django.contrib import messages
 from django.http import HttpResponse, Http404
@@ -685,7 +709,8 @@ class SMTPConfigurationForm(forms.ModelForm):
             'incoming_host', 'incoming_port', 'incoming_folder',
             'email_to_ticket_company', 'email_to_ticket_creator',
             'email_to_ticket_assignee', 'filter_issue_only',
-            'issue_keywords', 'mark_processed_as_read',
+            'issue_keywords', 'ignore_keyword_filter_enabled',
+            'ignore_keywords', 'mark_processed_as_read',
             'max_emails_per_fetch', 'fetch_days_back', 'is_active',
         ]
         widgets = {
@@ -752,6 +777,14 @@ class SMTPConfigurationForm(forms.ModelForm):
                 'class': 'w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white',
                 'placeholder': 'Optional: ปัญหา,error,issue,ระบบล่ม',
             }),
+            'ignore_keyword_filter_enabled': forms.CheckboxInput(attrs={
+                'class': 'rounded bg-slate-900 border-slate-700 text-rose-500 h-4 w-4',
+            }),
+            'ignore_keywords': forms.Textarea(attrs={
+                'rows': 2,
+                'class': 'w-full bg-slate-900/50 border border-rose-500/30 rounded-lg px-4 py-2.5 text-white',
+                'placeholder': 'Optional: newsletter, promotion, automatic reply',
+            }),
             'mark_processed_as_read': forms.CheckboxInput(attrs={
                 'class': 'rounded bg-slate-900 border-slate-700 text-indigo-600 h-4 w-4',
             }),
@@ -787,6 +820,28 @@ class SMTPConfigurationForm(forms.ModelForm):
         if not password and self.instance and self.instance.pk:
             return self.instance.password
         return password
+
+    def clean_issue_keywords(self):
+        return _normalize_email_filter_keywords(
+            self.cleaned_data.get('issue_keywords')
+        )
+
+    def clean_ignore_keywords(self):
+        return _normalize_email_filter_keywords(
+            self.cleaned_data.get('ignore_keywords')
+        )
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if (
+            cleaned_data.get('ignore_keyword_filter_enabled')
+            and not cleaned_data.get('ignore_keywords')
+        ):
+            self.add_error(
+                'ignore_keywords',
+                'Add at least one ignore keyword before enabling this filter.',
+            )
+        return cleaned_data
 
 
 class EmailToTicketScheduleForm(forms.ModelForm):
@@ -3279,6 +3334,12 @@ class EmailToTicketTimerView(
         context['first_smtp'] = first_smtp
         context['default_filter_issue_only'] = first_smtp.filter_issue_only if first_smtp else True
         context['default_issue_keywords'] = first_smtp.issue_keywords if (first_smtp and first_smtp.issue_keywords) else 'ปัญหา, ticket, help, issue, support, แจ้ง, ขอ'
+        context['default_ignore_keyword_filter_enabled'] = (
+            first_smtp.ignore_keyword_filter_enabled if first_smtp else False
+        )
+        context['default_ignore_keywords'] = (
+            first_smtp.ignore_keywords if first_smtp else ''
+        )
         edit_rule_id = self.request.GET.get('edit_rule')
         edit_rule = None
         if edit_rule_id:
@@ -3407,8 +3468,25 @@ class EmailToTicketKeywordFilterSaveView(
 ):
     def post(self, request, *args, **kwargs):
         filter_issue_only = request.POST.get('filter_issue_only') == 'on'
-        issue_keywords = (request.POST.get('issue_keywords') or '').strip()
+        ignore_keyword_filter_enabled = (
+            request.POST.get('ignore_keyword_filter_enabled') == 'on'
+        )
         mailbox_id = request.POST.get('mailbox_id')
+
+        try:
+            issue_keywords = _normalize_email_filter_keywords(
+                request.POST.get('issue_keywords')
+            )
+            ignore_keywords = _normalize_email_filter_keywords(
+                request.POST.get('ignore_keywords')
+            )
+            if ignore_keyword_filter_enabled and not ignore_keywords:
+                raise ValidationError(
+                    'Add at least one ignore keyword before enabling this filter.'
+                )
+        except ValidationError as exc:
+            messages.error(request, ' '.join(exc.messages))
+            return redirect('email_timer')
 
         configs = SMTPConfiguration.objects.filter(
             feature_scope__in=[
@@ -3417,17 +3495,30 @@ class EmailToTicketKeywordFilterSaveView(
             ]
         )
         if mailbox_id and mailbox_id != 'all':
-            configs = configs.filter(pk=mailbox_id)
+            try:
+                mailbox_pk = int(mailbox_id)
+            except (TypeError, ValueError):
+                messages.error(request, 'Select a valid target mailbox.')
+                return redirect('email_timer')
+            configs = configs.filter(pk=mailbox_pk)
 
         updated_count = configs.update(
             filter_issue_only=filter_issue_only,
             issue_keywords=issue_keywords,
+            ignore_keyword_filter_enabled=ignore_keyword_filter_enabled,
+            ignore_keywords=ignore_keywords,
         )
 
         status_str = "Enabled (Subject keywords required)" if filter_issue_only else "Disabled (Accept all emails)"
+        ignore_status = (
+            'Ignore filter enabled'
+            if ignore_keyword_filter_enabled
+            else 'Ignore filter disabled'
+        )
         messages.success(
             request,
-            f"Keyword Filter Settings updated for {updated_count} mailbox(es): {status_str}.",
+            f"Keyword Filter Settings updated for {updated_count} mailbox(es): "
+            f"{status_str}; {ignore_status}.",
         )
         return redirect('email_timer')
 

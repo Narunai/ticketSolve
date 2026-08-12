@@ -21,7 +21,7 @@
 9. **Backup Security Regression**: ทดสอบ path traversal, incremental backup เมื่อ Ticket เก่ามี comment ใหม่ และการลบรายการ backup ที่ไม่มี archive
 10. **Security Baseline Regression**: login throttling, POST-only logout, security audit, SMTP encryption at rest, file-signature validation, security headers และ open-redirect protection
 11. **Simple Password**: approval scope, persistent password อย่าง `123456`, one-time display ของรหัสที่สุ่มใหม่, Argon2 storage, System Sub-Admin restrictions, tenant isolation, owner reset, การห้ามบัญชีที่ไม่ได้รับอนุมัติใช้รหัสง่าย และ lock 10 นาที
-12. **Email → Ticket**: ทดสอบ Approval queue, Approve/Reject, การไม่สร้าง Ticket ก่อนอนุมัติ, staged attachment authenticated download/cleanup, RBAC, contact directory, Message-ID deduplication, sender routing, timer gating และ run log ที่มี pending count
+12. **Email → Ticket**: ทดสอบ Approval queue, Approve/Reject, การไม่สร้าง Ticket ก่อนอนุมัติ, staged attachment authenticated download/cleanup, RBAC, contact directory, Message-ID deduplication, sender routing, include/ignore keyword priority, skipped reason logging, timer gating และ run log ที่มี pending count
 13. **In-App Notifications**: ทดสอบกระดิ่งแจ้งเตือน, การเปิด Ticket/ทำเครื่องหมายอ่านแล้ว, Mark all read และป้องกันการอ่านแจ้งเตือนข้ามผู้ใช้หรือข้าม tenant
 14. **Chatbot Security**: ทดสอบ Django session/RBAC gateway, System Admin scope, same-origin mutation, API-key non-disclosure, per-user rate limit, payload/model allowlist, admin audit และ curated-document sandbox
 15. **New Feature Regression**: ทดสอบว่า Address Book ไม่ข้าม Email Approval, recipient preview ไม่ enumerate ข้าม tenant, Client User inject arbitrary email ไม่ได้ และ override ถูก validate/ใช้ครั้งเดียว
@@ -65,8 +65,8 @@ python -m pytest chatbot_service -q
 ผลที่ยืนยันล่าสุดวันที่ 12 สิงหาคม 2026:
 
 ```text
-Found 106 test(s).
-Ran 106 tests in 49.962s
+Found 108 test(s).
+Ran 108 tests in 54.167s
 OK
 System check identified no issues (0 silenced).
 
@@ -75,7 +75,7 @@ Template script-tag check: PASS
 pip-audit (main + chatbot): No known vulnerabilities found
 ```
 
-* **Django suite**: ผ่านครบ 106/106 บน development environment (Django 5.2)
+* **Django suite**: ผ่านครบ 108/108 บน development environment (Django 5.2)
 * **FastAPI chatbot suite**: ผ่านครบ 10/10
 * **Deployment checks**: `check --deploy`, `makemigrations --check` และ template script-tag scan ผ่าน
 * **Dependency audit**: `pip-audit` ของ requirements ทั้งสองชุดไม่พบ known vulnerabilities หลังอัปเดต `cryptography==50.0.0`

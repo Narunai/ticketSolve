@@ -15,7 +15,7 @@
         </div>
         <div class="flex items-center gap-2">
             <button type="button" onclick="openKeywordFilterModal()" class="rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-3.5 py-2 text-xs font-bold text-indigo-300 hover:bg-indigo-500/20 transition-all flex items-center gap-1.5 cursor-pointer">
-                <span>🔍</span> <span>Keyword Filters</span>
+                <span>🔍</span> <span>{{ t.keyword_ignore_filters }}</span>
             </button>
             <a href="{% url 'system_settings' %}" class="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-700">
                 SMTP Settings
@@ -566,13 +566,14 @@
     })();
 
     function openKeywordFilterModal() {
+        syncKeywordFilterFields();
         document.getElementById('keywordFilterModal').classList.remove('hidden');
     }
     function closeKeywordFilterModal() {
         document.getElementById('keywordFilterModal').classList.add('hidden');
     }
-    function appendKeyword(keyword) {
-        const area = document.getElementById('modal_issue_keywords');
+    function appendKeywordToArea(areaId, keyword) {
+        const area = document.getElementById(areaId);
         let current = area.value.trim();
         if (!current) {
             area.value = keyword;
@@ -583,21 +584,40 @@
             }
         }
     }
+    function appendKeyword(keyword) {
+        appendKeywordToArea('modal_issue_keywords', keyword);
+    }
+    function appendIgnoreKeyword(keyword) {
+        appendKeywordToArea('modal_ignore_keywords', keyword);
+    }
     function resetDefaultKeywords() {
         document.getElementById('modal_issue_keywords').value = 'ปัญหา, ticket, help, issue, support, แจ้ง, ขอ';
         document.getElementById('modal_filter_issue_only').checked = true;
+    }
+    function clearIgnoreKeywords() {
+        document.getElementById('modal_ignore_keywords').value = '';
+        document.getElementById('modal_ignore_keyword_filter_enabled').checked = false;
+    }
+    function syncKeywordFilterFields() {
+        const select = document.getElementById('keyword_mailbox_id');
+        const option = select?.selectedOptions?.[0];
+        if (!option) return;
+        document.getElementById('modal_filter_issue_only').checked = option.dataset.filterIssueOnly === 'true';
+        document.getElementById('modal_issue_keywords').value = option.dataset.issueKeywords || '';
+        document.getElementById('modal_ignore_keyword_filter_enabled').checked = option.dataset.ignoreEnabled === 'true';
+        document.getElementById('modal_ignore_keywords').value = option.dataset.ignoreKeywords || '';
     }
 </script>
 
 <!-- Keyword Filters Management Modal -->
 <div id="keywordFilterModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm hidden">
-    <div class="w-full max-w-xl rounded-2xl border border-indigo-500/30 bg-slate-900/95 p-6 shadow-2xl space-y-5">
+    <div class="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-indigo-500/30 bg-slate-900/95 p-6 shadow-2xl space-y-5">
         <div class="flex items-center justify-between border-b border-slate-800 pb-4">
             <div class="flex items-center gap-2.5">
                 <span class="text-xl">🔍</span>
                 <div>
-                    <h3 class="text-base font-bold text-white">Email Timer Keyword Filters</h3>
-                    <p class="text-[11px] text-slate-400">Configure subject keywords required for converting emails into tickets</p>
+                    <h3 class="text-base font-bold text-white">{{ t.email_import_filters }}</h3>
+                    <p class="text-[11px] text-slate-400">{{ t.email_import_filters_desc }}</p>
                 </div>
             </div>
             <button type="button" onclick="closeKeywordFilterModal()" class="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white">✕</button>
@@ -607,12 +627,51 @@
             {% csrf_token %}
             <div>
                 <label class="block text-xs font-medium text-slate-300 mb-1.5">Target Mailbox</label>
-                <select name="mailbox_id" class="w-full rounded-xl border border-slate-800 bg-slate-950 px-3.5 py-2.5 text-xs text-slate-200 focus:border-indigo-500 focus:outline-none">
-                    <option value="all">🌐 All Email-to-Ticket Mailboxes</option>
+                <select name="mailbox_id" id="keyword_mailbox_id" onchange="syncKeywordFilterFields()" class="w-full rounded-xl border border-slate-800 bg-slate-950 px-3.5 py-2.5 text-xs text-slate-200 focus:border-indigo-500 focus:outline-none">
+                    <option value="all"
+                            data-filter-issue-only="{% if default_filter_issue_only %}true{% else %}false{% endif %}"
+                            data-issue-keywords="{{ default_issue_keywords }}"
+                            data-ignore-enabled="{% if default_ignore_keyword_filter_enabled %}true{% else %}false{% endif %}"
+                            data-ignore-keywords="{{ default_ignore_keywords }}">🌐 All Email-to-Ticket Mailboxes</option>
                     {% for box in mailboxes %}
-                    <option value="{{ box.pk }}">{{ box.name }} ({{ box.email_to_ticket_company|default:"No company" }})</option>
+                    <option value="{{ box.pk }}"
+                            data-filter-issue-only="{% if box.filter_issue_only %}true{% else %}false{% endif %}"
+                            data-issue-keywords="{{ box.issue_keywords|default:'ปัญหา, ticket, help, issue, support, แจ้ง, ขอ' }}"
+                            data-ignore-enabled="{% if box.ignore_keyword_filter_enabled %}true{% else %}false{% endif %}"
+                            data-ignore-keywords="{{ box.ignore_keywords }}">{{ box.name }} ({{ box.email_to_ticket_company|default:"No company" }})</option>
                     {% endfor %}
                 </select>
+            </div>
+
+            <div class="space-y-3 rounded-xl border border-rose-500/30 bg-rose-500/5 p-3.5">
+                <div class="flex items-center justify-between gap-4">
+                    <div>
+                        <span class="text-xs font-bold text-rose-200">{{ t.ignore_keyword_filter }}</span>
+                        <p class="text-[10px] text-slate-400">{{ t.ignore_keyword_filter_desc }}</p>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" name="ignore_keyword_filter_enabled" id="modal_ignore_keyword_filter_enabled" class="sr-only peer" {% if default_ignore_keyword_filter_enabled %}checked{% endif %}>
+                        <div class="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-rose-600"></div>
+                    </label>
+                </div>
+                <div>
+                    <div class="mb-1.5 flex items-center justify-between">
+                        <label class="text-xs font-medium text-slate-300">{{ t.ignore_subject_keywords }}</label>
+                        <span class="text-[10px] text-rose-300">{{ t.ignore_filter_priority_help }}</span>
+                    </div>
+                    <textarea name="ignore_keywords" id="modal_ignore_keywords" rows="3" maxlength="4000" class="w-full rounded-xl border border-rose-500/30 bg-slate-950 p-3 text-xs text-slate-200 font-mono focus:border-rose-500 focus:outline-none placeholder-slate-600" placeholder="{{ t.ignore_keywords_placeholder }}">{{ default_ignore_keywords }}</textarea>
+                </div>
+                <div>
+                    <span class="mb-1.5 block text-[10px] text-slate-400">{{ t.quick_ignore_presets }}</span>
+                    <div class="flex flex-wrap gap-1.5">
+                        <button type="button" onclick="appendIgnoreKeyword('newsletter')" class="rounded-md border border-rose-500/20 bg-rose-500/10 px-2 py-1 font-mono text-[10px] text-rose-200 hover:bg-rose-500/20">+ newsletter</button>
+                        <button type="button" onclick="appendIgnoreKeyword('promotion')" class="rounded-md border border-rose-500/20 bg-rose-500/10 px-2 py-1 font-mono text-[10px] text-rose-200 hover:bg-rose-500/20">+ promotion</button>
+                        <button type="button" onclick="appendIgnoreKeyword('automatic reply')" class="rounded-md border border-rose-500/20 bg-rose-500/10 px-2 py-1 font-mono text-[10px] text-rose-200 hover:bg-rose-500/20">+ automatic reply</button>
+                        <button type="button" onclick="appendIgnoreKeyword('out of office')" class="rounded-md border border-rose-500/20 bg-rose-500/10 px-2 py-1 font-mono text-[10px] text-rose-200 hover:bg-rose-500/20">+ out of office</button>
+                        <button type="button" onclick="appendIgnoreKeyword('โฆษณา')" class="rounded-md border border-rose-500/20 bg-rose-500/10 px-2 py-1 font-mono text-[10px] text-rose-200 hover:bg-rose-500/20">+ โฆษณา</button>
+                        <button type="button" onclick="clearIgnoreKeywords()" class="rounded-md border border-slate-700 bg-slate-800 px-2 py-1 font-mono text-[10px] text-slate-300 hover:bg-slate-700">{{ t.clear_ignore_keywords }}</button>
+                    </div>
+                </div>
             </div>
 
             <div class="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2">
@@ -633,7 +692,7 @@
                     <label class="block text-xs font-medium text-slate-300">Issue Subject Keywords (Comma-separated)</label>
                     <span class="text-[10px] text-slate-500">Case-insensitive</span>
                 </div>
-                <textarea name="issue_keywords" id="modal_issue_keywords" rows="4" class="w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-xs text-slate-200 font-mono focus:border-indigo-500 focus:outline-none placeholder-slate-600" placeholder="e.g. ปัญหา, ticket, help, issue, support, แจ้ง, ขอ">{{ default_issue_keywords }}</textarea>
+                <textarea name="issue_keywords" id="modal_issue_keywords" rows="4" maxlength="4000" class="w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-xs text-slate-200 font-mono focus:border-indigo-500 focus:outline-none placeholder-slate-600" placeholder="e.g. ปัญหา, ticket, help, issue, support, แจ้ง, ขอ">{{ default_issue_keywords }}</textarea>
             </div>
 
             <!-- Quick Add Presets -->
@@ -653,7 +712,7 @@
 
             <div class="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
                 <button type="button" onclick="closeKeywordFilterModal()" class="px-4 py-2 rounded-xl text-xs font-semibold border border-slate-700 text-slate-300 hover:bg-slate-800">Cancel</button>
-                <button type="submit" class="px-5 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-600/30">Save Keyword Filters ➔</button>
+                <button type="submit" class="px-5 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-600/30">{{ t.save_email_filters }}</button>
             </div>
         </form>
     </div>

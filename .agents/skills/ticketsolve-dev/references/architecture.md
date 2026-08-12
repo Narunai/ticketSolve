@@ -97,7 +97,7 @@
 - **Gunicorn hardening**: `PrivateTmp`, `NoNewPrivileges`, `ProtectSystem=full`
 - **Media downloads**: Served through Django views (auth-gated), not nginx
 - **Chatbot authorization**: Nginx `auth_request` reuses Django session/RBAC and overwrites trusted identity headers
-- **Chatbot secrets**: DB is `/var/lib/ticketsolve-chatbot`; Fernet key is `/etc/ticketsolve/chatbot-fernet.key`; the decrypted API key is never returned to the browser
+- **Chatbot secrets**: DB is `/var/lib/ticketsolve-chatbot`; Fernet key is `/etc/ticketsolve-chatbot/fernet.key`; the decrypted API key is never returned to the browser. `ticketsolve-backup` can read only the DB, not the key.
 - **Chatbot service sandbox**: dedicated system user, read-only project, capability drop, memory/task limits
 
 ### 6. Template System
@@ -118,7 +118,7 @@ The chatbot widget (`/chatbot-static/widget.js`) is loaded conditionally in `bas
 /var/www/ticketSolve/staticfiles/  # collectstatic output
 /var/www/ticketSolve/media/   # User uploads (attachments)
 /etc/ticketsolve/ticketsolve.env   # Production environment secrets
-/etc/ticketsolve/chatbot-fernet.key # Chatbot API-key encryption key
+/etc/ticketsolve-chatbot/fernet.key # Chatbot API-key encryption key
 /var/lib/ticketsolve-chatbot/chatbot.db # Chatbot runtime data
 /var/backups/ticketsolve/     # Database backups
 ```

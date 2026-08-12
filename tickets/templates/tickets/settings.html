@@ -150,6 +150,15 @@
                         <p class="mt-1 text-[10px] text-slate-500">Comma-separated. Leave blank to use the built-in Thai/English issue keywords.</p>
                     </div>
                     <div class="flex items-center gap-2">
+                        {{ form.ignore_keyword_filter_enabled }}
+                        <label for="{{ form.ignore_keyword_filter_enabled.id_for_label }}" class="text-xs font-semibold text-rose-300">{{ t.ignore_keyword_filter }}</label>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] text-rose-300 font-semibold mb-1 uppercase tracking-wider">{{ t.ignore_subject_keywords }}</label>
+                        {{ form.ignore_keywords }}
+                        <p class="mt-1 text-[10px] text-slate-500">{{ t.ignore_keyword_filter_desc }} {{ t.ignore_filter_priority_help }}</p>
+                    </div>
+                    <div class="flex items-center gap-2">
                         {{ form.mark_processed_as_read }}
                         <label for="{{ form.mark_processed_as_read.id_for_label }}" class="text-xs text-slate-300">Mark imported/skipped messages as read</label>
                     </div>

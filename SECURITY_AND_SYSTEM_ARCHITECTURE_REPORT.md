@@ -25,7 +25,7 @@
 - แก้ Email Approval regression: Address Book ไม่เท่ากับการอนุมัติ ผู้ส่งจะ auto-import ได้เมื่อเคย import สำเร็จ, เป็น user ในระบบ หรือมี routing rule เท่านั้น
 - ปิด tenant enumeration และ stored-XSS ใน Email Recipient Preview พร้อมตรวจ email override, จำกัด 20 รายการ และไม่ให้ Client User ส่ง ticket content ไป arbitrary email
 - ตรึงเวอร์ชัน production dependencies, อัปเดต `cryptography` จาก 49.0.0 ไป 50.0.0 ตาม advisory และตรวจพบ **0 known vulnerabilities** ด้วย `pip-audit` ณ วันที่รายงาน
-- เพิ่ม security regression tests, Simple Password, Email approval/RBAC, PDF ภาษาไทย และ Chatbot security; Django 106 tests + FastAPI 10 tests
+- เพิ่ม security regression tests, Simple Password, Email approval/RBAC, bounded Ignore Keyword Filter, PDF ภาษาไทย และ Chatbot security; Django 108 tests + FastAPI 10 tests
 
 ## 2. มาตรฐานอ้างอิงและเป้าหมาย
 
@@ -174,7 +174,7 @@ Migration `0030_security_baseline` ทำสามอย่างแบบอั
 | `python manage.py check` | ผ่าน: 0 issues |
 | `python manage.py check --deploy` | ผ่าน: 0 issues |
 | `python manage.py makemigrations --check` | ผ่าน: no changes detected |
-| Django regression suite | 106/106 ผ่าน |
+| Django regression suite | 108/108 ผ่าน |
 | FastAPI Chatbot suite | 10/10 ผ่าน |
 | `check --deploy` / migration check / template-script check | ผ่าน |
 | `pip-audit` main + chatbot requirements | No known vulnerabilities found ณ 12 ส.ค. 2026 |
