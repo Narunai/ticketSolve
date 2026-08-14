@@ -764,6 +764,13 @@ class MaintenanceSetting(models.Model):
             and self.scheduled_start > at
         )
 
+    @property
+    def has_access_code(self):
+        return bool(
+            self.access_code_hash
+            or getattr(settings, 'MAINTENANCE_PERMANENT_ACCESS_CODE_HASH', '')
+        )
+
     def __str__(self):
         return 'System maintenance configuration'
 

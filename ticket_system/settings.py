@@ -258,6 +258,12 @@ SIMPLE_PASSWORD_LOCK_SECONDS = int(os.environ.get('SIMPLE_PASSWORD_LOCK_SECONDS'
 MAINTENANCE_ACCESS_MAX_FAILURES = int(os.environ.get('MAINTENANCE_ACCESS_MAX_FAILURES', 5))
 MAINTENANCE_ACCESS_WINDOW_SECONDS = int(os.environ.get('MAINTENANCE_ACCESS_WINDOW_SECONDS', 10 * 60))
 MAINTENANCE_ACCESS_LOCK_SECONDS = int(os.environ.get('MAINTENANCE_ACCESS_LOCK_SECONDS', 10 * 60))
+# Optional break-glass code managed outside the database. Store only a Django
+# password hash here; the plaintext code must never enter source control.
+MAINTENANCE_PERMANENT_ACCESS_CODE_HASH = os.environ.get(
+    'MAINTENANCE_PERMANENT_ACCESS_CODE_HASH',
+    '',
+).strip()
 RESTORE_SENTINEL_FILE = os.environ.get(
     'RESTORE_SENTINEL_FILE',
     str(BASE_DIR / '.restore' / 'restore-in-progress'),

@@ -11,6 +11,7 @@ from pathlib import Path
 
 from cryptography.fernet import Fernet, InvalidToken
 from django.conf import settings
+from django.contrib.auth.hashers import check_password
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.db.utils import OperationalError, ProgrammingError
@@ -274,6 +275,28 @@ def clear_maintenance_access_failures(request, access_version):
     AuthenticationThrottle.objects.filter(
         key_hash=_maintenance_throttle_key(request, access_version)
     ).delete()
+
+
+def maintenance_access_code_configured(maintenance_setting):
+    return bool(
+        maintenance_setting.access_code_hash
+        or getattr(settings, 'MAINTENANCE_PERMANENT_ACCESS_CODE_HASH', '')
+    )
+
+
+def maintenance_access_code_matches(supplied_code, maintenance_setting):
+    """Validate rotating and environment-managed maintenance codes safely."""
+    if not supplied_code:
+        return False
+    encoded_candidates = list(dict.fromkeys(filter(None, [
+        maintenance_setting.access_code_hash,
+        getattr(settings, 'MAINTENANCE_PERMANENT_ACCESS_CODE_HASH', ''),
+    ])))
+    matched = False
+    for encoded in encoded_candidates:
+        # Evaluate every configured hash to avoid exposing which code matched.
+        matched = check_password(supplied_code, encoded) or matched
+    return matched
 
 
 def grant_maintenance_access(request, maintenance_setting):

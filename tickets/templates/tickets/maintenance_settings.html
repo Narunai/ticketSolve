@@ -68,7 +68,10 @@
                         <label class="mb-1 block text-xs font-semibold text-slate-300">Test session duration</label>
                         {{ form.access_session_minutes }}
                     </div>
-                    <p class="mt-2 text-[11px] text-slate-500">Stored code: {% if maintenance.access_code_hash %}Configured{% else %}Not configured{% endif %}</p>
+                    <div class="mt-2 space-y-1 text-[11px] text-slate-500">
+                        <p>Rotating code: {% if maintenance.access_code_hash %}Configured{% else %}Not configured{% endif %}</p>
+                        <p>Permanent environment code: {% if permanent_access_code_configured %}Configured{% else %}Not configured{% endif %}</p>
+                    </div>
                 </div>
 
                 <div class="rounded-xl border border-slate-800 bg-slate-950/50 p-4">

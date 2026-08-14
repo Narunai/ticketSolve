@@ -2,7 +2,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.contrib.auth.views import LoginView
 from django.contrib.auth import logout, update_session_auth_hash
-from django.contrib.auth.hashers import check_password, make_password
+from django.contrib.auth.hashers import make_password
 from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib.auth.password_validation import validate_password
 from django.views.generic import CreateView, UpdateView, DetailView, TemplateView, ListView, FormView
@@ -30,6 +30,8 @@ from .security import (
     clear_login_failures,
     generate_simple_password,
     grant_maintenance_access,
+    maintenance_access_code_configured,
+    maintenance_access_code_matches,
     maintenance_access_retry_after,
     login_retry_after,
     record_maintenance_access_failure,
@@ -974,7 +976,10 @@ class MaintenanceSettingsForm(forms.ModelForm):
         end = cleaned.get('expected_end')
         if start and end and end <= start:
             self.add_error('expected_end', 'Expected completion must be after the scheduled start.')
-        has_code = bool(self.instance and self.instance.access_code_hash)
+        has_code = bool(
+            (self.instance and self.instance.access_code_hash)
+            or getattr(settings, 'MAINTENANCE_PERMANENT_ACCESS_CODE_HASH', '')
+        )
         if (
             cleaned.get('is_enabled')
             and cleaned.get('allow_test_access')
@@ -985,7 +990,7 @@ class MaintenanceSettingsForm(forms.ModelForm):
             cleaned.get('is_enabled')
             and self.instance
             and not self.instance.is_enabled
-            and not cleaned.get('access_code')
+            and not (has_code or cleaned.get('access_code'))
         ):
             self.add_error(
                 'access_code',
@@ -4586,9 +4591,7 @@ class MaintenanceAccessView(View):
         supplied_code = request.POST.get('access_code', '')
         allowed = bool(
             setting.allow_test_access
-            and setting.access_code_hash
-            and supplied_code
-            and check_password(supplied_code, setting.access_code_hash)
+            and maintenance_access_code_matches(supplied_code, setting)
         )
         if not allowed:
             record_maintenance_access_failure(request, setting.access_version)
@@ -4639,6 +4642,9 @@ class MaintenanceSettingsView(LoginRequiredMixin, SystemStaffRequiredMixin, Temp
         context['can_manage'] = bool(
             self.request.user.is_superuser
             or self.request.user.role == CustomUser.SYSTEM_ADMIN
+        )
+        context['permanent_access_code_configured'] = bool(
+            getattr(settings, 'MAINTENANCE_PERMANENT_ACCESS_CODE_HASH', '')
         )
         active_users = CustomUser.objects.filter(is_active=True)
         context['active_user_count'] = active_users.count()
@@ -5021,7 +5027,11 @@ class BackupRestoreRequestView(
         errors = []
         if not backup.restore_supported or backup.validation_status != BackupLog.VALIDATION_VALID:
             errors.append('This backup is not marked as compatible with complete restore.')
-        if not maintenance.is_active() or not maintenance.allow_test_access or not maintenance.access_code_hash:
+        if (
+            not maintenance.is_active()
+            or not maintenance.allow_test_access
+            or not maintenance_access_code_configured(maintenance)
+        ):
             errors.append('Enable active Maintenance Mode with an access code before requesting restore.')
         if not request.user.check_password(request.POST.get('current_password', '')):
             errors.append('Your current account password was not accepted.')
@@ -5029,7 +5039,7 @@ class BackupRestoreRequestView(
         supplied_code = request.POST.get('maintenance_code', '')
         if retry_after:
             errors.append('Maintenance access verification is temporarily locked.')
-        elif not supplied_code or not check_password(supplied_code, maintenance.access_code_hash):
+        elif not maintenance_access_code_matches(supplied_code, maintenance):
             record_maintenance_access_failure(request, maintenance.access_version)
             errors.append('The maintenance access code was not accepted.')
         else:

@@ -351,6 +351,36 @@ class MultiTenantTicketTests(TestCase):
         positions = [navigation.index(marker) for marker in expected_order]
         self.assertEqual(positions, sorted(positions))
 
+    def test_theme_switcher_keeps_classic_modes_and_adds_brand_presets(self):
+        self.client.login(username="system_admin", password="password123")
+        response = self.client.get(reverse('dashboard'))
+        self.assertEqual(response.status_code, 200)
+
+        page = response.content.decode('utf-8')
+        self.assertIn('data-theme-preset="classic-dark"', page)
+        self.assertEqual(page.count('data-theme-preset-name='), 4)
+        for preset, label in [
+            ('classic-dark', 'Classic Dark'),
+            ('classic-light', 'Classic Light'),
+            ('binance-dark', 'Binance Dark'),
+            ('taste-light', 'Taste Light'),
+        ]:
+            self.assertIn(f'data-theme-preset-name="{preset}"', page)
+            self.assertIn(label, page)
+
+        self.assertIn("'binance-dark': { mode: 'dark', style: 'binance' }", page)
+        self.assertIn("'taste-light': { mode: 'light', style: 'taste' }", page)
+        self.assertIn("saveThemePreference('ticket_theme_preset', safePreset)", page)
+        self.assertIn('[data-theme-style="binance"]', page)
+        self.assertIn('[data-theme-style="taste"]', page)
+        self.assertIn('--theme-gradient-from: #fcd535;', page)
+        self.assertIn('--theme-gradient-from: #1d4ed8;', page)
+        self.assertIn('id="accentToneControls"', page)
+        self.assertIn('This preset uses its own accessible accent color.', page)
+        self.assertIn('@media (max-width: 640px)', page)
+        self.assertIn('aria-controls="themeMenuDropdown"', page)
+        self.assertIn('.theme-preset-btn:focus-visible', page)
+
     def test_sidebar_identity_shows_name_company_and_effective_admin_role(self):
         self.client.login(username='system_admin', password='password123')
         response = self.client.get(reverse('dashboard'))
@@ -3613,6 +3643,84 @@ class MaintenanceBackupRestoreTests(TestCase):
         self.assertTrue(SecurityAuditLog.objects.filter(
             event_type='MAINTENANCE_ACCESS_BLOCKED'
         ).exists())
+
+    def test_permanent_environment_code_survives_rotating_code_changes(self):
+        from django.contrib.auth.hashers import make_password
+        from django.test import Client
+        from .models import MaintenanceSetting
+
+        permanent_code = 'permanent-maintenance-test-2026'
+        with self.settings(
+            MAINTENANCE_PERMANENT_ACCESS_CODE_HASH=make_password(permanent_code)
+        ):
+            self.client.login(username='system_admin', password='password123')
+            settings_page = self.client.get(reverse('maintenance_settings'))
+            self.assertContains(settings_page, 'Permanent environment code:')
+            self.assertContains(settings_page, 'Configured')
+
+            enabled = self.client.post(reverse('maintenance_settings'), {
+                'is_enabled': 'on',
+                'title': 'Permanent access test',
+                'message': 'Testing the environment-managed access code.',
+                'scheduled_start': '',
+                'expected_end': '',
+                'allow_test_access': 'on',
+                'access_session_minutes': '120',
+                'access_code': '',
+                'current_password': 'password123',
+            })
+            self.assertRedirects(
+                enabled,
+                reverse('maintenance_settings'),
+                fetch_redirect_response=False,
+            )
+            setting = MaintenanceSetting.get_solo()
+            self.assertTrue(setting.is_active())
+            self.assertFalse(setting.access_code_hash)
+            self.assertTrue(setting.has_access_code)
+
+            tester = Client()
+            maintenance_page = tester.get(reverse('dashboard'))
+            self.assertEqual(maintenance_page.status_code, 503)
+            self.assertContains(
+                maintenance_page,
+                'Authorized test access code',
+                status_code=503,
+            )
+            granted = tester.post(
+                reverse('maintenance_access'),
+                {'access_code': permanent_code},
+                REMOTE_ADDR='198.51.100.30',
+            )
+            self.assertRedirects(
+                granted,
+                reverse('login'),
+                fetch_redirect_response=False,
+            )
+
+            setting.access_code_hash = make_password('new-rotating-code-2026')
+            setting.access_version += 1
+            setting.save(update_fields=['access_code_hash', 'access_version'])
+            tester_after_rotation = Client()
+            granted_after_rotation = tester_after_rotation.post(
+                reverse('maintenance_access'),
+                {'access_code': permanent_code},
+                REMOTE_ADDR='198.51.100.31',
+            )
+            self.assertRedirects(
+                granted_after_rotation,
+                reverse('login'),
+                fetch_redirect_response=False,
+            )
+
+            setting.allow_test_access = False
+            setting.save(update_fields=['allow_test_access'])
+            denied = Client().post(
+                reverse('maintenance_access'),
+                {'access_code': permanent_code},
+                REMOTE_ADDR='198.51.100.32',
+            )
+            self.assertEqual(denied.status_code, 503)
 
     def test_system_sub_admin_cannot_change_global_maintenance_or_import_backup(self):
         from .models import MaintenanceSetting

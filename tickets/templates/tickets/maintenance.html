@@ -61,7 +61,7 @@
         <div class="time">Expected completion: {{ maintenance.expected_end|date:"Y-m-d H:i T" }}</div>
         {% endif %}
 
-        {% if not hard_maintenance and maintenance.allow_test_access and maintenance.access_code_hash %}
+        {% if not hard_maintenance and maintenance.allow_test_access and maintenance.has_access_code %}
         <form method="post" action="{% url 'maintenance_access' %}">
             {% csrf_token %}
             <input type="hidden" name="next" value="{{ request.get_full_path }}">
