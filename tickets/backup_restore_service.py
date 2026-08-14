@@ -660,6 +660,7 @@ def finalize_upload_session(upload_session):
     final_name = f"imported_{timestamp}_{str(upload_session.upload_id)[:8]}{extension}"
     final_path = os.path.join(BACKUP_DIR, final_name)
     os.replace(temp_path, final_path)
+    os.chmod(final_path, 0o640)
     log = BackupLog.objects.create(
         filename=final_name,
         original_filename=os.path.basename(upload_session.original_filename)[:255],

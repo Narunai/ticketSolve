@@ -33,6 +33,12 @@ CHATBOT_DB_PATH = os.path.abspath(
 )
 
 
+def secure_backup_file(path):
+    """Ensure backup payloads are never readable by unrelated VPS users."""
+    if path and os.path.isfile(path):
+        os.chmod(path, 0o640)
+
+
 def get_backup_file_path(filename):
     """Returns absolute filepath in BACKUP_DIR if it exists, else None."""
     if not filename or os.path.basename(filename) != filename:
@@ -150,6 +156,7 @@ def _snapshot_chatbot_database(destination_path):
     finally:
         destination.close()
         source.close()
+    secure_backup_file(destination_path)
     return True
 
 
@@ -263,6 +270,7 @@ def perform_full_backup():
                 database_format = 'sqlite3'
             if not os.path.isfile(database_path):
                 raise FileNotFoundError('The database backup payload was not created.')
+            secure_backup_file(database_path)
 
             payloads = {database_arcname: file_sha256(database_path)}
             if chatbot_included:
@@ -309,6 +317,7 @@ def perform_full_backup():
                 manifest_info.mtime = int(timezone.now().timestamp())
                 tar.addfile(manifest_info, io.BytesIO(manifest_bytes))
 
+            secure_backup_file(backup_filepath)
             validation = validate_backup_archive(backup_filepath)
             if not validation.get('restore_supported'):
                 raise ValueError(
@@ -517,6 +526,7 @@ def perform_system_data_backup():
                 manifest_info.mtime = int(timezone.now().timestamp())
                 archive.addfile(manifest_info, io.BytesIO(manifest_bytes))
 
+            secure_backup_file(archive_path)
             for p in (temp_db_path, temp_json_path, temp_chatbot_path):
                 if os.path.exists(p):
                     try:
@@ -698,6 +708,7 @@ def perform_incremental_backup(hours=2):
                     if os.path.exists(file_on_disk):
                         zipf.write(file_on_disk, arcname)
 
+            secure_backup_file(zip_path)
             file_size = os.path.getsize(zip_path)
             expired_count = cleanup_expired_backups()
 

@@ -92,6 +92,7 @@ sudo systemctl restart nginx
 * **Authorization**: ดาวน์โหลดและลบได้เฉพาะ System Staff ที่ยืนยันตัวตนแล้ว
 * **Empty/Missing Archive**: รายการขนาด 0 หรือ archive ที่ไม่มีอยู่จะแสดง **No data file** โดยซ่อน Download และแสดงปุ่ม **Delete empty record**; ปุ่ม **Delete all 0 MB** ลบรายการ 0 MB ทั้งหมดในครั้งเดียว และจะไม่ลบไฟล์จริงหากตรวจพบว่าขนาดบนดิสก์มากกว่า 0
 * **Delete Behavior**: การลบใช้ `POST` + CSRF; ถ้ามี archive จะลบทั้งไฟล์และ `BackupLog` แต่หากลบไฟล์ไม่ได้ ระบบจะคง log ไว้และแจ้งข้อผิดพลาด
+* Archive และ temporary database payload ถูกบังคับ permission เป็น `0640` เพื่อไม่ให้ user อื่นบน VPS อ่านข้อมูลสำรอง
 
 > Backup ชุดนี้อยู่บน VPS เครื่องเดียวกับแอป จึงช่วยกู้คืนจากความเสียหายระดับไฟล์/ฐานข้อมูล แต่ไม่ใช่ off-site backup หากต้องการป้องกันกรณี VPS หรือดิสก์สูญหายทั้งเครื่อง ต้องทำสำเนา archive ไปยัง storage คนละระบบเพิ่มเติม
 
