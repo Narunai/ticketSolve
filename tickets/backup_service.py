@@ -1,6 +1,9 @@
 import os
 import json
 import io
+import hashlib
+import stat
+import subprocess
 import sqlite3
 import tarfile
 import time
@@ -13,6 +16,13 @@ from django.db.models import Q
 from django.core.management import call_command
 
 from .models import BackupLog, Ticket, TicketComment
+from .backup_restore_service import (
+    BACKUP_FORMAT_VERSION,
+    file_sha256,
+    make_backup_manifest,
+    MEDIA_INDEX_PATH,
+    validate_backup_archive,
+)
 
 BACKUP_DIR = os.path.abspath(
     os.environ.get("BACKUP_DIR", os.path.join(settings.BASE_DIR, "backups"))
@@ -48,6 +58,13 @@ def cleanup_expired_backups():
             continue
         path = get_backup_file_path(filename)
         if not path:
+            continue
+        try:
+            if BackupLog.objects.filter(filename=filename, is_protected=True).exists():
+                continue
+        except Exception:
+            # Cleanup must never remove an archive when protection state cannot
+            # be verified (for example while a database restore is in flight).
             continue
         try:
             if os.path.getmtime(path) < cutoff:
@@ -136,6 +153,28 @@ def _snapshot_chatbot_database(destination_path):
     return True
 
 
+def _build_media_file_index(media_root):
+    """Hash every regular media file and reject links/special files."""
+    files = {}
+    for current_root, directories, filenames in os.walk(media_root, followlinks=False):
+        for directory_name in directories:
+            directory_path = os.path.join(current_root, directory_name)
+            if os.path.islink(directory_path):
+                raise ValueError('Media backup refuses symbolic-link directories.')
+        for filename in filenames:
+            source_path = os.path.join(current_root, filename)
+            file_stat = os.lstat(source_path)
+            if not stat.S_ISREG(file_stat.st_mode):
+                raise ValueError('Media backup only accepts regular files.')
+            relative_path = os.path.relpath(source_path, media_root).replace(os.sep, '/')
+            archive_name = f'media/{relative_path}'
+            files[archive_name] = file_sha256(source_path)
+    return {
+        'format_version': '1',
+        'files': dict(sorted(files.items())),
+    }
+
+
 def perform_full_backup():
     """
     Creates a full backup of the database (via PostgreSQL dump or SQLite Online Backup API) and media.
@@ -147,7 +186,7 @@ def perform_full_backup():
     archive_name = f"full_backup_{now_str}.tar.gz"
     backup_filepath = os.path.join(BACKUP_DIR, archive_name)
     temp_db_path = os.path.join(BACKUP_DIR, f"temp_db_{now_str}.sqlite3")
-    temp_json_path = os.path.join(BACKUP_DIR, f"temp_dump_{now_str}.json")
+    temp_pg_path = os.path.join(BACKUP_DIR, f"temp_pg_{now_str}.dump")
     temp_chatbot_path = os.path.join(BACKUP_DIR, f"temp_chatbot_{now_str}.sqlite3")
 
     with FileLock("system_backup.lock", timeout=60):
@@ -155,45 +194,130 @@ def perform_full_backup():
             is_pg = is_postgresql_backend()
 
             if is_pg:
-                # PostgreSQL Backup: Export full dataset to structured JSON dump
-                orig_close = connection.close
-                connection.close = lambda: None
-                try:
-                    with open(temp_json_path, 'w', encoding='utf-8') as f:
-                        call_command('dumpdata', database='default', indent=2, stdout=f)
-                finally:
-                    connection.close = orig_close
-                connection.ensure_connection()
+                # Native PostgreSQL custom format is transaction-consistent and
+                # supports an atomic single-transaction pg_restore workflow.
+                database = settings.DATABASES['default']
+                environment = os.environ.copy()
+                if database.get('PASSWORD'):
+                    environment['PGPASSWORD'] = str(database['PASSWORD'])
+                command = [
+                    'pg_dump',
+                    '--format=custom',
+                    '--no-owner',
+                    '--no-acl',
+                    '--file',
+                    temp_pg_path,
+                ]
+                if database.get('HOST'):
+                    command.extend(['--host', str(database['HOST'])])
+                if database.get('PORT'):
+                    command.extend(['--port', str(database['PORT'])])
+                if database.get('USER'):
+                    command.extend(['--username', str(database['USER'])])
+                command.append(str(database['NAME']))
+                subprocess.run(
+                    command,
+                    check=True,
+                    env=environment,
+                    capture_output=True,
+                    text=True,
+                    timeout=1800,
+                )
             else:
                 # SQLite Backup: Perform safe online SQLite backup to temp_db_path to prevent WAL corruption
-                db_path = os.path.join(settings.BASE_DIR, "db.sqlite3")
-                if os.path.exists(db_path):
+                database_name = str(settings.DATABASES['default']['NAME'])
+                is_memory_database = (
+                    database_name == ':memory:'
+                    or 'mode=memory' in database_name
+                )
+                if is_memory_database:
+                    # TestCase keeps an outer transaction open; SQLite's backup
+                    # loop waits on that transaction. serialize() creates the
+                    # same consistent snapshot without waiting for a commit.
+                    connection.ensure_connection()
+                    serialized = connection.connection.serialize()
+                    with open(temp_db_path, 'wb') as destination:
+                        destination.write(serialized)
+                else:
+                    db_path = os.path.abspath(database_name)
+                    if not os.path.isfile(db_path):
+                        raise FileNotFoundError('The SQLite database file was not found.')
                     src_conn = sqlite3.connect(db_path)
                     dst_conn = sqlite3.connect(temp_db_path)
-                    with dst_conn:
-                        src_conn.backup(dst_conn, pages=100, sleep=0.01)
-                    dst_conn.close()
-                    src_conn.close()
+                    try:
+                        with dst_conn:
+                            src_conn.backup(dst_conn, pages=100, sleep=0.01)
+                    finally:
+                        dst_conn.close()
+                        src_conn.close()
 
             chatbot_included = _snapshot_chatbot_database(temp_chatbot_path)
 
+            if is_pg:
+                database_arcname = 'database/postgresql.dump'
+                database_path = temp_pg_path
+                database_format = 'postgresql_custom'
+            else:
+                database_arcname = 'database/db.sqlite3'
+                database_path = temp_db_path
+                database_format = 'sqlite3'
+            if not os.path.isfile(database_path):
+                raise FileNotFoundError('The database backup payload was not created.')
+
+            payloads = {database_arcname: file_sha256(database_path)}
+            if chatbot_included:
+                payloads['chatbot/chatbot.db'] = file_sha256(temp_chatbot_path)
+            media_path = os.path.abspath(str(settings.MEDIA_ROOT))
+            media_included = os.path.isdir(media_path)
+            media_index_bytes = b''
+            if media_included:
+                media_index = _build_media_file_index(media_path)
+                media_index_bytes = json.dumps(
+                    media_index,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(',', ':'),
+                ).encode('utf-8')
+                payloads[MEDIA_INDEX_PATH] = hashlib.sha256(media_index_bytes).hexdigest()
+            manifest = make_backup_manifest(
+                backup_type=BackupLog.TYPE_FULL,
+                database_format=database_format,
+                payloads=payloads,
+                includes_media=media_included,
+                includes_chatbot=chatbot_included,
+            )
+            manifest_bytes = json.dumps(
+                manifest,
+                indent=2,
+                ensure_ascii=False,
+            ).encode('utf-8')
+
             # Package the database and media
             with tarfile.open(backup_filepath, "w:gz") as tar:
-                if is_pg and os.path.exists(temp_json_path):
-                    tar.add(temp_json_path, arcname="db_dump.json")
-                elif os.path.exists(temp_db_path):
-                    tar.add(temp_db_path, arcname="db.sqlite3")
-                elif os.path.exists(os.path.join(settings.BASE_DIR, "db.sqlite3")):
-                    tar.add(os.path.join(settings.BASE_DIR, "db.sqlite3"), arcname="db.sqlite3")
+                tar.add(database_path, arcname=database_arcname)
                 if chatbot_included:
                     tar.add(temp_chatbot_path, arcname="chatbot/chatbot.db")
-
-                media_path = os.path.join(settings.BASE_DIR, "media")
-                if os.path.exists(media_path):
+                if media_included:
                     tar.add(media_path, arcname="media")
+                    media_index_info = tarfile.TarInfo(MEDIA_INDEX_PATH)
+                    media_index_info.size = len(media_index_bytes)
+                    media_index_info.mtime = int(timezone.now().timestamp())
+                    tar.addfile(media_index_info, io.BytesIO(media_index_bytes))
+
+                manifest_info = tarfile.TarInfo('backup_manifest.json')
+                manifest_info.size = len(manifest_bytes)
+                manifest_info.mtime = int(timezone.now().timestamp())
+                tar.addfile(manifest_info, io.BytesIO(manifest_bytes))
+
+            validation = validate_backup_archive(backup_filepath)
+            if not validation.get('restore_supported'):
+                raise ValueError(
+                    'Generated Full Backup did not pass post-write validation: '
+                    f"{validation.get('details', 'unknown validation error')}"
+                )
 
             # Clean up temporary backup files
-            for p in (temp_db_path, temp_json_path, temp_chatbot_path):
+            for p in (temp_db_path, temp_pg_path, temp_chatbot_path):
                 if os.path.exists(p):
                     try:
                         os.remove(p)
@@ -201,6 +325,7 @@ def perform_full_backup():
                         pass
 
             file_size = os.path.getsize(backup_filepath)
+            archive_sha256 = file_sha256(backup_filepath)
             expired_count = cleanup_expired_backups()
 
             db_type = "PostgreSQL" if is_pg else "SQLite"
@@ -211,14 +336,21 @@ def perform_full_backup():
             )
             log = BackupLog.objects.create(
                 filename=archive_name,
+                original_filename=archive_name,
                 file_size_bytes=file_size,
                 backup_type=BackupLog.TYPE_FULL,
                 status=BackupLog.STATUS_SUCCESS,
+                source=BackupLog.SOURCE_GENERATED,
+                sha256=archive_sha256,
+                format_version=BACKUP_FORMAT_VERSION,
+                validation_status=BackupLog.VALIDATION_VALID,
+                validation_details='Generated and checksummed by TicketSolve.',
+                restore_supported=True,
                 details=details
             )
             return {"success": True, "log": log, "details": details, "file_path": backup_filepath}
         except Exception as e:
-            for p in (temp_db_path, temp_json_path, temp_chatbot_path):
+            for p in (temp_db_path, temp_pg_path, temp_chatbot_path):
                 if os.path.exists(p):
                     try:
                         os.remove(p)
@@ -231,6 +363,7 @@ def perform_full_backup():
                     pass
             log = BackupLog.objects.create(
                 filename=archive_name,
+                original_filename=archive_name,
                 file_size_bytes=0,
                 backup_type=BackupLog.TYPE_FULL,
                 status=BackupLog.STATUS_FAILED,

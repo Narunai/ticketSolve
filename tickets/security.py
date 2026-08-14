@@ -13,6 +13,8 @@ from cryptography.fernet import Fernet, InvalidToken
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
+from django.db.utils import OperationalError, ProgrammingError
+from django.shortcuts import render
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 
@@ -23,6 +25,7 @@ ALLOWED_ATTACHMENT_EXTENSIONS = {
     ".pdf", ".png", ".jpg", ".jpeg", ".gif", ".webp",
     ".txt", ".csv", ".docx", ".xlsx", ".pptx",
 }
+MAINTENANCE_SESSION_KEY = "maintenance_access"
 
 
 def _fernet_keys():
@@ -220,6 +223,85 @@ def clear_account_login_failures(*identifiers):
         AuthenticationThrottle.objects.filter(key_hash__in=keys).delete()
 
 
+def _maintenance_throttle_key(request, access_version):
+    return _fingerprint(
+        "maintenance-ip",
+        f"{client_ip(request)}:{int(access_version)}",
+    )
+
+
+def maintenance_access_retry_after(request, access_version):
+    from .models import AuthenticationThrottle
+    now = timezone.now()
+    row = AuthenticationThrottle.objects.filter(
+        key_hash=_maintenance_throttle_key(request, access_version),
+        locked_until__gt=now,
+    ).first()
+    if not row:
+        return 0
+    return max(1, int((row.locked_until - now).total_seconds()) + 1)
+
+
+def record_maintenance_access_failure(request, access_version):
+    from .models import AuthenticationThrottle
+    now = timezone.now()
+    window_seconds = int(
+        getattr(settings, "MAINTENANCE_ACCESS_WINDOW_SECONDS", 600)
+    )
+    max_failures = int(
+        getattr(settings, "MAINTENANCE_ACCESS_MAX_FAILURES", 5)
+    )
+    lock_seconds = int(
+        getattr(settings, "MAINTENANCE_ACCESS_LOCK_SECONDS", 600)
+    )
+    key_hash = _maintenance_throttle_key(request, access_version)
+    with transaction.atomic():
+        row, _ = AuthenticationThrottle.objects.select_for_update().get_or_create(
+            key_hash=key_hash
+        )
+        if (now - row.window_started).total_seconds() > window_seconds:
+            row.failed_count = 0
+            row.window_started = now
+            row.locked_until = None
+        row.failed_count += 1
+        if row.failed_count >= max_failures:
+            row.locked_until = now + timezone.timedelta(seconds=lock_seconds)
+        row.save()
+
+
+def clear_maintenance_access_failures(request, access_version):
+    from .models import AuthenticationThrottle
+    AuthenticationThrottle.objects.filter(
+        key_hash=_maintenance_throttle_key(request, access_version)
+    ).delete()
+
+
+def grant_maintenance_access(request, maintenance_setting):
+    expires_at = timezone.now() + timezone.timedelta(
+        minutes=maintenance_setting.access_session_minutes
+    )
+    request.session[MAINTENANCE_SESSION_KEY] = {
+        "version": maintenance_setting.access_version,
+        "expires_at": int(expires_at.timestamp()),
+    }
+    request.session.cycle_key()
+
+
+def has_maintenance_access(request, maintenance_setting):
+    value = request.session.get(MAINTENANCE_SESSION_KEY)
+    if not isinstance(value, dict):
+        return False
+    try:
+        version_matches = int(value.get("version")) == maintenance_setting.access_version
+        not_expired = int(value.get("expires_at")) > int(timezone.now().timestamp())
+    except (TypeError, ValueError):
+        return False
+    if not (version_matches and not_expired):
+        request.session.pop(MAINTENANCE_SESSION_KEY, None)
+        return False
+    return True
+
+
 def write_security_audit(request, event_type, outcome, actor=None, target_type="", target_id="", details=""):
     from .models import SecurityAuditLog
     username = request.POST.get("username", "") if hasattr(request, "POST") else ""
@@ -261,3 +343,66 @@ class SecurityHeadersMiddleware:
         if getattr(request, "user", None) and request.user.is_authenticated and response.get("Content-Type", "").startswith("text/html"):
             response.setdefault("Cache-Control", "no-store, private")
         return response
+
+
+class MaintenanceModeMiddleware:
+    """Gate application traffic during scheduled maintenance and restores."""
+
+    PUBLIC_PATHS = {
+        "/maintenance/access/",
+        "/health/",
+        "/favicon.ico",
+    }
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def _maintenance_response(self, request, setting=None, hard=False):
+        response = render(
+            request,
+            "tickets/maintenance.html",
+            {
+                "maintenance": setting,
+                "hard_maintenance": hard,
+                "retry_after": 60,
+            },
+            status=503,
+        )
+        response["Retry-After"] = "60"
+        response["Cache-Control"] = "no-store, max-age=0"
+        response["X-Robots-Tag"] = "noindex, nofollow"
+        return response
+
+    def __call__(self, request):
+        restore_sentinel = os.path.abspath(
+            getattr(
+                settings,
+                "RESTORE_SENTINEL_FILE",
+                os.path.join(settings.BASE_DIR, ".restore", "restore-in-progress"),
+            )
+        )
+        static_url = getattr(settings, "STATIC_URL", "/static/")
+        public_path = (
+            request.path in self.PUBLIC_PATHS
+            or request.path.startswith(static_url)
+            or request.path.startswith("/.well-known/acme-challenge/")
+        )
+        if os.path.isfile(restore_sentinel) and not public_path:
+            request.maintenance_setting = None
+            return self._maintenance_response(request, hard=True)
+
+        try:
+            from .models import MaintenanceSetting
+            maintenance_setting = MaintenanceSetting.get_solo()
+        except (OperationalError, ProgrammingError):
+            maintenance_setting = None
+        request.maintenance_setting = maintenance_setting
+
+        if (
+            maintenance_setting
+            and maintenance_setting.is_active()
+            and not public_path
+            and not has_maintenance_access(request, maintenance_setting)
+        ):
+            return self._maintenance_response(request, setting=maintenance_setting)
+        return self.get_response(request)

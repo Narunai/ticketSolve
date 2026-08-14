@@ -190,6 +190,9 @@ def language_processor(request):
         'search_filter': 'Search / Filter',
         'clear_filters': 'Clear',
         'showing_routing_rules': 'Showing routing rules:',
+        'system_maintenance': 'System Maintenance',
+        'maintenance_active_banner': 'Maintenance mode is active. Only authorized test sessions can access TicketSolve.',
+        'maintenance_scheduled_banner': 'Scheduled maintenance is planned.',
     }
     
     return {
@@ -212,4 +215,20 @@ def notification_processor(request):
     return {
         'header_notifications': notifications[:8],
         'unread_notification_count': notifications.filter(is_read=False).count(),
+    }
+
+
+def maintenance_processor(request):
+    """Expose only display-safe maintenance state already loaded by middleware."""
+    maintenance = getattr(request, 'maintenance_setting', None)
+    if not maintenance:
+        return {
+            'maintenance_notice': None,
+            'maintenance_active': False,
+            'maintenance_scheduled': False,
+        }
+    return {
+        'maintenance_notice': maintenance,
+        'maintenance_active': maintenance.is_active(),
+        'maintenance_scheduled': maintenance.is_scheduled(),
     }

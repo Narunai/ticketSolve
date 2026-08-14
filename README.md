@@ -2,7 +2,7 @@
 
 **TicketSolve** คือระบบบริหารจัดการตั๋วแจ้งซ่อมและสนับสนุนงานบริการ IT (IT Service Desk & Support Ticket Management System) ในรูปแบบ Multi-Tenant รองรับการทำงานหลายบริษัทในระบบเดียว มีระบบสิทธิ์การใช้งาน 5 ระดับ, ระบบปรับแต่งฟิลด์และหน้าตาตามบริษัท, ระบบแจ้งเตือนทางอีเมลพร้อมสถิติการส่ง, ระบบนำอีเมลเข้าเป็น Ticket, ระบบย้ายสถานะอัตโนมัติ (Status Automation), ระบบรายงานประจำเดือน PDF, และระบบสำรองข้อมูลอัตโนมัติบน AWS VPS ทุก 2 ชั่วโมง
 
-**อัปเดตล่าสุด**: 12 สิงหาคม 2026
+**อัปเดตล่าสุด**: 14 สิงหาคม 2026
 
 > เอกสารภาพรวมสถาปัตยกรรม การควบคุมความปลอดภัย ผลการแก้ไข และแผนผังระบบ:
 > [SECURITY_AND_SYSTEM_ARCHITECTURE_REPORT.md](SECURITY_AND_SYSTEM_ARCHITECTURE_REPORT.md)
@@ -166,3 +166,16 @@ python manage.py runserver 0.0.0.0:8000
 # 6. Run test suite
 python manage.py test
 ```
+
+---
+
+## 7. Maintenance, Backup Import และ Restore
+
+* หน้า **System Maintenance** ใช้ประกาศช่วงปิดปรับปรุง ตั้งเวลา ข้อความ และรหัสสำหรับผู้ทดสอบที่ได้รับอนุญาต รหัสถูกเก็บแบบ one-way hash และถูกจำกัด 5 ครั้งก่อนล็อก 10 นาที
+* รหัส Maintenance เป็นเพียงประตูก่อนหน้า Login ผู้ทดสอบยังต้องยืนยันตัวตนด้วยบัญชีปกติ และ RBAC/tenant isolation ยังทำงานเหมือนเดิม
+* หน้า **Backup System** รองรับนำเข้า `.tar.gz`/`.zip` แบบแบ่ง chunk ไปยัง quarantine โดยจำกัดขนาด พื้นที่ว่าง จำนวนไฟล์ expanded size compression ratio path traversal link/device และ checksum ก่อนย้ายเข้า backup storage
+* Full Backup v2 ใช้ PostgreSQL custom dump หรือ SQLite snapshot พร้อม Chatbot DB, media, signed manifest, SHA-256 และ signed media-file index โดยไม่รวม runtime secrets
+* One-click Restore เปิดให้เฉพาะ Full Backup v2 ที่ตรวจแล้วและตรงกับ database engine/field-encryption key ปัจจุบัน ต้องเปิด Maintenance Mode ยืนยันรหัสบัญชี รหัส Maintenance และ confirmation phrase
+* Root-owned restore worker จะหยุด service ที่เขียนข้อมูล สร้าง protected rollback backup กู้ข้อมูล รัน migration/check และคง Maintenance Mode ไว้จน System Admin ตรวจและกดเปิดระบบ
+* Backup รุ่นเดิม, Incremental และ System Data ยังเก็บ ดาวน์โหลด ตรวจ และลบได้ตามสิทธิ์ แต่ไม่ถูกเสนอเป็น complete one-click restore
+* Backup ยังอยู่บน VPS เดียวกับระบบ จึงต้องเพิ่ม encrypted off-host copy เช่น S3 Versioning/Object Lock เพื่อป้องกันกรณี VPS หรือดิสก์เสียทั้งเครื่อง

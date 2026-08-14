@@ -1,7 +1,9 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from .models import (
+    BackupLog,
     BackupSchedule,
+    BackupUploadSession,
     Company,
     CustomUser,
     InboundEmailReceipt,
@@ -11,9 +13,64 @@ from .models import (
     EmailToTicketRunLog,
     EmailToTicketSchedule,
     MonthlyReportSchedule,
+    MaintenanceSetting,
+    RestoreJob,
     Ticket,
     TicketAutomationConfig,
 )
+
+
+@admin.register(BackupLog)
+class BackupLogAdmin(admin.ModelAdmin):
+    list_display = ('created_at', 'backup_type', 'source', 'filename', 'status', 'validation_status', 'restore_supported', 'is_protected')
+    list_filter = ('backup_type', 'source', 'status', 'validation_status', 'restore_supported', 'is_protected')
+    search_fields = ('filename', 'original_filename', 'sha256', 'details')
+    readonly_fields = [field.name for field in BackupLog._meta.fields]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(BackupUploadSession)
+class BackupUploadSessionAdmin(admin.ModelAdmin):
+    list_display = ('upload_id', 'uploaded_by', 'original_filename', 'status', 'received_size', 'expected_size', 'created_at')
+    list_filter = ('status',)
+    readonly_fields = [field.name for field in BackupUploadSession._meta.fields]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(RestoreJob)
+class RestoreJobAdmin(admin.ModelAdmin):
+    list_display = ('job_id', 'status', 'backup', 'requested_by', 'progress_percent', 'created_at')
+    list_filter = ('status',)
+    search_fields = ('job_id', 'backup__filename', 'requested_by__username')
+    readonly_fields = [field.name for field in RestoreJob._meta.fields]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(MaintenanceSetting)
+class MaintenanceSettingAdmin(admin.ModelAdmin):
+    list_display = ('is_enabled', 'scheduled_start', 'expected_end', 'allow_test_access', 'updated_at', 'updated_by')
+    readonly_fields = [field.name for field in MaintenanceSetting._meta.fields]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 class CompanyAdmin(admin.ModelAdmin):
     list_display = ('name', 'created_at')

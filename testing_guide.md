@@ -25,6 +25,7 @@
 13. **In-App Notifications**: ทดสอบกระดิ่งแจ้งเตือน, การเปิด Ticket/ทำเครื่องหมายอ่านแล้ว, Mark all read และป้องกันการอ่านแจ้งเตือนข้ามผู้ใช้หรือข้าม tenant
 14. **Chatbot Security**: ทดสอบ Django session/RBAC gateway, System Admin scope, same-origin mutation, API-key non-disclosure, per-user rate limit, payload/model allowlist, admin audit และ curated-document sandbox
 15. **New Feature Regression**: ทดสอบว่า Address Book ไม่ข้าม Email Approval, recipient preview ไม่ enumerate ข้าม tenant, Client User inject arbitrary email ไม่ได้ และ override ถูก validate/ใช้ครั้งเดียว
+16. **Maintenance & Restore Safety**: ทดสอบ hashed maintenance code, 5-attempt/10-minute throttle, session-version invalidation, RBAC, quarantine chunk import, path traversal rejection, signed Full Backup v2, media checksum tamper detection, restore queue protection และ isolated SQLite payload replacement
 
 ---
 
@@ -51,6 +52,9 @@ python manage.py test tickets.tests.MultiTenantTicketTests.test_email_to_ticket_
 
 # รัน regression test สำหรับชื่อผู้ส่ง/log รายอีเมลและกระดิ่งแจ้งเตือน
 python manage.py test tickets.tests.MultiTenantTicketTests.test_imported_email_sender_is_pinned_to_ticket_and_logged_per_message tickets.tests.MultiTenantTicketTests.test_notification_bell_is_private_and_marks_notifications_read
+
+# รันเฉพาะ Maintenance/Import/Restore security regression
+python manage.py test tickets.tests.MaintenanceBackupRestoreTests
 ```
 
 ### 2.3 รันด้วย Pytest (ถ้าติดตั้งไว้)
@@ -65,8 +69,8 @@ python -m pytest chatbot_service -q
 ผลที่ยืนยันล่าสุดวันที่ 14 สิงหาคม 2026:
 
 ```text
-Found 108 test(s).
-Ran 108 tests in 85.405s
+Found 113 test(s).
+Ran 113 tests in 82.163s
 OK
 System check identified no issues (0 silenced).
 
@@ -75,7 +79,7 @@ Template script-tag check: PASS
 pip-audit (main + chatbot): No known vulnerabilities found
 ```
 
-* **Django suite**: ผ่านครบ 108/108 บน development environment (Django 5.2)
+* **Django suite**: ผ่านครบ 113/113 บน development environment (Django 5.2)
 * **FastAPI chatbot suite**: ผ่านครบ 10/10
 * **Deployment checks**: `check --deploy`, `makemigrations --check` และ template script-tag scan ผ่าน
 * **Dependency audit**: `pip-audit` ของ requirements ทั้งสองชุดไม่พบ known vulnerabilities หลังอัปเดต `cryptography==50.0.0`

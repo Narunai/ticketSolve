@@ -1,0 +1,9 @@
+[Unit]
+Description=Watch for an approved TicketSolve restore request
+
+[Path]
+PathExists=/var/lib/ticketsolve-restore/restore.trigger
+Unit=ticketsolve-restore.service
+
+[Install]
+WantedBy=multi-user.target

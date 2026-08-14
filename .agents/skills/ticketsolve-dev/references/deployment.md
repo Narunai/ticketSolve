@@ -68,6 +68,7 @@ ssh -i LightsailDefaultKey-ap-southeast-1.pem -o StrictHostKeyChecking=no \
 | `chatbot_service/templates/*` | `ticket-chatbot` |
 | `chatbot_service/static/*` | `ticket-chatbot` |
 | `deployment/nginx.conf` | `nginx` (via `sudo nginx -t && sudo systemctl reload nginx`) |
+| Restore worker/unit or migration changes | Run full `deployment/deploy.sh`; never SCP/restart only |
 
 ## Full Deployment (Model/Migration Changes)
 
@@ -139,6 +140,19 @@ Located at `/etc/ticketsolve/ticketsolve.env` on the server:
 | `ALLOWED_HOSTS` | `tikketsolve-systemoneit.uk,www.tikketsolve-systemoneit.uk` |
 | `CSRF_TRUSTED_ORIGINS` | `https://tikketsolve-systemoneit.uk,...` |
 | `FIELD_ENCRYPTION_KEYS` | Fernet key(s) for SMTP password encryption |
+| `BACKUP_MANIFEST_SIGNING_KEY` | Persistent HMAC key for Full Backup v2 manifests |
+| `BACKUP_DIR` | `/var/backups/ticketsolve` |
+| `BACKUP_QUARANTINE_DIR` | Quarantine for chunked imports |
+| `BACKUP_IMPORT_MAX_BYTES` | Maximum imported archive size |
+| `RESTORE_TRIGGER_FILE` | Root worker trigger path |
+| `RESTORE_SENTINEL_FILE` | Hard-maintenance sentinel path |
+| `RESTORE_LOG_DIR` | External JSONL restore logs |
+
+## Restore Deployment Safety
+
+The deploy script installs and enables `ticketsolve-restore.path`, the root-owned oneshot service, worker wrapper and Nginx hard-maintenance fallback. Production verification may validate units and create a Full Backup, but must not trigger a restore. Restore drills belong in an isolated copy with the same database engine and approved encryption key.
+
+If the worker retains `/run/ticketsolve/restore-in-progress`, do not remove it until an operator has reviewed the service journal and per-job JSONL log and has confirmed either the target restore or rollback is healthy.
 
 ## CWD for All Commands
 

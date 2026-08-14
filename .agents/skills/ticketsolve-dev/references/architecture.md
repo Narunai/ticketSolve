@@ -33,6 +33,7 @@
 │  │              Background Workers (systemd)                   │ │
 │  │  • ticketsolve-scheduler.timer   (ticket automation)        │ │
 │  │  • ticketsolve-email-to-ticket   (inbound email → ticket)   │ │
+│  │  • ticketsolve-restore.path       (root-owned restore gate)  │ │
 │  └─────────────────────────────────────────────────────────────┘ │
 └──────────────────────────────────────────────────────────────────┘
 ```
@@ -52,6 +53,7 @@
 | `permissions.py` | 3KB | `PermissionRequiredMixin` derivatives for role checks |
 | `admin.py` | 10KB | Django admin customizations |
 | `backup_service.py` | 21KB | PostgreSQL/SQLite + chatbot DB backup and scheduling |
+| `backup_restore_service.py` | Validation, quarantine import, signed manifest and restore primitives |
 | `email_to_ticket.py` | 26KB | IMAP polling → auto-create tickets from inbound emails |
 | `email_formatting.py` | 1.4KB | HTML email template builder |
 
@@ -87,6 +89,8 @@
 | `ticket-chatbot.service` | FastAPI chatbot on port 8001 |
 | `ticketsolve-scheduler.timer` | Periodic ticket automation (OPEN → IN_PROGRESS) |
 | `ticketsolve-email-to-ticket.timer` | IMAP polling for inbound emails |
+| `ticketsolve-restore.path` | Watches the exclusive restore trigger |
+| `ticketsolve-restore.service` | Root-owned oneshot worker; stops writers, restores, verifies and rolls back on failure |
 
 ### 5. Security Architecture
 
@@ -99,6 +103,8 @@
 - **Chatbot authorization**: Nginx `auth_request` reuses Django session/RBAC and overwrites trusted identity headers
 - **Chatbot secrets**: DB is `/var/lib/ticketsolve-chatbot`; Fernet key is `/etc/ticketsolve-chatbot/fernet.key`; the decrypted API key is never returned to the browser. `ticketsolve-backup` can read only the DB, not the key.
 - **Chatbot service sandbox**: dedicated system user, read-only project, capability drop, memory/task limits
+- **Maintenance gate**: hashed access code, 5-attempt/10-minute throttle, expiring versioned session; normal authentication and RBAC still required
+- **Backup restore**: only signed compatible Full Backup v2; quarantine import, protected pre-restore rollback, hard sentinel and post-restore admin review
 
 ### 6. Template System
 
@@ -121,4 +127,8 @@ The chatbot widget (`/chatbot-static/widget.js`) is loaded conditionally in `bas
 /etc/ticketsolve-chatbot/fernet.key # Chatbot API-key encryption key
 /var/lib/ticketsolve-chatbot/chatbot.db # Chatbot runtime data
 /var/backups/ticketsolve/     # Database backups
+/var/backups/ticketsolve/.quarantine/ # In-progress imported archives
+/var/lib/ticketsolve-restore/ # Exclusive restore trigger
+/var/log/ticketsolve/restore/ # External JSONL restore audit
+/run/ticketsolve/restore-in-progress # Hard-maintenance sentinel
 ```

@@ -2,7 +2,7 @@
 
 เอกสารฉบับนี้อธิบายฟีเจอร์การทำงานทั้งหมดของระบบ **TicketSolve** รวมถึงโครงสร้างสิทธิ์การใช้งานของแต่ละบทบาทผู้ใช้
 
-**อัปเดตล่าสุด**: 12 สิงหาคม 2026
+**อัปเดตล่าสุด**: 14 สิงหาคม 2026
 
 ---
 
@@ -75,6 +75,10 @@
 ### 💾 1.7 ระบบสำรองข้อมูล (AWS VPS Backup)
 * **Configurable Incremental Backup**: บันทึก Ticket ที่ถูกสร้าง/แก้ไข หรือมี Comments/ไฟล์แนบใหม่ตามช่วงที่ตั้ง (1, 2, 4, 6, 12 หรือ 24 ชั่วโมง; ค่าเริ่มต้น 2 ชั่วโมง) เป็น `.zip` ไว้ที่ `/var/backups/ticketsolve`
 * **Full Backup**: สำรอง PostgreSQL/SQLite ตาม engine, `media/` และ snapshot ของ Chatbot DB เป็น `.tar.gz` บน AWS VPS โดยไม่รวม secrets
+* **Signed Full Backup v2**: manifest ถูกเซ็นด้วย HMAC, archive มี SHA-256 และ media ทุกไฟล์ถูกผูกกับ signed file index; ระบบตรวจซ้ำก่อนยอมรับหรือ Restore
+* **Secure Import**: System Admin นำ archive ที่ดาวน์โหลดไว้กลับเข้าระบบแบบ chunked upload ผ่าน quarantine และ structural/resource/path/checksum validation ได้
+* **Controlled Restore**: Restore ได้เฉพาะ Full Backup v2 ที่เข้ากันได้ หลังเปิด Maintenance Mode และผ่าน current password + maintenance code + exact confirmation; root worker สร้าง rollback backup ก่อนกู้และรอ admin review ก่อนเปิดระบบ
+* **Legacy Preservation**: Full รุ่นเก่า, Incremental และ System Data เดิมยังดาวน์โหลด/ลบ/ตรวจสอบได้ แต่ไม่ใช้ complete one-click restore
 * **System Data (No Tickets)**: สำรอง Users, Companies, roles, SMTP/IMAP, routing, schedules, categories, ค่าระบบ และ Chatbot config/knowledge/audit โดยไม่รวม Ticket, `media/` หรือ runtime secrets
 * **Backup Timer**: System Admin ตั้งรอบและเปิด/ปิด Incremental, Full และ System Data แยกกันได้จากหน้า Backup; จำกัด Incremental ขั้นต่ำ 1 ชั่วโมง และ Full/System Data ขั้นต่ำ 1 วัน พร้อม failure backoff 30 นาที ส่วน System Sub Admin ดูสถานะได้แต่แก้ timer ไม่ได้
 * **Retention**: ลบ archive ที่เก่ากว่า `BACKUP_RETENTION_DAYS` ซึ่งมีค่าเริ่มต้น 30 วัน
@@ -109,6 +113,8 @@ Sidebar แสดงชื่อผู้ใช้ บริษัท/ส่ว�
 | ตั้งค่าแจ้งเตือน Notification Email | ✅ | ✅ | ✅ | ❌ | ❌ |
 | ตั้งค่าย้ายสถานะอัตโนมัติ (Automation) | ✅ | ✅ | ❌ | ❌ | ❌ |
 | ตั้งค่าและลบข้อมูล Backup | ✅ | ✅ | ❌ | ❌ | ❌ |
+| นำเข้า/Validate/Restore Full Backup | ✅ | ❌ (ดูสถานะได้) | ❌ | ❌ | ❌ |
+| ตั้งค่า Maintenance Mode/รหัสทดสอบ | ✅ | ❌ (อ่านได้) | ❌ | ❌ | ❌ |
 | จัดการตั้งค่า SMTP Server | ✅ | ❌ | ❌ | ❌ | ❌ |
 | ลบ Ticket ออกจากระบบ (Delete Ticket) | ✅ | ✅ | ❌ | ❌ | ❌ |
 | ใช้งาน AI Chatbot | ✅ | ✅ | ✅ | ✅ | ✅ |

@@ -15,6 +15,11 @@
             </p>
         </div>
         <div class="flex flex-wrap items-center gap-3">
+            {% if can_import_or_restore %}
+            <button id="show-backup-import" type="button" class="rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-2 text-xs font-bold text-sky-200 transition-colors hover:bg-sky-500/20">
+                Import Backup Archive
+            </button>
+            {% endif %}
             <form method="POST" action="{% url 'backup_trigger' %}" class="inline">
                 {% csrf_token %}
                 <input type="hidden" name="backup_type" value="incremental">
@@ -43,6 +48,29 @@
             </form>
         </div>
     </div>
+
+    {% if can_import_or_restore %}
+    <section id="backup-import-panel" class="glass-panel hidden rounded-2xl border border-sky-500/30 p-5" data-start-url="{% url 'backup_import_start' %}">
+        <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+                <h3 class="font-bold text-white">Import a downloaded TicketSolve backup</h3>
+                <p class="mt-1 text-xs leading-5 text-slate-400">The archive is uploaded in bounded chunks, quarantined, checksummed and validated before it is added to Backup History. Importing never changes the live database.</p>
+            </div>
+            <span class="rounded-full border border-slate-700 bg-slate-950 px-3 py-1 text-[11px] text-slate-400">Maximum {{ backup_import_max_mb }} MB</span>
+        </div>
+        <form id="backup-import-form" class="mt-4" enctype="multipart/form-data">
+            {% csrf_token %}
+            <div class="flex flex-col gap-3 md:flex-row md:items-center">
+                <input id="backup-import-file" name="archive" type="file" accept=".zip,.gz,application/zip,application/gzip" required class="min-w-0 flex-1 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-slate-300">
+                <button id="backup-import-submit" type="submit" class="rounded-xl bg-sky-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-sky-500">Upload and validate</button>
+            </div>
+            <div id="backup-import-progress-wrap" class="mt-4 hidden">
+                <div class="h-2 overflow-hidden rounded-full bg-slate-800"><div id="backup-import-progress" class="h-full w-0 rounded-full bg-sky-500 transition-all"></div></div>
+                <div id="backup-import-status" class="mt-2 text-xs text-slate-400">Preparing upload...</div>
+            </div>
+        </form>
+    </section>
+    {% endif %}
 
     <!-- Automatic Backup Timer -->
     <section class="glass-panel rounded-2xl border border-slate-800/80 p-5">
@@ -171,6 +199,42 @@
             </div>
         </div>
     </div>
+
+    {% if restore_jobs %}
+    <section class="glass-panel overflow-hidden rounded-2xl border border-rose-500/20">
+        <div class="border-b border-slate-800 px-5 py-4">
+            <h3 class="font-bold text-white">Restore jobs</h3>
+            <p class="mt-1 text-xs text-slate-500">External worker logs remain available even when the database is replaced.</p>
+        </div>
+        <div class="divide-y divide-slate-800">
+            {% for job in restore_jobs %}
+            <div class="p-4">
+                <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div class="min-w-0">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="font-mono text-xs text-slate-300">{{ job.job_id }}</span>
+                            <span class="rounded-full border border-slate-700 bg-slate-900 px-2 py-0.5 text-[10px] font-bold text-slate-300">{{ job.get_status_display }}</span>
+                            <span class="text-[10px] text-slate-500">{{ job.progress_percent }}%</span>
+                        </div>
+                        <p class="mt-2 text-xs text-slate-400">{{ job.details }}</p>
+                        <p class="mt-1 text-[10px] text-slate-600">Backup: {{ job.backup.filename }} · Requested by {{ job.requested_by.username|default:"System" }} · {{ job.created_at|date:"Y-m-d H:i:s" }}</p>
+                    </div>
+                    {% if can_import_or_restore and job.status == 'AWAITING_REVIEW' %}
+                    <form method="post" action="{% url 'restore_open_system' job.job_id %}" class="w-full max-w-sm rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3">
+                        {% csrf_token %}
+                        <label class="block text-[10px] font-bold text-slate-400">Current password</label>
+                        <input type="password" name="current_password" required autocomplete="current-password" class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-2 text-xs text-white">
+                        <label class="mt-2 block text-[10px] font-bold text-slate-400">Type OPEN SYSTEM</label>
+                        <input type="text" name="confirmation_phrase" required autocomplete="off" class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-2 font-mono text-xs text-white">
+                        <button type="submit" class="mt-2 w-full rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-500">Complete review and reopen</button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
 
     <!-- Backup Log History Table -->
     <div class="glass-panel rounded-2xl border border-slate-800/80 overflow-hidden shadow-xl">
@@ -312,6 +376,10 @@
                         </td>
                         <td class="px-6 py-4 font-mono text-xs font-medium text-white truncate max-w-xs">
                             {{ blog.filename }}
+                            <div class="mt-1 flex flex-wrap gap-1 font-sans">
+                                <span class="rounded border px-1.5 py-0.5 text-[9px] {% if blog.source == 'IMPORTED' %}border-sky-500/30 bg-sky-500/10 text-sky-300{% else %}border-slate-700 bg-slate-800 text-slate-400{% endif %}">{{ blog.get_source_display }}</span>
+                                <span class="rounded border px-1.5 py-0.5 text-[9px] {% if blog.validation_status == 'VALID' %}border-emerald-500/30 bg-emerald-500/10 text-emerald-300{% elif blog.validation_status == 'INVALID' %}border-rose-500/30 bg-rose-500/10 text-rose-300{% elif blog.validation_status == 'LEGACY' %}border-amber-500/30 bg-amber-500/10 text-amber-300{% else %}border-slate-700 bg-slate-800 text-slate-400{% endif %}">{{ blog.get_validation_status_display }}</span>
+                            </div>
                         </td>
                         <td class="px-6 py-4 font-mono text-xs text-slate-300 whitespace-nowrap">
                             {{ blog.file_size_mb }} MB
@@ -342,12 +410,25 @@
                                 No data file
                             </span>
                             {% endif %}
+                            {% if can_import_or_restore and blog.has_data_file %}
+                            <form method="POST" action="{% url 'backup_validate' blog.id %}" class="inline">
+                                {% csrf_token %}
+                                <button type="submit" class="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/20">Validate</button>
+                            </form>
+                            {% endif %}
+                            {% if can_import_or_restore and blog.restore_supported and blog.has_data_file %}
+                            <a href="{% url 'backup_restore_request' blog.id %}" class="inline-flex rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-1.5 text-xs font-bold text-rose-300 hover:bg-rose-500/20">Restore</a>
+                            {% endif %}
+                            {% if blog.is_protected %}
+                            <span class="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-300">Protected rollback</span>
+                            {% else %}
                             <form method="POST" action="{% url 'backup_delete' blog.id %}" onsubmit="return confirm('Delete backup record {{ blog.filename }}?');" class="inline">
                                 {% csrf_token %}
                                 <button type="submit" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 transition-all cursor-pointer active:scale-95">
                                     {% if blog.has_data_file %}🗑️ Delete{% else %}🗑️ Delete empty record{% endif %}
                                 </button>
                             </form>
+                            {% endif %}
                         </td>
                     </tr>
                     {% empty %}
@@ -362,4 +443,83 @@
         </div>
     </div>
 </div>
+{% if can_import_or_restore %}
+<script>
+    (() => {
+        const panel = document.getElementById('backup-import-panel');
+        const showButton = document.getElementById('show-backup-import');
+        const form = document.getElementById('backup-import-form');
+        const fileInput = document.getElementById('backup-import-file');
+        const submitButton = document.getElementById('backup-import-submit');
+        const progressWrap = document.getElementById('backup-import-progress-wrap');
+        const progressBar = document.getElementById('backup-import-progress');
+        const statusText = document.getElementById('backup-import-status');
+        const csrfInput = form ? form.querySelector('input[name="csrfmiddlewaretoken"]') : null;
+
+        if (!panel || !showButton || !form || !fileInput || !csrfInput) return;
+
+        showButton.addEventListener('click', () => {
+            panel.classList.toggle('hidden');
+            if (!panel.classList.contains('hidden')) fileInput.focus();
+        });
+
+        const postForm = async (url, data) => {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {'X-CSRFToken': csrfInput.value},
+                body: data,
+                credentials: 'same-origin'
+            });
+            const payload = await response.json().catch(() => ({ok: false, error: 'The server returned an unreadable response.'}));
+            if (!response.ok || !payload.ok) throw new Error(payload.error || payload.message || 'Backup upload failed.');
+            return payload;
+        };
+
+        form.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const file = fileInput.files[0];
+            if (!file) return;
+            submitButton.disabled = true;
+            progressWrap.classList.remove('hidden');
+            progressBar.style.width = '0%';
+            statusText.classList.remove('text-rose-400');
+            statusText.textContent = 'Creating a secure upload session...';
+            let cancelUrl = '';
+            try {
+                const startData = new FormData();
+                startData.append('filename', file.name);
+                startData.append('size', String(file.size));
+                const started = await postForm(panel.dataset.startUrl, startData);
+                cancelUrl = started.cancel_url;
+                const chunkSize = started.chunk_size;
+                let offset = 0;
+                let index = 0;
+                while (offset < file.size) {
+                    const chunkData = new FormData();
+                    const chunk = file.slice(offset, Math.min(offset + chunkSize, file.size));
+                    chunkData.append('index', String(index));
+                    chunkData.append('chunk', chunk, 'chunk.bin');
+                    await postForm(started.chunk_url, chunkData);
+                    offset += chunk.size;
+                    index += 1;
+                    const percent = Math.min(100, Math.round((offset / file.size) * 100));
+                    progressBar.style.width = `${percent}%`;
+                    statusText.textContent = `Uploading: ${percent}%`;
+                }
+                statusText.textContent = 'Upload complete. Validating archive and checksums...';
+                await postForm(started.complete_url, new FormData());
+                statusText.textContent = 'Backup imported and validated successfully. Reloading...';
+                window.setTimeout(() => window.location.reload(), 800);
+            } catch (error) {
+                statusText.textContent = error.message;
+                statusText.classList.add('text-rose-400');
+                if (cancelUrl) {
+                    try { await postForm(cancelUrl, new FormData()); } catch (ignored) { /* best-effort cleanup */ }
+                }
+                submitButton.disabled = false;
+            }
+        });
+    })();
+</script>
+{% endif %}
 {% endblock %}

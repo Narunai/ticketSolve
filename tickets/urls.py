@@ -6,6 +6,9 @@ urlpatterns = [
     path('', RedirectView.as_view(url='dashboard/', permanent=False)),
     path('login/', views.CustomLoginView.as_view(), name='login'),
     path('logout/', views.custom_logout, name='logout'),
+    path('health/', views.healthcheck, name='healthcheck'),
+    path('maintenance/access/', views.MaintenanceAccessView.as_view(), name='maintenance_access'),
+    path('maintenance/settings/', views.MaintenanceSettingsView.as_view(), name='maintenance_settings'),
     # These endpoints are reachable only as internal Nginx auth subrequests in
     # production. They bind the isolated chatbot service to Django sessions.
     path('_internal/chatbot-auth/user/', views.chatbot_user_auth, name='chatbot_user_auth'),
@@ -107,6 +110,13 @@ urlpatterns = [
     path('backups/', views.BackupManagementView.as_view(), name='backup_list'),
     path('backups/trigger/', views.TriggerBackupView.as_view(), name='backup_trigger'),
     path('backups/schedule/', views.BackupScheduleUpdateView.as_view(), name='backup_schedule_update'),
+    path('backups/import/start/', views.BackupImportStartView.as_view(), name='backup_import_start'),
+    path('backups/import/<uuid:upload_id>/chunk/', views.BackupImportChunkView.as_view(), name='backup_import_chunk'),
+    path('backups/import/<uuid:upload_id>/complete/', views.BackupImportCompleteView.as_view(), name='backup_import_complete'),
+    path('backups/import/<uuid:upload_id>/cancel/', views.BackupImportCancelView.as_view(), name='backup_import_cancel'),
+    path('backups/<int:pk>/validate/', views.BackupValidateView.as_view(), name='backup_validate'),
+    path('backups/<int:pk>/restore/', views.BackupRestoreRequestView.as_view(), name='backup_restore_request'),
+    path('backups/restore-jobs/<uuid:job_id>/open-system/', views.RestoreOpenSystemView.as_view(), name='restore_open_system'),
     path('backups/<int:pk>/download/', views.DownloadBackupView.as_view(), name='backup_download'),
     path('backups/<int:pk>/delete/', views.DeleteBackupLogView.as_view(), name='backup_delete'),
     path('backups/delete-zero-mb/', views.DeleteAllZeroMbBackupsView.as_view(), name='backup_delete_zero_mb'),

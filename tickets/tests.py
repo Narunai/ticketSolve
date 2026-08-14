@@ -3539,6 +3539,300 @@ class SimplePasswordTests(TestCase):
         )
 
 
+class MaintenanceBackupRestoreTests(TestCase):
+    def setUp(self):
+        self.company_a = Company.objects.create(name='Maintenance Company A')
+        self.system_admin = User.objects.create_user(
+            username='system_admin',
+            password='password123',
+            role=User.SYSTEM_ADMIN,
+            is_staff=True,
+            email='system-admin@example.com',
+        )
+        self.user_a = User.objects.create_user(
+            username='user_a',
+            password='password123',
+            role=User.CLIENT_USER,
+            company=self.company_a,
+            email='user-a@example.com',
+        )
+
+    def test_maintenance_gate_hashes_code_throttles_failures_and_keeps_rbac_login(self):
+        from django.contrib.auth.hashers import check_password
+        from django.test import Client
+        from .models import MaintenanceSetting, SecurityAuditLog
+
+        self.client.login(username='system_admin', password='password123')
+        response = self.client.post(reverse('maintenance_settings'), {
+            'is_enabled': 'on',
+            'title': 'Database maintenance',
+            'message': 'A controlled maintenance test is running.',
+            'scheduled_start': '',
+            'expected_end': '',
+            'allow_test_access': 'on',
+            'access_session_minutes': '120',
+            'access_code': 'authorized-test-2026',
+            'current_password': 'password123',
+        })
+        self.assertRedirects(response, reverse('maintenance_settings'))
+        setting = MaintenanceSetting.get_solo()
+        self.assertTrue(setting.is_active())
+        self.assertNotEqual(setting.access_code_hash, 'authorized-test-2026')
+        self.assertTrue(check_password('authorized-test-2026', setting.access_code_hash))
+
+        public_client = Client()
+        self.assertEqual(public_client.get(reverse('dashboard')).status_code, 503)
+        for attempt in range(5):
+            failed = public_client.post(
+                reverse('maintenance_access'),
+                {'access_code': 'wrong-code'},
+                REMOTE_ADDR='198.51.100.10',
+            )
+            self.assertEqual(failed.status_code, 429 if attempt == 4 else 503)
+        blocked = public_client.post(
+            reverse('maintenance_access'),
+            {'access_code': 'authorized-test-2026'},
+            REMOTE_ADDR='198.51.100.10',
+        )
+        self.assertEqual(blocked.status_code, 429)
+
+        tester_client = Client()
+        granted = tester_client.post(
+            reverse('maintenance_access'),
+            {'access_code': 'authorized-test-2026'},
+            REMOTE_ADDR='198.51.100.11',
+        )
+        self.assertRedirects(granted, reverse('login'), fetch_redirect_response=False)
+        self.assertEqual(tester_client.get(reverse('dashboard')).status_code, 302)
+        signed_in = tester_client.post(reverse('login'), {
+            'username': 'user_a',
+            'password': 'password123',
+        })
+        self.assertRedirects(signed_in, reverse('dashboard'), fetch_redirect_response=False)
+        self.assertEqual(tester_client.get(reverse('dashboard')).status_code, 200)
+        self.assertTrue(SecurityAuditLog.objects.filter(
+            event_type='MAINTENANCE_ACCESS_BLOCKED'
+        ).exists())
+
+    def test_system_sub_admin_cannot_change_global_maintenance_or_import_backup(self):
+        from .models import MaintenanceSetting
+
+        sub_admin = CustomUser.objects.create_user(
+            username='maintenance_sub_admin',
+            password='password123',
+            role=CustomUser.SYSTEM_SUB_ADMIN,
+            email='maintenance-sub@example.com',
+        )
+        self.client.login(username=sub_admin.username, password='password123')
+        self.assertEqual(self.client.get(reverse('maintenance_settings')).status_code, 200)
+        denied = self.client.post(reverse('maintenance_settings'), {
+            'is_enabled': 'on',
+            'title': 'Blocked change',
+            'message': 'Must not save',
+            'allow_test_access': 'on',
+            'access_session_minutes': '120',
+            'access_code': 'should-not-save',
+            'current_password': 'password123',
+        })
+        self.assertEqual(denied.status_code, 403)
+        self.assertFalse(MaintenanceSetting.get_solo().is_enabled)
+        import_denied = self.client.post(reverse('backup_import_start'), {
+            'filename': 'backup.zip',
+            'size': '10',
+        })
+        self.assertEqual(import_denied.status_code, 403)
+
+    def test_chunked_backup_import_validates_archive_and_rejects_traversal(self):
+        import hashlib
+        import io
+        import json
+        import tempfile
+        import zipfile
+        from unittest import mock
+        from .backup_restore_service import make_backup_manifest
+        from .models import BackupLog
+
+        self.client.login(username='system_admin', password='password123')
+        ticket_payload = b'[]'
+        manifest = make_backup_manifest(
+            backup_type=BackupLog.TYPE_INCREMENTAL,
+            database_format='ticket_json',
+            payloads={'tickets.json': hashlib.sha256(ticket_payload).hexdigest()},
+            includes_media=False,
+            includes_chatbot=False,
+        )
+        valid_buffer = io.BytesIO()
+        with zipfile.ZipFile(valid_buffer, 'w', zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr('tickets.json', ticket_payload)
+            archive.writestr(
+                'backup_manifest.json',
+                json.dumps(manifest, ensure_ascii=False),
+            )
+        valid_bytes = valid_buffer.getvalue()
+
+        malicious_buffer = io.BytesIO()
+        with zipfile.ZipFile(malicious_buffer, 'w', zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr('../outside.txt', b'blocked')
+        malicious_bytes = malicious_buffer.getvalue()
+
+        with tempfile.TemporaryDirectory() as root:
+            backup_dir = os.path.join(root, 'backups')
+            quarantine_dir = os.path.join(backup_dir, '.quarantine')
+            with mock.patch('tickets.backup_restore_service.BACKUP_DIR', backup_dir), \
+                    mock.patch('tickets.backup_restore_service.BACKUP_QUARANTINE_DIR', quarantine_dir), \
+                    mock.patch('tickets.views.RESTORE_BACKUP_DIR', backup_dir):
+                started = self.client.post(reverse('backup_import_start'), {
+                    'filename': 'downloaded-ticket-backup.zip',
+                    'size': str(len(valid_bytes)),
+                })
+                self.assertEqual(started.status_code, 200)
+                upload = started.json()
+                chunked = self.client.post(upload['chunk_url'], {
+                    'index': '0',
+                    'chunk': SimpleUploadedFile('chunk.bin', valid_bytes),
+                })
+                self.assertEqual(chunked.status_code, 200)
+                completed = self.client.post(upload['complete_url'])
+                self.assertEqual(completed.status_code, 200)
+                imported = BackupLog.objects.get(pk=completed.json()['backup_id'])
+                self.assertEqual(imported.source, BackupLog.SOURCE_IMPORTED)
+                self.assertEqual(imported.validation_status, BackupLog.VALIDATION_VALID)
+                self.assertFalse(imported.restore_supported)
+                self.assertTrue(os.path.isfile(os.path.join(backup_dir, imported.filename)))
+
+                malicious_started = self.client.post(reverse('backup_import_start'), {
+                    'filename': 'malicious.zip',
+                    'size': str(len(malicious_bytes)),
+                }).json()
+                self.client.post(malicious_started['chunk_url'], {
+                    'index': '0',
+                    'chunk': SimpleUploadedFile('chunk.bin', malicious_bytes),
+                })
+                rejected = self.client.post(malicious_started['complete_url'])
+                self.assertEqual(rejected.status_code, 400)
+                self.assertFalse(os.path.exists(os.path.join(root, 'outside.txt')))
+                self.assertTrue(BackupLog.objects.filter(
+                    source=BackupLog.SOURCE_IMPORTED,
+                    validation_status=BackupLog.VALIDATION_INVALID,
+                ).exists())
+
+    def test_full_backup_v2_is_signed_checksummed_and_restore_request_is_queued(self):
+        import datetime
+        import io
+        import tarfile
+        import tempfile
+        from unittest import mock
+        from django.contrib.auth.hashers import make_password
+        from django.test import override_settings
+        from .backup_restore_service import validate_backup_archive
+        from .backup_service import perform_full_backup
+        from .models import BackupLog, MaintenanceSetting, RestoreJob
+
+        self.client.login(username='system_admin', password='password123')
+        with tempfile.TemporaryDirectory() as backup_dir, tempfile.TemporaryDirectory() as media_root, \
+                override_settings(MEDIA_ROOT=media_root), \
+                mock.patch('tickets.backup_service.BACKUP_DIR', backup_dir), \
+                mock.patch('tickets.backup_service.CHATBOT_DB_PATH', os.path.join(backup_dir, 'missing-chatbot.db')):
+            with open(os.path.join(media_root, 'thai-attachment.txt'), 'wb') as media_file:
+                media_file.write('ไฟล์แนบสำหรับทดสอบ'.encode('utf-8'))
+            result = perform_full_backup()
+            self.assertTrue(result['success'], result.get('error'))
+            backup = result['log']
+            self.assertEqual(backup.format_version, '2')
+            self.assertEqual(len(backup.sha256), 64)
+            self.assertTrue(backup.restore_supported)
+            validation = validate_backup_archive(
+                result['file_path'],
+                expected_sha256=backup.sha256,
+            )
+            self.assertTrue(validation['valid'], validation['details'])
+            self.assertTrue(validation['restore_supported'])
+
+            tampered_path = os.path.join(backup_dir, 'tampered-full-backup.tar.gz')
+            with tarfile.open(result['file_path'], 'r:gz') as source_archive, \
+                    tarfile.open(tampered_path, 'w:gz') as destination_archive:
+                for member in source_archive.getmembers():
+                    if member.isdir():
+                        destination_archive.addfile(member)
+                        continue
+                    source = source_archive.extractfile(member)
+                    content = source.read() if source else b''
+                    if member.name == 'media/thai-attachment.txt':
+                        content = b'tampered-media-content'
+                        member.size = len(content)
+                    destination_archive.addfile(member, io.BytesIO(content))
+            tampered_validation = validate_backup_archive(tampered_path)
+            self.assertFalse(tampered_validation['valid'])
+            self.assertIn('Media checksum mismatch', tampered_validation['details'])
+
+            maintenance = MaintenanceSetting.get_solo()
+            maintenance.is_enabled = True
+            maintenance.allow_test_access = True
+            maintenance.access_code_hash = make_password('restore-access-2026')
+            maintenance.save()
+            session = self.client.session
+            session['maintenance_access'] = {
+                'version': maintenance.access_version,
+                'expires_at': int((timezone.now() + datetime.timedelta(hours=1)).timestamp()),
+            }
+            session.save()
+
+            with mock.patch('tickets.views.queue_restore_trigger') as trigger:
+                queued = self.client.post(
+                    reverse('backup_restore_request', args=[backup.pk]),
+                    {
+                        'current_password': 'password123',
+                        'maintenance_code': 'restore-access-2026',
+                        'confirmation_phrase': f'RESTORE {backup.pk}',
+                    },
+                )
+            self.assertRedirects(queued, reverse('backup_list'))
+            job = RestoreJob.objects.get(backup=backup)
+            self.assertEqual(job.status, RestoreJob.STATUS_QUEUED)
+            trigger.assert_called_once_with(job.job_id)
+            backup.refresh_from_db()
+            self.assertTrue(backup.is_protected)
+
+    def test_restore_database_payload_replaces_isolated_sqlite_database(self):
+        import sqlite3
+        import tempfile
+        from unittest import mock
+        from django.test import override_settings
+        from .backup_restore_service import restore_database_payload
+
+        with tempfile.TemporaryDirectory() as root:
+            staging = os.path.join(root, 'staging')
+            os.makedirs(os.path.join(staging, 'database'))
+            source_path = os.path.join(staging, 'database', 'db.sqlite3')
+            target_path = os.path.join(root, 'target.sqlite3')
+            source = sqlite3.connect(source_path)
+            source.execute('CREATE TABLE marker (value TEXT)')
+            source.execute("INSERT INTO marker VALUES ('restored')")
+            source.commit()
+            source.close()
+            target = sqlite3.connect(target_path)
+            target.execute('CREATE TABLE marker (value TEXT)')
+            target.execute("INSERT INTO marker VALUES ('old')")
+            target.commit()
+            target.close()
+
+            database_setting = {
+                'default': {
+                    'ENGINE': 'django.db.backends.sqlite3',
+                    'NAME': target_path,
+                }
+            }
+            with override_settings(DATABASES=database_setting), \
+                    mock.patch('tickets.backup_restore_service.connections.close_all'), \
+                    mock.patch('tickets.backup_restore_service.call_command'):
+                restore_database_payload(staging, {'database_format': 'sqlite3'})
+            restored = sqlite3.connect(target_path)
+            try:
+                self.assertEqual(restored.execute('SELECT value FROM marker').fetchone()[0], 'restored')
+            finally:
+                restored.close()
+
+
 
 
 

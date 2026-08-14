@@ -2,6 +2,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.contrib.auth.views import LoginView
 from django.contrib.auth import logout, update_session_auth_hash
+from django.contrib.auth.hashers import check_password, make_password
 from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib.auth.password_validation import validate_password
 from django.views.generic import CreateView, UpdateView, DetailView, TemplateView, ListView, FormView
@@ -11,7 +12,7 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.validators import validate_email
 from django.http import FileResponse, JsonResponse, HttpResponse
 from django.views.decorators.http import require_GET, require_POST
-from .models import Ticket, CustomUser, Company, EmailLog, TicketAuditLog, SecurityAuditLog, ReportViewLog, MonthlyReportSchedule, TicketAutomationConfig, SMTPConfiguration, InboundEmailReceipt, InboundEmailAttachment, InboundEmailContact, InboundEmailRoutingRule, EmailToTicketSchedule, EmailToTicketRunLog, InAppNotification, get_smtp_connection, get_smtp_from_email, TicketComment, TicketAttachment, CommentAttachment, TicketCategory, ResolutionCategory, ModuleCategory, TicketStatusConfig, CompanyTicketConfig, CompanyTicketField, NotificationConfig, should_send_email_notification, BackupLog, BackupSchedule
+from .models import Ticket, CustomUser, Company, EmailLog, TicketAuditLog, SecurityAuditLog, ReportViewLog, MonthlyReportSchedule, TicketAutomationConfig, SMTPConfiguration, InboundEmailReceipt, InboundEmailAttachment, InboundEmailContact, InboundEmailRoutingRule, EmailToTicketSchedule, EmailToTicketRunLog, InAppNotification, get_smtp_connection, get_smtp_from_email, TicketComment, TicketAttachment, CommentAttachment, TicketCategory, ResolutionCategory, ModuleCategory, TicketStatusConfig, CompanyTicketConfig, CompanyTicketField, NotificationConfig, should_send_email_notification, BackupLog, BackupSchedule, BackupUploadSession, MaintenanceSetting, RestoreJob
 from .backup_service import perform_full_backup, perform_incremental_backup, perform_system_data_backup, get_backup_file_path, FileLock
 from .email_to_ticket_scheduler import run_email_to_ticket_cycle
 from .email_to_ticket import approve_inbound_email, reject_inbound_email
@@ -28,15 +29,19 @@ from .security import (
     clear_account_login_failures,
     clear_login_failures,
     generate_simple_password,
+    grant_maintenance_access,
+    maintenance_access_retry_after,
     login_retry_after,
+    record_maintenance_access_failure,
     record_login_failure,
+    clear_maintenance_access_failures,
     safe_redirect_target,
     validate_attachment,
     write_security_audit,
 )
 
 
-from django.db import models
+from django.db import models, transaction, connection as db_connection
 from django import forms
 
 
@@ -45,6 +50,18 @@ import os
 import shutil
 import datetime
 import uuid
+
+from .backup_restore_service import (
+    BACKUP_CHUNK_MAX_BYTES,
+    BACKUP_DIR as RESTORE_BACKUP_DIR,
+    BACKUP_IMPORT_MAX_BYTES,
+    ensure_backup_directories,
+    finalize_upload_session,
+    quarantine_path,
+    queue_restore_trigger,
+    safe_backup_extension,
+    validate_backup_archive,
+)
 
 
 @require_GET
@@ -892,6 +909,89 @@ class BackupScheduleForm(forms.ModelForm):
             'full_is_active': forms.CheckboxInput(attrs={'class': checkbox_class}),
             'system_is_active': forms.CheckboxInput(attrs={'class': checkbox_class}),
         }
+
+
+class MaintenanceSettingsForm(forms.ModelForm):
+    access_code = forms.CharField(
+        required=False,
+        max_length=128,
+        widget=forms.PasswordInput(attrs={
+            'class': 'w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white',
+            'autocomplete': 'new-password',
+            'placeholder': 'Leave blank to keep the current code',
+        }),
+    )
+    current_password = forms.CharField(
+        required=True,
+        max_length=128,
+        widget=forms.PasswordInput(attrs={
+            'class': 'w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white',
+            'autocomplete': 'current-password',
+        }),
+    )
+    notify_users = forms.BooleanField(required=False)
+    send_email_notice = forms.BooleanField(required=False)
+
+    class Meta:
+        model = MaintenanceSetting
+        fields = [
+            'is_enabled',
+            'title',
+            'message',
+            'scheduled_start',
+            'expected_end',
+            'allow_test_access',
+            'access_session_minutes',
+        ]
+        base_input = (
+            'w-full rounded-lg border border-slate-700 bg-slate-950 '
+            'px-3 py-2.5 text-sm text-white'
+        )
+        widgets = {
+            'is_enabled': forms.CheckboxInput(attrs={'class': 'h-4 w-4 rounded border-slate-700 bg-slate-950 text-indigo-600'}),
+            'title': forms.TextInput(attrs={'class': base_input}),
+            'message': forms.Textarea(attrs={'class': base_input, 'rows': 4}),
+            'scheduled_start': forms.DateTimeInput(attrs={'class': base_input, 'type': 'datetime-local'}, format='%Y-%m-%dT%H:%M'),
+            'expected_end': forms.DateTimeInput(attrs={'class': base_input, 'type': 'datetime-local'}, format='%Y-%m-%dT%H:%M'),
+            'allow_test_access': forms.CheckboxInput(attrs={'class': 'h-4 w-4 rounded border-slate-700 bg-slate-950 text-indigo-600'}),
+            'access_session_minutes': forms.Select(attrs={'class': base_input}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['scheduled_start'].input_formats = ['%Y-%m-%dT%H:%M']
+        self.fields['expected_end'].input_formats = ['%Y-%m-%dT%H:%M']
+
+    def clean_access_code(self):
+        value = self.cleaned_data.get('access_code', '')
+        if value and len(value) < 10:
+            raise ValidationError('The maintenance access code must contain at least 10 characters.')
+        return value
+
+    def clean(self):
+        cleaned = super().clean()
+        start = cleaned.get('scheduled_start')
+        end = cleaned.get('expected_end')
+        if start and end and end <= start:
+            self.add_error('expected_end', 'Expected completion must be after the scheduled start.')
+        has_code = bool(self.instance and self.instance.access_code_hash)
+        if (
+            cleaned.get('is_enabled')
+            and cleaned.get('allow_test_access')
+            and not (has_code or cleaned.get('access_code'))
+        ):
+            self.add_error('access_code', 'Set an access code before enabling authorized test access.')
+        if (
+            cleaned.get('is_enabled')
+            and self.instance
+            and not self.instance.is_enabled
+            and not cleaned.get('access_code')
+        ):
+            self.add_error(
+                'access_code',
+                'Enter a new access code when enabling maintenance mode.',
+            )
+        return cleaned
 
 
 class InboundEmailRoutingRuleForm(forms.ModelForm):
@@ -4419,6 +4519,657 @@ class TicketAutomationDeleteView(LoginRequiredMixin, SystemStaffRequiredMixin, V
         return redirect('ticket_automation_list')
 
 
+@require_GET
+def healthcheck(request):
+    """Minimal database-backed health probe without exposing system details."""
+    try:
+        with db_connection.cursor() as cursor:
+            cursor.execute('SELECT 1')
+            cursor.fetchone()
+    except Exception:
+        return JsonResponse({'status': 'unavailable'}, status=503)
+    return JsonResponse({'status': 'ok'})
+
+
+class MaintenanceAccessView(View):
+    template_name = 'tickets/maintenance.html'
+
+    def _render(self, request, setting, error='', status=503):
+        response = render(
+            request,
+            self.template_name,
+            {
+                'maintenance': setting,
+                'hard_maintenance': False,
+                'access_error': error,
+            },
+            status=status,
+        )
+        response['Cache-Control'] = 'no-store, max-age=0'
+        response['X-Robots-Tag'] = 'noindex, nofollow'
+        if status == 429:
+            response['Retry-After'] = str(
+                maintenance_access_retry_after(request, setting.access_version)
+            )
+        else:
+            response['Retry-After'] = '60'
+        return response
+
+    def get(self, request, *args, **kwargs):
+        setting = MaintenanceSetting.get_solo()
+        if not setting.is_active():
+            return redirect('dashboard' if request.user.is_authenticated else 'login')
+        return self._render(request, setting)
+
+    def post(self, request, *args, **kwargs):
+        setting = MaintenanceSetting.get_solo()
+        if not setting.is_active():
+            return redirect('dashboard' if request.user.is_authenticated else 'login')
+        retry_after = maintenance_access_retry_after(request, setting.access_version)
+        if retry_after:
+            write_security_audit(
+                request,
+                'MAINTENANCE_ACCESS_BLOCKED',
+                SecurityAuditLog.OUTCOME_BLOCKED,
+                actor=request.user if request.user.is_authenticated else None,
+                target_type='MaintenanceSetting',
+                target_id=setting.pk,
+                details='Maintenance access attempt was rate limited.',
+            )
+            return self._render(
+                request,
+                setting,
+                'Too many attempts. Please wait 10 minutes and try again.',
+                status=429,
+            )
+
+        supplied_code = request.POST.get('access_code', '')
+        allowed = bool(
+            setting.allow_test_access
+            and setting.access_code_hash
+            and supplied_code
+            and check_password(supplied_code, setting.access_code_hash)
+        )
+        if not allowed:
+            record_maintenance_access_failure(request, setting.access_version)
+            write_security_audit(
+                request,
+                'MAINTENANCE_ACCESS_FAILURE',
+                SecurityAuditLog.OUTCOME_FAILURE,
+                actor=request.user if request.user.is_authenticated else None,
+                target_type='MaintenanceSetting',
+                target_id=setting.pk,
+                details='Invalid maintenance access code.',
+            )
+            status = 429 if maintenance_access_retry_after(request, setting.access_version) else 503
+            return self._render(
+                request,
+                setting,
+                'The access code was not accepted.',
+                status=status,
+            )
+
+        clear_maintenance_access_failures(request, setting.access_version)
+        grant_maintenance_access(request, setting)
+        write_security_audit(
+            request,
+            'MAINTENANCE_ACCESS_SUCCESS',
+            SecurityAuditLog.OUTCOME_SUCCESS,
+            actor=request.user if request.user.is_authenticated else None,
+            target_type='MaintenanceSetting',
+            target_id=setting.pk,
+            details='Authorized maintenance test session granted.',
+        )
+        destination = safe_redirect_target(
+            request,
+            request.POST.get('next'),
+            reverse('dashboard') if request.user.is_authenticated else reverse('login'),
+        )
+        return redirect(destination)
+
+
+class MaintenanceSettingsView(LoginRequiredMixin, SystemStaffRequiredMixin, TemplateView):
+    template_name = 'tickets/maintenance_settings.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        setting = MaintenanceSetting.get_solo()
+        context['maintenance'] = setting
+        context['form'] = kwargs.get('form') or MaintenanceSettingsForm(instance=setting)
+        context['can_manage'] = bool(
+            self.request.user.is_superuser
+            or self.request.user.role == CustomUser.SYSTEM_ADMIN
+        )
+        active_users = CustomUser.objects.filter(is_active=True)
+        context['active_user_count'] = active_users.count()
+        context['active_email_count'] = active_users.exclude(email='').count()
+        context['recent_events'] = SecurityAuditLog.objects.filter(
+            event_type__startswith='MAINTENANCE_'
+        ).select_related('actor')[:20]
+        return context
+
+    def post(self, request, *args, **kwargs):
+        if not (
+            request.user.is_superuser
+            or request.user.role == CustomUser.SYSTEM_ADMIN
+        ):
+            raise PermissionDenied
+        setting = MaintenanceSetting.get_solo()
+        previous_enabled = setting.is_enabled
+        previous_hash = setting.access_code_hash
+        form = MaintenanceSettingsForm(request.POST, instance=setting)
+        form_valid = form.is_valid()
+        password_valid = bool(
+            form_valid
+            and request.user.check_password(
+                form.cleaned_data.get('current_password', '')
+            )
+        )
+        if not form_valid or not password_valid:
+            if form_valid:
+                form.add_error('current_password', 'Your current password was not accepted.')
+            context = self.get_context_data(form=form)
+            return self.render_to_response(context, status=400)
+
+        configured = form.save(commit=False)
+        access_code = form.cleaned_data.get('access_code')
+        if access_code:
+            configured.access_code_hash = make_password(access_code)
+            configured.access_version += 1
+        if previous_enabled and not configured.is_enabled:
+            configured.access_version += 1
+        configured.updated_by = request.user
+        configured.save()
+
+        if configured.is_active() and access_code:
+            grant_maintenance_access(request, configured)
+        if not configured.is_enabled:
+            request.session.pop('maintenance_access', None)
+
+        notice_count = 0
+        if form.cleaned_data.get('notify_users'):
+            users = list(CustomUser.objects.filter(is_active=True))
+            InAppNotification.objects.bulk_create([
+                InAppNotification(
+                    recipient=user,
+                    actor=request.user,
+                    event_type=InAppNotification.EVENT_MAINTENANCE,
+                    title=configured.title[:255],
+                    message=configured.message,
+                )
+                for user in users
+            ])
+            notice_count = len(users)
+            if form.cleaned_data.get('send_email_notice'):
+                recipients = sorted({user.email for user in users if user.email})
+                details = []
+                if configured.scheduled_start:
+                    details.append(('Scheduled start', timezone.localtime(configured.scheduled_start).strftime('%Y-%m-%d %H:%M %Z')))
+                if configured.expected_end:
+                    details.append(('Expected completion', timezone.localtime(configured.expected_end).strftime('%Y-%m-%d %H:%M %Z')))
+                text_body, html_body = build_formal_email(
+                    heading='TicketSolve Maintenance Notice',
+                    greeting='Dear TicketSolve user,',
+                    introduction=configured.message,
+                    details=details,
+                    action_label='Open TicketSolve',
+                    action_url=settings.PUBLIC_BASE_URL,
+                    notice='This message contains no maintenance access code. Contact your system administrator if test access is required.',
+                )
+                from .signals import log_and_send_email
+                log_and_send_email(
+                    f'[TicketSolve] {configured.title}',
+                    text_body,
+                    recipients,
+                    EmailLog.ACTION_MAINTENANCE,
+                    html_message=html_body,
+                )
+
+        write_security_audit(
+            request,
+            'MAINTENANCE_SETTINGS_UPDATE',
+            SecurityAuditLog.OUTCOME_SUCCESS,
+            actor=request.user,
+            target_type='MaintenanceSetting',
+            target_id=configured.pk,
+            details=(
+                f'Maintenance enabled={configured.is_enabled}; '
+                f'access code changed={previous_hash != configured.access_code_hash}; '
+                f'notifications={notice_count}.'
+            ),
+        )
+        messages.success(request, 'Maintenance settings saved securely.')
+        return redirect('maintenance_settings')
+
+
+def _backup_json_error(message, status=400):
+    return JsonResponse({'ok': False, 'error': str(message)[:1000]}, status=status)
+
+
+class BackupImportStartView(LoginRequiredMixin, SuperuserOrSystemAdminRequiredMixin, View):
+    def post(self, request, *args, **kwargs):
+        original_filename = os.path.basename(
+            str(request.POST.get('filename', '')).replace('\\', '/')
+        )[:255]
+        extension = safe_backup_extension(original_filename)
+        if not extension:
+            return _backup_json_error('Only TicketSolve .tar.gz and .zip archives are supported.')
+        try:
+            expected_size = int(request.POST.get('size', '0'))
+        except (TypeError, ValueError):
+            return _backup_json_error('Invalid upload size.')
+        if expected_size <= 0 or expected_size > BACKUP_IMPORT_MAX_BYTES:
+            return _backup_json_error(
+                f'Backup archives must be between 1 byte and {BACKUP_IMPORT_MAX_BYTES} bytes.'
+            )
+
+        ensure_backup_directories()
+        free_bytes = shutil.disk_usage(RESTORE_BACKUP_DIR).free
+        if free_bytes < expected_size * 2:
+            return _backup_json_error(
+                'The server does not have enough free space to import and validate this archive.',
+                status=507,
+            )
+
+        expired_sessions = list(
+            BackupUploadSession.objects.filter(
+                expires_at__lt=timezone.now(),
+                status__in=[
+                    BackupUploadSession.STATUS_UPLOADING,
+                    BackupUploadSession.STATUS_FAILED,
+                    BackupUploadSession.STATUS_CANCELLED,
+                ],
+            )[:50]
+        )
+        for expired in expired_sessions:
+            expired_path = quarantine_path(expired.temp_filename)
+            if expired_path and os.path.isfile(expired_path):
+                try:
+                    os.remove(expired_path)
+                except OSError:
+                    pass
+            expired.delete()
+
+        upload_id = uuid.uuid4()
+        temp_filename = f'{upload_id}.part'
+        temp_path = quarantine_path(temp_filename)
+        try:
+            descriptor = os.open(temp_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o640)
+            os.close(descriptor)
+        except OSError:
+            return _backup_json_error('Unable to create a quarantine upload.', status=500)
+
+        session = BackupUploadSession.objects.create(
+            upload_id=upload_id,
+            uploaded_by=request.user,
+            original_filename=original_filename,
+            temp_filename=temp_filename,
+            expected_size=expected_size,
+            expires_at=timezone.now() + datetime.timedelta(hours=6),
+        )
+        write_security_audit(
+            request,
+            'BACKUP_IMPORT_START',
+            SecurityAuditLog.OUTCOME_SUCCESS,
+            actor=request.user,
+            target_type='BackupUploadSession',
+            target_id=session.upload_id,
+            details=f'Started bounded archive upload ({expected_size} bytes).',
+        )
+        return JsonResponse({
+            'ok': True,
+            'upload_id': str(session.upload_id),
+            'chunk_size': BACKUP_CHUNK_MAX_BYTES,
+            'chunk_url': reverse('backup_import_chunk', args=[session.upload_id]),
+            'complete_url': reverse('backup_import_complete', args=[session.upload_id]),
+            'cancel_url': reverse('backup_import_cancel', args=[session.upload_id]),
+        })
+
+
+class BackupImportChunkView(LoginRequiredMixin, SuperuserOrSystemAdminRequiredMixin, View):
+    def post(self, request, upload_id, *args, **kwargs):
+        chunk = request.FILES.get('chunk')
+        if not chunk or chunk.size <= 0 or chunk.size > BACKUP_CHUNK_MAX_BYTES:
+            return _backup_json_error('Upload chunk is empty or exceeds the per-chunk limit.')
+        try:
+            chunk_index = int(request.POST.get('index', '-1'))
+        except (TypeError, ValueError):
+            return _backup_json_error('Invalid chunk index.')
+
+        with transaction.atomic():
+            session = get_object_or_404(
+                BackupUploadSession.objects.select_for_update(),
+                upload_id=upload_id,
+                uploaded_by=request.user,
+            )
+            if session.status != BackupUploadSession.STATUS_UPLOADING:
+                return _backup_json_error('This upload session is no longer writable.', status=409)
+            if session.expires_at <= timezone.now():
+                return _backup_json_error('This upload session has expired.', status=410)
+            if chunk_index != session.next_chunk_index:
+                return _backup_json_error('Chunks must be uploaded in order.', status=409)
+            if session.received_size + chunk.size > session.expected_size:
+                return _backup_json_error('Uploaded data exceeds the declared archive size.')
+            temp_path = quarantine_path(session.temp_filename)
+            if not temp_path or not os.path.isfile(temp_path):
+                return _backup_json_error('Quarantine upload file is unavailable.', status=410)
+            if os.path.getsize(temp_path) != session.received_size:
+                return _backup_json_error('Upload state failed an integrity check.', status=409)
+            with open(temp_path, 'ab') as destination:
+                for data in chunk.chunks(1024 * 1024):
+                    destination.write(data)
+            session.received_size += chunk.size
+            session.next_chunk_index += 1
+            session.save(update_fields=['received_size', 'next_chunk_index', 'updated_at'])
+
+        return JsonResponse({
+            'ok': True,
+            'received_size': session.received_size,
+            'expected_size': session.expected_size,
+            'next_chunk_index': session.next_chunk_index,
+        })
+
+
+class BackupImportCompleteView(LoginRequiredMixin, SuperuserOrSystemAdminRequiredMixin, View):
+    def post(self, request, upload_id, *args, **kwargs):
+        with transaction.atomic():
+            session = get_object_or_404(
+                BackupUploadSession.objects.select_for_update(),
+                upload_id=upload_id,
+                uploaded_by=request.user,
+            )
+            if session.status != BackupUploadSession.STATUS_UPLOADING:
+                return _backup_json_error('This upload session cannot be completed.', status=409)
+            temp_path = quarantine_path(session.temp_filename)
+            actual_size = os.path.getsize(temp_path) if temp_path and os.path.isfile(temp_path) else -1
+            if session.received_size != session.expected_size or actual_size != session.expected_size:
+                return _backup_json_error('The uploaded archive is incomplete.', status=409)
+            session.status = BackupUploadSession.STATUS_VALIDATING
+            session.save(update_fields=['status', 'updated_at'])
+
+        try:
+            backup_log, validation, duplicate = finalize_upload_session(session)
+        except Exception as exc:
+            session.status = BackupUploadSession.STATUS_FAILED
+            session.error_message = str(exc)[:1000]
+            session.save(update_fields=['status', 'error_message', 'updated_at'])
+            write_security_audit(
+                request,
+                'BACKUP_IMPORT_COMPLETE',
+                SecurityAuditLog.OUTCOME_FAILURE,
+                actor=request.user,
+                target_type='BackupUploadSession',
+                target_id=session.upload_id,
+                details='Backup import failed during quarantine validation.',
+            )
+            return _backup_json_error('Backup validation failed.', status=400)
+
+        outcome = (
+            SecurityAuditLog.OUTCOME_SUCCESS
+            if validation.get('valid')
+            else SecurityAuditLog.OUTCOME_FAILURE
+        )
+        write_security_audit(
+            request,
+            'BACKUP_IMPORT_COMPLETE',
+            outcome,
+            actor=request.user,
+            target_type='BackupLog',
+            target_id=backup_log.pk,
+            details=(
+                'Duplicate archive linked to existing record.'
+                if duplicate
+                else validation.get('details', 'Backup import completed.')
+            ),
+        )
+        return JsonResponse({
+            'ok': bool(validation.get('valid')),
+            'backup_id': backup_log.pk,
+            'duplicate': duplicate,
+            'validation_status': backup_log.validation_status,
+            'restore_supported': backup_log.restore_supported,
+            'message': validation.get('details', ''),
+        }, status=200 if validation.get('valid') else 400)
+
+
+class BackupImportCancelView(LoginRequiredMixin, SuperuserOrSystemAdminRequiredMixin, View):
+    def post(self, request, upload_id, *args, **kwargs):
+        with transaction.atomic():
+            session = get_object_or_404(
+                BackupUploadSession.objects.select_for_update(),
+                upload_id=upload_id,
+                uploaded_by=request.user,
+            )
+            if session.status in {
+                BackupUploadSession.STATUS_COMPLETED,
+                BackupUploadSession.STATUS_VALIDATING,
+            }:
+                return _backup_json_error('This upload can no longer be cancelled.', status=409)
+            temp_path = quarantine_path(session.temp_filename)
+            if temp_path and os.path.isfile(temp_path):
+                try:
+                    os.remove(temp_path)
+                except OSError:
+                    return _backup_json_error('Unable to remove the quarantined upload.', status=500)
+            session.status = BackupUploadSession.STATUS_CANCELLED
+            session.save(update_fields=['status', 'updated_at'])
+        return JsonResponse({'ok': True})
+
+
+class BackupValidateView(LoginRequiredMixin, SuperuserOrSystemAdminRequiredMixin, View):
+    def post(self, request, pk, *args, **kwargs):
+        backup = get_object_or_404(BackupLog, pk=pk)
+        file_path = get_backup_file_path(backup.filename)
+        validation = validate_backup_archive(
+            file_path or '',
+            expected_sha256=backup.sha256,
+        )
+        backup.sha256 = validation.get('sha256', backup.sha256)
+        backup.format_version = validation.get('format_version', '')
+        backup.validation_status = validation['status']
+        backup.validation_details = validation['details']
+        backup.restore_supported = validation.get('restore_supported', False)
+        if not validation['valid']:
+            backup.status = BackupLog.STATUS_FAILED
+        elif file_path:
+            backup.status = BackupLog.STATUS_SUCCESS
+        backup.save(update_fields=[
+            'sha256',
+            'format_version',
+            'validation_status',
+            'validation_details',
+            'restore_supported',
+            'status',
+        ])
+        write_security_audit(
+            request,
+            'BACKUP_VALIDATE',
+            SecurityAuditLog.OUTCOME_SUCCESS if validation['valid'] else SecurityAuditLog.OUTCOME_FAILURE,
+            actor=request.user,
+            target_type='BackupLog',
+            target_id=backup.pk,
+            details=validation['details'],
+        )
+        if validation['valid']:
+            messages.success(request, validation['details'])
+        else:
+            messages.error(request, f"Backup validation failed: {validation['details']}")
+        return redirect('backup_list')
+
+
+class BackupRestoreRequestView(
+    LoginRequiredMixin,
+    SuperuserOrSystemAdminRequiredMixin,
+    TemplateView,
+):
+    template_name = 'tickets/backup_restore_confirm.html'
+
+    def get_backup(self):
+        return get_object_or_404(BackupLog, pk=self.kwargs['pk'])
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        backup = self.get_backup()
+        context['backup'] = backup
+        context['confirmation_phrase'] = f'RESTORE {backup.pk}'
+        context['maintenance'] = MaintenanceSetting.get_solo()
+        return context
+
+    def post(self, request, *args, **kwargs):
+        backup = self.get_backup()
+        maintenance = MaintenanceSetting.get_solo()
+        errors = []
+        if not backup.restore_supported or backup.validation_status != BackupLog.VALIDATION_VALID:
+            errors.append('This backup is not marked as compatible with complete restore.')
+        if not maintenance.is_active() or not maintenance.allow_test_access or not maintenance.access_code_hash:
+            errors.append('Enable active Maintenance Mode with an access code before requesting restore.')
+        if not request.user.check_password(request.POST.get('current_password', '')):
+            errors.append('Your current account password was not accepted.')
+        retry_after = maintenance_access_retry_after(request, maintenance.access_version)
+        supplied_code = request.POST.get('maintenance_code', '')
+        if retry_after:
+            errors.append('Maintenance access verification is temporarily locked.')
+        elif not supplied_code or not check_password(supplied_code, maintenance.access_code_hash):
+            record_maintenance_access_failure(request, maintenance.access_version)
+            errors.append('The maintenance access code was not accepted.')
+        else:
+            clear_maintenance_access_failures(request, maintenance.access_version)
+        expected_phrase = f'RESTORE {backup.pk}'
+        if request.POST.get('confirmation_phrase', '').strip() != expected_phrase:
+            errors.append(f'Type {expected_phrase} exactly to confirm.')
+
+        file_path = get_backup_file_path(backup.filename)
+        validation = validate_backup_archive(
+            file_path or '',
+            expected_sha256=backup.sha256,
+        )
+        if not validation.get('restore_supported'):
+            errors.append(validation.get('details') or 'Backup validation failed.')
+
+        if errors:
+            write_security_audit(
+                request,
+                'BACKUP_RESTORE_REQUEST',
+                SecurityAuditLog.OUTCOME_FAILURE,
+                actor=request.user,
+                target_type='BackupLog',
+                target_id=backup.pk,
+                details='Restore request failed one or more confirmation checks.',
+            )
+            context = self.get_context_data()
+            context['restore_errors'] = errors
+            return self.render_to_response(context, status=400)
+
+        active_statuses = [
+            RestoreJob.STATUS_QUEUED,
+            RestoreJob.STATUS_VALIDATING,
+            RestoreJob.STATUS_PRE_BACKUP,
+            RestoreJob.STATUS_RESTORING,
+            RestoreJob.STATUS_VERIFYING,
+            RestoreJob.STATUS_AWAITING_REVIEW,
+        ]
+        try:
+            with FileLock('restore_request.lock', timeout=2):
+                if RestoreJob.objects.filter(status__in=active_statuses).exists():
+                    errors.append('Another restore is running or awaiting administrator review.')
+                else:
+                    job = RestoreJob.objects.create(
+                        backup=backup,
+                        requested_by=request.user,
+                        details='Restore request queued after multi-step administrator confirmation.',
+                    )
+                    backup.is_protected = True
+                    backup.save(update_fields=['is_protected'])
+                    try:
+                        queue_restore_trigger(job.job_id)
+                    except Exception:
+                        job.status = RestoreJob.STATUS_FAILED
+                        job.details = 'Unable to notify the root-owned restore worker.'
+                        job.completed_at = timezone.now()
+                        job.save(update_fields=['status', 'details', 'completed_at', 'updated_at'])
+                        backup.is_protected = False
+                        backup.save(update_fields=['is_protected'])
+                        raise
+        except Exception:
+            errors.append(
+                'Unable to queue restore safely. No restore was started; '
+                'review the server audit log before trying again.'
+            )
+
+        if errors:
+            write_security_audit(
+                request,
+                'BACKUP_RESTORE_REQUEST',
+                SecurityAuditLog.OUTCOME_FAILURE,
+                actor=request.user,
+                target_type='BackupLog',
+                target_id=backup.pk,
+                details='Validated restore request could not be queued safely.',
+            )
+            context = self.get_context_data()
+            context['restore_errors'] = errors
+            return self.render_to_response(context, status=409)
+
+        write_security_audit(
+            request,
+            'BACKUP_RESTORE_REQUEST',
+            SecurityAuditLog.OUTCOME_SUCCESS,
+            actor=request.user,
+            target_type='RestoreJob',
+            target_id=job.job_id,
+            details=f'Queued validated Full Backup restore for BackupLog #{backup.pk}.',
+        )
+        messages.warning(
+            request,
+            'Restore queued. The root-owned worker will stop write services, create a rollback backup and validate the restored system.',
+        )
+        return redirect('backup_list')
+
+
+class RestoreOpenSystemView(LoginRequiredMixin, SuperuserOrSystemAdminRequiredMixin, View):
+    def post(self, request, job_id, *args, **kwargs):
+        job = get_object_or_404(RestoreJob, job_id=job_id)
+        if job.status != RestoreJob.STATUS_AWAITING_REVIEW:
+            messages.error(request, 'This restore job is not awaiting administrator review.')
+            return redirect('backup_list')
+        if not request.user.check_password(request.POST.get('current_password', '')):
+            messages.error(request, 'Your current account password was not accepted.')
+            return redirect('backup_list')
+        if request.POST.get('confirmation_phrase', '').strip() != 'OPEN SYSTEM':
+            messages.error(request, 'Type OPEN SYSTEM exactly to reopen TicketSolve.')
+            return redirect('backup_list')
+
+        maintenance = MaintenanceSetting.get_solo()
+        maintenance.is_enabled = False
+        maintenance.access_version += 1
+        maintenance.updated_by = request.user
+        maintenance.save(update_fields=[
+            'is_enabled',
+            'access_version',
+            'updated_by',
+            'updated_at',
+        ])
+        request.session.pop('maintenance_access', None)
+        job.status = RestoreJob.STATUS_SUCCEEDED
+        job.completed_at = timezone.now()
+        job.details = 'Administrator review completed and normal access was restored.'
+        job.save(update_fields=['status', 'completed_at', 'details', 'updated_at'])
+        BackupLog.objects.filter(
+            pk__in=[value for value in [job.backup_id, job.rollback_backup_id] if value]
+        ).update(is_protected=False)
+        write_security_audit(
+            request,
+            'BACKUP_RESTORE_ACCEPTED',
+            SecurityAuditLog.OUTCOME_SUCCESS,
+            actor=request.user,
+            target_type='RestoreJob',
+            target_id=job.job_id,
+            details='Administrator completed post-restore review and reopened the system.',
+        )
+        messages.success(request, 'Maintenance mode disabled. TicketSolve is open to all authorized users.')
+        return redirect('backup_list')
+
+
 class BackupManagementView(LoginRequiredMixin, SystemStaffRequiredMixin, TemplateView):
     template_name = 'tickets/backup_list.html'
 
@@ -4480,7 +5231,10 @@ class BackupManagementView(LoginRequiredMixin, SystemStaffRequiredMixin, Templat
         context['incremental_count'] = all_logs.filter(backup_type=BackupLog.TYPE_INCREMENTAL).count()
         context['system_count'] = all_logs.filter(backup_type=BackupLog.TYPE_SYSTEM).count()
         context['large_count'] = all_logs.filter(file_size_bytes__gte=1024 * 1024).count()
-        context['zero_mb_count'] = all_logs.filter(file_size_bytes=0).count()
+        context['zero_mb_count'] = all_logs.filter(
+            file_size_bytes=0,
+            is_protected=False,
+        ).count()
         context['last_backup'] = all_logs.first()
 
         backup_schedule = BackupSchedule.get_solo()
@@ -4492,6 +5246,14 @@ class BackupManagementView(LoginRequiredMixin, SystemStaffRequiredMixin, Templat
             self.request.user.is_superuser
             or self.request.user.role == CustomUser.SYSTEM_ADMIN
         )
+        context['can_import_or_restore'] = context['can_manage_backup_schedule']
+        context['backup_import_max_mb'] = BACKUP_IMPORT_MAX_BYTES // (1024 * 1024)
+        context['restore_jobs'] = RestoreJob.objects.select_related(
+            'backup',
+            'rollback_backup',
+            'requested_by',
+        )[:20]
+        context['maintenance'] = MaintenanceSetting.get_solo()
         context['incremental_manual_hours'] = max(
             1,
             backup_schedule.incremental_interval_minutes // 60,
@@ -4608,16 +5370,26 @@ class DownloadBackupView(LoginRequiredMixin, SystemStaffRequiredMixin, View):
             messages.error(request, f"Backup file '{log.filename}' is not available on server for download.")
             return redirect('backup_list')
 
-        with open(file_path, 'rb') as f:
-            file_data = f.read()
-        response = HttpResponse(file_data, content_type='application/octet-stream')
-        response['Content-Disposition'] = f'attachment; filename="{log.filename}"'
-        return response
+        return FileResponse(
+            open(file_path, 'rb'),
+            as_attachment=True,
+            filename=os.path.basename(log.filename),
+            content_type='application/octet-stream',
+        )
 
 
 class DeleteBackupLogView(LoginRequiredMixin, SystemStaffRequiredMixin, View):
     def post(self, request, pk, *args, **kwargs):
         log = get_object_or_404(BackupLog, pk=pk)
+        if log.is_protected or log.restore_jobs.exclude(
+            status__in=[
+                RestoreJob.STATUS_SUCCEEDED,
+                RestoreJob.STATUS_FAILED,
+                RestoreJob.STATUS_ROLLED_BACK,
+            ]
+        ).exists():
+            messages.error(request, 'This backup is protected by an active restore workflow.')
+            return redirect('backup_list')
         filename = log.filename
         log_id = log.pk
         file_path = get_backup_file_path(filename)
@@ -4658,7 +5430,10 @@ class DeleteAllZeroMbBackupsView(LoginRequiredMixin, SystemStaffRequiredMixin, V
         try:
             with FileLock('system_backup.lock', timeout=30):
                 zero_mb_logs = list(
-                    BackupLog.objects.filter(file_size_bytes=0).only('id', 'filename')
+                    BackupLog.objects.filter(
+                        file_size_bytes=0,
+                        is_protected=False,
+                    ).only('id', 'filename')
                 )
                 for backup_log in zero_mb_logs:
                     file_path = get_backup_file_path(backup_log.filename)

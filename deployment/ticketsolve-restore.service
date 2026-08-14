@@ -1,0 +1,23 @@
+[Unit]
+Description=TicketSolve validated backup restore worker
+After=network.target postgresql.service
+ConditionPathExists=/var/lib/ticketsolve-restore/restore.trigger
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+WorkingDirectory=/var/www/ticketSolve
+EnvironmentFile=/etc/ticketsolve/ticketsolve.env
+ExecStart=/usr/local/sbin/ticketsolve-restore-worker
+UMask=0027
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+TimeoutStartSec=3600

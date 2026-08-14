@@ -58,6 +58,17 @@ if not SECRET_KEY:
             'SECRET_KEY must be provided through the VPS environment file.'
         )
 
+# Kept separate from Django session/CSRF signing so SECRET_KEY rotation does
+# not silently invalidate every retained Full Backup manifest.
+BACKUP_MANIFEST_SIGNING_KEY = os.environ.get(
+    'BACKUP_MANIFEST_SIGNING_KEY',
+    SECRET_KEY,
+).strip()
+if IS_PRODUCTION and len(BACKUP_MANIFEST_SIGNING_KEY) < 32:
+    raise ImproperlyConfigured(
+        'BACKUP_MANIFEST_SIGNING_KEY must be a strong persistent secret in production.'
+    )
+
 ALLOWED_HOSTS = env_list('ALLOWED_HOSTS')
 if not ALLOWED_HOSTS:
     if IS_PRODUCTION:
@@ -94,6 +105,7 @@ MIDDLEWARE = [
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'tickets.security.SecurityHeadersMiddleware',
+    'tickets.security.MaintenanceModeMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -112,6 +124,7 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'tickets.context_processors.language_processor',
                 'tickets.context_processors.notification_processor',
+                'tickets.context_processors.maintenance_processor',
             ],
         },
     },
@@ -242,6 +255,13 @@ LOGIN_THROTTLE_MAX_FAILURES = int(os.environ.get('LOGIN_THROTTLE_MAX_FAILURES', 
 LOGIN_THROTTLE_WINDOW_SECONDS = int(os.environ.get('LOGIN_THROTTLE_WINDOW_SECONDS', 15 * 60))
 LOGIN_THROTTLE_LOCK_SECONDS = int(os.environ.get('LOGIN_THROTTLE_LOCK_SECONDS', 15 * 60))
 SIMPLE_PASSWORD_LOCK_SECONDS = int(os.environ.get('SIMPLE_PASSWORD_LOCK_SECONDS', 10 * 60))
+MAINTENANCE_ACCESS_MAX_FAILURES = int(os.environ.get('MAINTENANCE_ACCESS_MAX_FAILURES', 5))
+MAINTENANCE_ACCESS_WINDOW_SECONDS = int(os.environ.get('MAINTENANCE_ACCESS_WINDOW_SECONDS', 10 * 60))
+MAINTENANCE_ACCESS_LOCK_SECONDS = int(os.environ.get('MAINTENANCE_ACCESS_LOCK_SECONDS', 10 * 60))
+RESTORE_SENTINEL_FILE = os.environ.get(
+    'RESTORE_SENTINEL_FILE',
+    str(BASE_DIR / '.restore' / 'restore-in-progress'),
+)
 PUBLIC_BASE_URL = os.environ.get(
     'PUBLIC_BASE_URL',
     'https://tikketsolve-systemoneit.uk' if IS_PRODUCTION else 'http://127.0.0.1:8000',
@@ -295,4 +315,3 @@ LOGGING = {
         },
     },
 }
-

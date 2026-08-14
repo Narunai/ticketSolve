@@ -2,7 +2,7 @@
 
 เอกสารฉบับนี้อธิบายขั้นตอนการติดตั้งระบบ **TicketSolve** บน AWS Lightsail รวมถึงการตั้งค่า Nginx, Gunicorn, Systemd Timer และ Local VPS Backup
 
-**อัปเดตล่าสุด**: 12 สิงหาคม 2026
+**อัปเดตล่าสุด**: 14 สิงหาคม 2026
 
 ---
 
@@ -335,3 +335,57 @@ sudo bash -c '
 
 > Microsoft 365 tenant ที่ปิด IMAP/Basic Auth ต้องเพิ่ม Microsoft Graph OAuth credentials
 > ก่อนใช้งาน บัญชีดังกล่าวไม่ควรกรอกรหัสผ่านปกติเพื่อพยายาม bypass นโยบายขององค์กร
+
+---
+
+## 8. Maintenance, Backup Import และ Restore Runbook
+
+### 8.1 ส่วนประกอบ production
+
+* `/var/lib/ticketsolve-restore/restore.trigger` — one-job trigger ที่ Django สร้างแบบ exclusive
+* `/run/ticketsolve/restore-in-progress` — hard-maintenance sentinel
+* `/var/log/ticketsolve/restore/<job-id>.jsonl` — restore log ภายนอกฐานข้อมูล
+* `ticketsolve-restore.path` — เฝ้า trigger และเรียก root-owned service
+* `ticketsolve-restore.service` — oneshot restore unit
+* `/usr/local/sbin/ticketsolve-restore-worker` — หยุด/เริ่ม write services และคง sentinel เมื่อเกิด failure
+
+Deployment script จะสร้าง directory/permission, ติดตั้ง PostgreSQL client (`pg_dump`/`pg_restore`), unit files, Nginx fallback page และเปิด path unit อัตโนมัติ
+
+### 8.2 Archive ที่ Restore ได้
+
+Complete Restore รองรับเฉพาะ **Full Backup format v2** ที่มี signed manifest, SHA-256, database magic, payload checksums และ signed media index และต้องใช้ database engine กับ `FIELD_ENCRYPTION_KEYS` fingerprint เดียวกับ runtime ปัจจุบัน System Data, Incremental และ legacy archive ยังคงเก็บ/ดาวน์โหลดได้แต่ Restore แบบทั้งระบบไม่ได้
+
+Runtime secrets และ `/etc/ticketsolve/ticketsolve.env` ไม่อยู่ใน archive ผู้ปฏิบัติงานต้องเก็บ `FIELD_ENCRYPTION_KEYS` และ `BACKUP_MANIFEST_SIGNING_KEY` เดิมแยกต่างหาก มิฉะนั้นระบบจะตรวจลายเซ็น archive หรือถอดข้อมูล SMTP/IMAP ที่เข้ารหัสไม่ได้
+
+### 8.3 ลำดับ Restore ผ่านหน้าเว็บ
+
+1. System Admin ตรวจว่า Full Backup มีสถานะ Validated/Restore supported และมี off-host copy
+2. เปิด Maintenance Mode ตั้งรหัสทดสอบอย่างน้อย 10 ตัวอักษร และแจ้งผู้ใช้
+3. เปิด Restore ของ archive ที่เลือก แล้วยืนยัน current account password, maintenance code และ `RESTORE <backup-id>`
+4. Worker หยุด Gunicorn/chatbot/scheduler/email worker สร้าง protected rollback backup และตรวจ archive ซ้ำ
+5. Worker กู้ database/media/chatbot, migrate, `check` และ smoke test จากนั้นเริ่ม service โดยยังคง application Maintenance Mode
+6. System Admin ตรวจ login, tenant scope, Ticket count, attachment, SMTP configuration และ background-service status แล้วพิมพ์ `OPEN SYSTEM`
+
+### 8.4 Failure และ operator recovery
+
+ถ้า restore หรือ automatic rollback ไม่สามารถยืนยันความปลอดภัยได้ worker จะไม่ลบ hard sentinel และจะไม่เปิด write services เอง ห้ามลบ sentinel เพื่อ bypass ให้ตรวจ:
+
+```bash
+sudo systemctl status ticketsolve-restore.service --no-pager
+sudo journalctl -u ticketsolve-restore.service --no-pager -n 200
+sudo tail -200 /var/log/ticketsolve/restore/<job-id>.jsonl
+sudo systemctl status gunicorn ticket-chatbot ticketsolve-scheduler.timer ticketsolve-email-to-ticket.timer --no-pager
+```
+
+หลังตรวจและกู้/rollback สำเร็จโดยผู้ปฏิบัติงานที่ได้รับอนุมัติเท่านั้น จึงเริ่ม services และลบ `/run/ticketsolve/restore-in-progress` การ Restore จริงต้องอยู่ใน approved maintenance window ส่วน regression/restore drill ให้ใช้ isolated copy เท่านั้น
+
+### 8.5 Import limits
+
+| Environment variable | Default | Purpose |
+|---|---:|---|
+| `BACKUP_IMPORT_MAX_BYTES` | 536870912 | ขนาด archive นำเข้าสูงสุด 512 MB |
+| `BACKUP_CHUNK_MAX_BYTES` | 8388608 | chunk สูงสุด 8 MB |
+| `BACKUP_MAX_EXPANDED_BYTES` | 4294967296 | expanded content สูงสุด 4 GiB |
+| `BACKUP_MAX_MEMBERS` | 50000 | จำนวน archive entries สูงสุด |
+| `BACKUP_MAX_COMPRESSION_RATIO` | 200 | ป้องกัน archive bomb |
+| `BACKUP_MEDIA_INDEX_MAX_BYTES` | 8388608 | signed media index สูงสุด 8 MB |

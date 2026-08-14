@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex,nofollow">
+    <title>TicketSolve Maintenance</title>
+    <style>
+        :root { color-scheme: dark; }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            padding: 24px;
+            background: #020617;
+            color: #e2e8f0;
+            font-family: Inter, "Noto Sans Thai", Tahoma, sans-serif;
+        }
+        .panel {
+            width: min(620px, 100%);
+            padding: 32px;
+            border: 1px solid #25324a;
+            border-radius: 18px;
+            background: #0f172a;
+            box-shadow: 0 24px 80px rgba(0, 0, 0, .45);
+        }
+        .eyebrow { color: #93c5fd; font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+        h1 { margin: 12px 0; color: #fff; font-size: clamp(26px, 5vw, 38px); }
+        p { color: #94a3b8; line-height: 1.7; }
+        .time { margin-top: 20px; padding: 14px; border: 1px solid #334155; border-radius: 12px; background: #020617; }
+        label { display: block; margin: 22px 0 8px; color: #cbd5e1; font-size: 13px; font-weight: 700; }
+        input {
+            width: 100%; padding: 13px 14px; border: 1px solid #475569; border-radius: 10px;
+            background: #020617; color: #fff; font-size: 16px;
+        }
+        button {
+            width: 100%; margin-top: 12px; padding: 13px; border: 0; border-radius: 10px;
+            background: #4f46e5; color: #fff; font-weight: 700; cursor: pointer;
+        }
+        .error { margin-top: 14px; padding: 12px; border: 1px solid #be123c; border-radius: 10px; color: #fecdd3; background: rgba(190, 18, 60, .18); }
+        .note { margin-top: 16px; font-size: 12px; color: #64748b; }
+    </style>
+</head>
+<body>
+    <main class="panel">
+        <div class="eyebrow">TicketSolve Service Status</div>
+        <h1>{% if hard_maintenance %}Restore in progress{% elif maintenance %}{{ maintenance.title }}{% else %}System maintenance{% endif %}</h1>
+        <p>
+            {% if hard_maintenance %}
+                The system is restoring verified data. All application access is temporarily suspended to protect data integrity.
+            {% elif maintenance %}
+                {{ maintenance.message|linebreaksbr }}
+            {% else %}
+                TicketSolve is temporarily unavailable while maintenance is completed.
+            {% endif %}
+        </p>
+
+        {% if maintenance.expected_end %}
+        <div class="time">Expected completion: {{ maintenance.expected_end|date:"Y-m-d H:i T" }}</div>
+        {% endif %}
+
+        {% if not hard_maintenance and maintenance.allow_test_access and maintenance.access_code_hash %}
+        <form method="post" action="{% url 'maintenance_access' %}">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+            <label for="maintenance-code">Authorized test access code</label>
+            <input id="maintenance-code" name="access_code" type="password" maxlength="128" autocomplete="one-time-code" required autofocus>
+            <button type="submit">Continue to TicketSolve</button>
+        </form>
+        {% endif %}
+
+        {% if access_error %}<div class="error">{{ access_error }}</div>{% endif %}
+        <div class="note">A maintenance access code does not replace your normal TicketSolve account sign-in.</div>
+    </main>
+</body>
+</html>

@@ -9,6 +9,11 @@ ENV_FILE="${ENV_DIR}/ticketsolve.env"
 CHATBOT_ENV_DIR="/etc/ticketsolve-chatbot"
 CHATBOT_KEY_FILE="${CHATBOT_ENV_DIR}/fernet.key"
 BACKUP_DIR="/var/backups/ticketsolve"
+BACKUP_QUARANTINE_DIR="${BACKUP_DIR}/.quarantine"
+RESTORE_DIR="/var/lib/ticketsolve-restore"
+RESTORE_LOG_DIR="/var/log/ticketsolve/restore"
+RESTORE_TRIGGER_FILE="${RESTORE_DIR}/restore.trigger"
+RESTORE_SENTINEL_FILE="/run/ticketsolve/restore-in-progress"
 
 # Prevent background workers from loading new model code before migrations finish.
 sudo systemctl stop ticketsolve-email-to-ticket.timer 2>/dev/null || true
@@ -17,7 +22,7 @@ sudo systemctl stop ticketsolve-email-to-ticket.service 2>/dev/null || true
 sudo systemctl stop ticketsolve-scheduler.service 2>/dev/null || true
 
 sudo apt update
-sudo apt install -y python3-pip python3-venv nginx curl git python3-certbot-nginx
+sudo apt install -y python3-pip python3-venv nginx curl git python3-certbot-nginx postgresql-client
 
 cd "$PROJECT_DIR"
 if [ ! -d "venv" ]; then
@@ -64,6 +69,15 @@ if [ "${#EXISTING_SECRET}" -lt 50 ] || [[ "$EXISTING_SECRET" == django-insecure-
     fi
     echo "Generated a strong production SECRET_KEY."
 fi
+if ! sudo grep -qE '^BACKUP_MANIFEST_SIGNING_KEY=.{32,}$' "$ENV_FILE"; then
+    BACKUP_SIGNING_KEY="$(venv/bin/python -c 'import secrets; print(secrets.token_urlsafe(64))')"
+    if sudo grep -q '^BACKUP_MANIFEST_SIGNING_KEY=' "$ENV_FILE"; then
+        sudo sed -i "s|^BACKUP_MANIFEST_SIGNING_KEY=.*$|BACKUP_MANIFEST_SIGNING_KEY=${BACKUP_SIGNING_KEY}|" "$ENV_FILE"
+    else
+        echo "BACKUP_MANIFEST_SIGNING_KEY=${BACKUP_SIGNING_KEY}" | sudo tee -a "$ENV_FILE" >/dev/null
+    fi
+    echo "Generated a persistent Full Backup manifest signing key."
+fi
 if ! sudo grep -qE '^ALLOWED_HOSTS=.+$' "$ENV_FILE"; then
     echo "ALLOWED_HOSTS=tikketsolve-systemoneit.uk,www.tikketsolve-systemoneit.uk" | sudo tee -a "$ENV_FILE" >/dev/null
 fi
@@ -79,12 +93,34 @@ fi
 if ! sudo grep -q '^BACKUP_RETENTION_DAYS=' "$ENV_FILE"; then
     echo "BACKUP_RETENTION_DAYS=30" | sudo tee -a "$ENV_FILE" >/dev/null
 fi
+if ! sudo grep -q '^BACKUP_QUARANTINE_DIR=' "$ENV_FILE"; then
+    echo "BACKUP_QUARANTINE_DIR=${BACKUP_QUARANTINE_DIR}" | sudo tee -a "$ENV_FILE" >/dev/null
+fi
+if ! sudo grep -q '^BACKUP_IMPORT_MAX_BYTES=' "$ENV_FILE"; then
+    echo "BACKUP_IMPORT_MAX_BYTES=536870912" | sudo tee -a "$ENV_FILE" >/dev/null
+fi
+if ! sudo grep -q '^RESTORE_TRIGGER_FILE=' "$ENV_FILE"; then
+    echo "RESTORE_TRIGGER_FILE=${RESTORE_TRIGGER_FILE}" | sudo tee -a "$ENV_FILE" >/dev/null
+fi
+if ! sudo grep -q '^RESTORE_SENTINEL_FILE=' "$ENV_FILE"; then
+    echo "RESTORE_SENTINEL_FILE=${RESTORE_SENTINEL_FILE}" | sudo tee -a "$ENV_FILE" >/dev/null
+fi
+if ! sudo grep -q '^RESTORE_LOG_DIR=' "$ENV_FILE"; then
+    echo "RESTORE_LOG_DIR=${RESTORE_LOG_DIR}" | sudo tee -a "$ENV_FILE" >/dev/null
+fi
+if ! sudo grep -q '^CHATBOT_DB_PATH=' "$ENV_FILE"; then
+    echo "CHATBOT_DB_PATH=/var/lib/ticketsolve-chatbot/chatbot.db" | sudo tee -a "$ENV_FILE" >/dev/null
+fi
 if ! sudo grep -q '^SECURE_HSTS_PRELOAD=' "$ENV_FILE"; then
     echo "SECURE_HSTS_PRELOAD=True" | sudo tee -a "$ENV_FILE" >/dev/null
 fi
 sudo chmod 640 "$ENV_FILE"
 sudo chown root:www-data "$ENV_FILE"
 sudo install -d -m 750 -o ubuntu -g www-data "$BACKUP_DIR"
+sudo install -d -m 750 -o ubuntu -g www-data "$BACKUP_QUARANTINE_DIR"
+sudo install -d -m 750 -o ubuntu -g www-data "$RESTORE_DIR"
+sudo install -d -m 750 -o root -g adm "$RESTORE_LOG_DIR"
+sudo install -d -m 755 -o root -g root "$(dirname "$RESTORE_SENTINEL_FILE")"
 
 run_manage() {
     local unit_suffix="$1"
@@ -154,12 +190,17 @@ sudo cp deployment/ticketsolve-scheduler.service /etc/systemd/system/ticketsolve
 sudo cp deployment/ticketsolve-scheduler.timer /etc/systemd/system/ticketsolve-scheduler.timer
 sudo cp deployment/ticketsolve-email-to-ticket.service /etc/systemd/system/ticketsolve-email-to-ticket.service
 sudo cp deployment/ticketsolve-email-to-ticket.timer /etc/systemd/system/ticketsolve-email-to-ticket.timer
+sudo cp deployment/ticketsolve-restore.service /etc/systemd/system/ticketsolve-restore.service
+sudo cp deployment/ticketsolve-restore.path /etc/systemd/system/ticketsolve-restore.path
+sudo install -m 750 -o root -g root deployment/ticketsolve-restore-worker.sh /usr/local/sbin/ticketsolve-restore-worker
+sudo install -m 644 -o root -g root deployment/maintenance-hard.html "$PROJECT_DIR/staticfiles/maintenance-hard.html"
 sudo cp chatbot_service/ticket-chatbot.service /etc/systemd/system/ticket-chatbot.service
 sudo systemctl daemon-reload
 sudo systemctl restart gunicorn
 sudo systemctl enable gunicorn
 sudo systemctl enable --now ticketsolve-scheduler.timer
 sudo systemctl enable --now ticketsolve-email-to-ticket.timer
+sudo systemctl enable --now ticketsolve-restore.path
 sudo systemctl enable --now ticket-chatbot
 sudo systemctl restart ticket-chatbot
 

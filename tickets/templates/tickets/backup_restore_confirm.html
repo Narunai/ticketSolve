@@ -1,0 +1,55 @@
+{% extends 'tickets/base.html' %}
+
+{% block title %}Confirm Restore - TicketSolve{% endblock %}
+{% block header_title %}Confirm Full Backup Restore{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-3xl space-y-5">
+    <a href="{% url 'backup_list' %}" class="text-sm font-semibold text-sky-400 hover:underline">Back to Backup Management</a>
+
+    <section class="glass-panel rounded-2xl border border-rose-500/30 p-6">
+        <h2 class="text-xl font-bold text-white">Restore {{ backup.filename }}</h2>
+        <p class="mt-2 text-sm leading-6 text-slate-400">
+            The restore worker will validate the archive again, create a protected rollback backup, stop all write-producing services, replace the database and files, run migrations and checks, then keep Maintenance Mode active for administrator review.
+        </p>
+        <dl class="mt-5 grid gap-3 rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-xs sm:grid-cols-2">
+            <div><dt class="text-slate-500">Backup type</dt><dd class="mt-1 font-semibold text-slate-200">{{ backup.get_backup_type_display }}</dd></div>
+            <div><dt class="text-slate-500">Source</dt><dd class="mt-1 font-semibold text-slate-200">{{ backup.get_source_display }}</dd></div>
+            <div><dt class="text-slate-500">Format</dt><dd class="mt-1 font-mono text-slate-200">{{ backup.format_version|default:"-" }}</dd></div>
+            <div><dt class="text-slate-500">Size</dt><dd class="mt-1 font-mono text-slate-200">{{ backup.file_size_mb }} MB</dd></div>
+            <div class="sm:col-span-2"><dt class="text-slate-500">SHA-256</dt><dd class="mt-1 break-all font-mono text-slate-300">{{ backup.sha256 }}</dd></div>
+        </dl>
+    </section>
+
+    {% if restore_errors %}
+    <div class="rounded-xl border border-rose-500/40 bg-rose-500/10 p-4 text-sm text-rose-200">
+        <ul class="list-disc space-y-1 pl-5">{% for error in restore_errors %}<li>{{ error }}</li>{% endfor %}</ul>
+    </div>
+    {% endif %}
+
+    {% if not maintenance.is_active %}
+    <div class="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-200">
+        Active Maintenance Mode is required before a restore can be queued. Configure it from System Maintenance first.
+    </div>
+    {% endif %}
+
+    <form method="post" class="glass-panel rounded-2xl border border-slate-800 p-6">
+        {% csrf_token %}
+        <div class="space-y-4">
+            <div>
+                <label class="mb-1 block text-xs font-bold text-slate-300">Your current TicketSolve password</label>
+                <input type="password" name="current_password" maxlength="128" autocomplete="current-password" required class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-white">
+            </div>
+            <div>
+                <label class="mb-1 block text-xs font-bold text-slate-300">Maintenance access code</label>
+                <input type="password" name="maintenance_code" maxlength="128" autocomplete="one-time-code" required class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-white">
+            </div>
+            <div>
+                <label class="mb-1 block text-xs font-bold text-slate-300">Type <span class="font-mono text-rose-300">{{ confirmation_phrase }}</span></label>
+                <input type="text" name="confirmation_phrase" autocomplete="off" required class="w-full rounded-lg border border-rose-500/40 bg-slate-950 px-3 py-2.5 font-mono text-white">
+            </div>
+        </div>
+        <button type="submit" class="mt-5 w-full rounded-xl bg-rose-600 px-5 py-3 text-sm font-bold text-white hover:bg-rose-500">Queue validated restore</button>
+    </form>
+</div>
+{% endblock %}

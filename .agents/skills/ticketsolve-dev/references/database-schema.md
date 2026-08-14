@@ -15,7 +15,7 @@ The project supports both PostgreSQL 16+ (Production High-Concurrency) and SQLit
 - `DB_SSLMODE`: SSL mode (e.g. `prefer` or `require`)
 - `DB_CONN_MAX_AGE`: Connection Pooling age in seconds (Default: 600)
 
-Backup functionality (`tickets/backup_service.py`) automatically adapts between PostgreSQL JSON dump (`call_command('dumpdata')`) and SQLite Online Backup API.
+Full Backup functionality (`tickets/backup_service.py`) uses PostgreSQL custom-format `pg_dump` in production and the SQLite Online Backup API in development. Complete restore is limited to signed compatible Full Backup v2 archives.
 
 ### Company (Line 11)
 
@@ -244,11 +244,23 @@ IP-based brute-force protection.
 
 ### BackupLog (Line 506)
 
-Records of database backups.
+Records generated/imported archives, original filename, source, SHA-256, format version, validation result, restore compatibility, uploader and rollback protection state.
 
 ### BackupSchedule (Line 541)
 
 Scheduled automatic backup configuration.
+
+### MaintenanceSetting
+
+Singleton maintenance state: notice/schedule, hashed test-access code, session version/duration and last System Admin updater. It is an additional gate and never replaces Django authentication.
+
+### BackupUploadSession
+
+Tracks ordered bounded chunks written to quarantine, declared/received size, expiry, status and the resulting `BackupLog`.
+
+### RestoreJob
+
+Auditable state machine from queued/validation/pre-backup/restore/verification to awaiting review, success, failure or rollback; links target and protected rollback backups.
 
 ### MonthlyReportSchedule (Line 923)
 

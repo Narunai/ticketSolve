@@ -1,6 +1,6 @@
 # รายงานความปลอดภัยและสถาปัตยกรรมระบบ TicketSolve
 
-วันที่ประเมินและปรับปรุง: 12 สิงหาคม 2026
+วันที่ประเมินและปรับปรุง: 14 สิงหาคม 2026
 ขอบเขต: source code, Django/FastAPI, RBAC/tenant isolation, Email integration, AI chatbot, backup, Nginx, Gunicorn/systemd, dependencies และ automated tests
 
 > สถานะของเอกสาร: เป็นการวาง baseline และปรับให้สอดคล้องกับแนวปฏิบัติสากล ไม่ใช่ใบรับรอง ISO 27001, SOC 2 หรือการรับรอง OWASP ASVS จากหน่วยงานภายนอก การรับรองอย่างเป็นทางการยังต้องมี governance, evidence, penetration test และ auditor อิสระ
@@ -249,3 +249,39 @@ Migration `0030_security_baseline` ทำสามอย่างแบบอั
 - [NIST Cybersecurity Framework 2.0](https://www.nist.gov/publications/nist-cybersecurity-framework-csf-20)
 - [Django 5.2 security documentation](https://docs.djangoproject.com/en/5.2/internals/security/)
 - [Django deployment checklist](https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/)
+
+## 12. Maintenance และ Verified Restore Update — 14 สิงหาคม 2026
+
+การดำเนินการรอบนี้เพิ่ม recovery control โดยไม่ลบหรือเปลี่ยนรูปแบบ Backup เดิม:
+
+| Control | การดำเนินการ |
+|---|---|
+| Maintenance gate | ตั้งเวลา/ข้อความได้ รหัสทดสอบเก็บ one-way hash, session มีอายุและ version, ผิด 5 ครั้งล็อก 10 นาที; ผู้ผ่าน gate ยังต้อง Login และผ่าน RBAC/tenant isolation |
+| Hard restore gate | root worker สร้าง sentinel ก่อนหยุด Gunicorn/worker; Nginx แสดงหน้า 503 แบบ no-store หาก application ไม่พร้อม |
+| Backup integrity | Full Backup v2 ใช้ native PostgreSQL custom dump หรือ SQLite snapshot, archive SHA-256, HMAC-signed manifest, payload checksum และ signed media-file index |
+| Secure import | chunk สูงสุด 8 MB, archive สูงสุด 512 MB โดยค่าเริ่มต้น, quarantine, disk-space check, path/link/device/member/expanded-size/compression-ratio validation และ duplicate checksum handling |
+| Restore authorization | จำกัด System Admin/superuser, ต้องใช้ current password + maintenance code + exact phrase และ restore ได้เฉพาะ Full v2 ที่ engine/key fingerprint ตรง |
+| Rollback | สร้าง protected Full Backup ก่อนกู้ทุกครั้ง; หากกู้ล้มเหลว worker พยายาม automatic rollback และคง hard-maintenance sentinel เมื่อผลไม่ปลอดภัย |
+| Post-restore review | migrate, Django check และ DB smoke test ก่อนสถานะ Awaiting Review; Maintenance Mode ยังเปิดจน admin ยืนยัน `OPEN SYSTEM` |
+| Audit | บันทึก maintenance access/settings, import, validation, restore request และ external JSONL restore events โดยไม่บันทึกรหัสลับ |
+
+แผนผัง Recovery:
+
+```mermaid
+flowchart LR
+    A[System Admin opens Maintenance] --> B[Select validated Full v2]
+    B --> C[Password + maintenance code + exact phrase]
+    C --> D[Root restore worker]
+    D --> E[Stop write services + hard gate]
+    E --> F[Protected pre-restore Full Backup]
+    F --> G[Validate and restore DB/media/chatbot]
+    G --> H{Migration/check/smoke pass?}
+    H -->|Yes| I[Awaiting admin review]
+    I --> J[OPEN SYSTEM]
+    H -->|No| K[Automatic rollback]
+    K --> L[Keep hard gate for operator review]
+```
+
+ข้อจำกัดที่ยังคงอยู่: archive อยู่บน AWS VPS เครื่องเดียวกับ application จึงไม่ป้องกันการสูญเสียทั้ง VPS/disk/account และไม่มี MFA สำหรับ privileged roles การดำเนินงานถัดไปจึงยังเป็น encrypted off-host backup, S3 Versioning/Object Lock, MFA และ restore drill บน isolated environment ห้ามทดลอง restore กับฐาน production โดยไม่มี approved change window และ external backup ที่ตรวจแล้ว
+
+ผลทดสอบ release นี้: Django 113/113 ผ่าน, `manage.py check` ผ่าน 0 issues และ `makemigrations --check --dry-run` ไม่พบ model change ที่ขาด migration

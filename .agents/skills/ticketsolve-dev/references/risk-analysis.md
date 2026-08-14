@@ -13,6 +13,7 @@ Original master file: `RISK_ANALYSIS_AND_MITIGATION_PLAN.md`
 | **4. Database Concurrency** | Low-Med | PostgreSQL for production; SQLite for local development and isolated chatbot config | Monitor connections/locks; add PgBouncer or managed HA when load evidence requires it |
 | **5. File Attachment Security** | Medium | Signature allowlist & Extension verification | ClamAV Anti-Virus stream scanning & file quarantine |
 | **6. Audit Log Retention** | Low-Med | Django audit in main DB and chatbot admin audit in isolated SQLite | Structured JSON logs shipped to AWS CloudWatch / SIEM (Append-only) |
+| **7. Restore Operation** | Medium | Signed Full v2 only, dual confirmation, root worker, protected rollback, hard gate and external JSONL log | Quarterly isolated restore drill, reviewed runbook and off-host immutable backup |
 
 ## Related Documentation
 

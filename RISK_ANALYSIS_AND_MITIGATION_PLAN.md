@@ -3,8 +3,8 @@
 **เอกสารวิเคราะห์ความเสี่ยงสำคัญและแผนยกระดับความปลอดภัย (Security Risk Analysis & Mitigation Roadmap)**
 
 * **ระบบ**: TicketSolve Multi-Tenant IT Support Ticket System
-* **เวอร์ชันเอกสาร**: 1.0.0
-* **วันที่จัดทำ**: 8 สิงหาคม 2026
+* **เวอร์ชันเอกสาร**: 1.1.0
+* **วันที่ปรับปรุงล่าสุด**: 14 สิงหาคม 2026
 * **มาตรฐานอ้างอิง**: OWASP ASVS 5.0 Level 2, OWASP Top 10:2025, NIST CSF 2.0
 
 ---
@@ -21,7 +21,7 @@
 
 | รายการความเสี่ยง (Risk Item) | ระดับความเสี่ยง | ผลกระทบ (Impact) | โอกาสเกิด (Likelihood) | สถานะปัจจุบัน | มาตรการแก้ไขที่เสนอ (Mitigation Strategy) |
 |---|:---:|:---:|:---:|:---:|---|
-| **1. สำรองข้อมูลบน VPS เดียวกับแอปพลิเคชัน (Single Point of Failure Backup)** | **สูง (High)** | เสียหายร้ายแรง (Data Loss) | ปานกลาง | สำรองข้อมูลบน VPS `/var/backups/` | ทำ Encrypted Off-site Backup ไปยัง AWS S3 พร้อม S3 Object Lock & Versioning |
+| **1. สำรองข้อมูลบน VPS เดียวกับแอปพลิเคชัน (Single Point of Failure Backup)** | **สูง (High)** | เสียหายร้ายแรง (Data Loss) | ปานกลาง | Full v2 มี signed manifest/checksum และ controlled restore/rollback แต่ archive ยังอยู่ `/var/backups/` บน VPS เดียว | ทำ Encrypted Off-site Backup ไปยัง AWS S3 พร้อม S3 Object Lock & Versioning |
 | **2. ไม่มี Multi-Factor Authentication (MFA) สำหรับ System Admin** | **สูง (High)** | บัญชีผู้ดูแลถูกบุกรุก (Account Takeover) | ปานกลาง | มี Login Throttling + Argon2 | เพิ่ม TOTP / WebAuthn MFA สำหรับสิทธิ์ `SYSTEM_ADMIN` และ `SYSTEM_SUB_ADMIN` |
 | **3. Content Security Policy (CSP) เป็นเพียง Report-Only Mode** | **กลาง (Medium)** | ความเสี่ยง XSS / Script Injection | ปานกลาง | CSP Header เป็น Report-Only | ย้าย inline script/style, เพิ่ม `nonce` token และเปลี่ยนเป็น Enforcing CSP |
 | **4. Database High Availability** | **ต่ำ-กลาง (Low-Med)** | PostgreSQL บน VPS ยังเป็น single instance | ต่ำ-ปานกลาง | Production ใช้ PostgreSQL; SQLite เหลือ local/chatbot config | ติดตาม lock/connection และย้ายไป managed HA/PgBouncer เมื่อ load/RTO ต้องการ |
