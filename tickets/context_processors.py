@@ -183,6 +183,13 @@ def language_processor(request):
         'quick_ignore_presets': 'Common ignore keywords:',
         'clear_ignore_keywords': 'Clear Ignore Keywords',
         'save_email_filters': 'Save Email Filters',
+        'search_assignee_routing': 'Search assignee routing rules',
+        'search_routing_placeholder': 'Search sender, mailbox, assignee or company',
+        'filter_by_company': 'Filter by company',
+        'all_companies': 'All companies',
+        'search_filter': 'Search / Filter',
+        'clear_filters': 'Clear',
+        'showing_routing_rules': 'Showing routing rules:',
     }
     
     return {

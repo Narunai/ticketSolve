@@ -231,5 +231,6 @@ base.html
 ### Inbound (Email → Ticket)
 - `email_to_ticket.py` polls IMAP mailboxes
 - Matching rules in `InboundEmailRoutingRule`
-- Creates tickets automatically or queues for manual approval
+- New/unapproved mailbox contacts queue for manual approval even when a system user or active routing rule matches; only a contact that remains in the mailbox directory and has a successful imported receipt with an administrator decision may auto-import
+- Routing rules select the assignee/company after approval; they never grant permission to bypass the approval queue
 - Scheduled via `ticketsolve-email-to-ticket.timer`

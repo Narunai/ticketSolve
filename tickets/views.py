@@ -3347,15 +3347,39 @@ class EmailToTicketTimerView(
                 InboundEmailRoutingRule,
                 pk=edit_rule_id,
             )
-        context['routing_form'] = InboundEmailRoutingRuleForm(
-            instance=edit_rule,
-        )
+        context['routing_form'] = InboundEmailRoutingRuleForm(instance=edit_rule)
         context['editing_rule'] = edit_rule
-        context['routing_rules'] = InboundEmailRoutingRule.objects.select_related(
+
+        routing_query = (self.request.GET.get('routing_q') or '').strip()[:100]
+        routing_company_id = ''
+        raw_routing_company_id = (
+            self.request.GET.get('routing_company') or ''
+        ).strip()[:20]
+        routing_rules = InboundEmailRoutingRule.objects.select_related(
             'smtp_configuration',
             'assignee',
             'assignee__company',
         )
+        if routing_query:
+            routing_rules = routing_rules.filter(
+                models.Q(sender_email__icontains=routing_query)
+                | models.Q(smtp_configuration__name__icontains=routing_query)
+                | models.Q(assignee__username__icontains=routing_query)
+                | models.Q(assignee__email__icontains=routing_query)
+                | models.Q(assignee__company__name__icontains=routing_query)
+            )
+        if raw_routing_company_id.isdigit() and Company.objects.filter(
+            pk=raw_routing_company_id,
+        ).exists():
+            routing_company_id = raw_routing_company_id
+            routing_rules = routing_rules.filter(
+                assignee__company_id=routing_company_id,
+            )
+        context['routing_query'] = routing_query
+        context['routing_company_id'] = routing_company_id
+        context['routing_companies'] = Company.objects.all().order_by('name')
+        context['routing_rule_total_count'] = InboundEmailRoutingRule.objects.count()
+        context['routing_rules'] = routing_rules
         return context
 
     def post(self, request, *args, **kwargs):

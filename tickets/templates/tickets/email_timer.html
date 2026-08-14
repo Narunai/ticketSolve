@@ -5,6 +5,7 @@
 {% block content %}
 <div id="email-timer-root" class="max-w-7xl mx-auto space-y-5"
      data-editing-rule="{% if editing_rule %}true{% else %}false{% endif %}"
+     data-routing-filter-active="{% if routing_query or routing_company_id %}true{% else %}false{% endif %}"
      data-scan-step-url="{% url 'email_timer_scan_step' %}">
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -162,7 +163,29 @@
                     </div>
                 </form>
 
-                <div class="overflow-x-auto lg:col-span-2">
+                <div class="space-y-3 lg:col-span-2">
+                    <form method="get" class="grid gap-2 rounded-lg border border-slate-800 bg-slate-950/30 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(180px,0.6fr)_auto]">
+                        <label class="sr-only" for="routingSearchInput">{{ t.search_assignee_routing }}</label>
+                        <input id="routingSearchInput" type="search" name="routing_q" value="{{ routing_query }}" maxlength="100" placeholder="{{ t.search_routing_placeholder }}" class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-[11px] text-slate-200 placeholder-slate-600">
+                        <label class="sr-only" for="routingCompanyFilter">{{ t.filter_by_company }}</label>
+                        <select id="routingCompanyFilter" name="routing_company" class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-[11px] text-slate-200">
+                            <option value="">{{ t.all_companies }}</option>
+                            {% for company in routing_companies %}
+                            <option value="{{ company.pk }}" {% if routing_company_id == company.pk|stringformat:"s" %}selected{% endif %}>{{ company.name }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="flex gap-2">
+                            <button type="submit" class="rounded-lg bg-slate-800 px-3 py-2 text-[11px] font-semibold text-slate-200 hover:bg-slate-700">{{ t.search_filter }}</button>
+                            {% if routing_query or routing_company_id %}
+                            <a href="{% url 'email_timer' %}" class="rounded-lg border border-slate-700 px-3 py-2 text-[11px] text-slate-400 hover:bg-slate-800">{{ t.clear_filters }}</a>
+                            {% endif %}
+                        </div>
+                        <p class="text-[10px] text-slate-500 sm:col-span-3">
+                            {{ t.showing_routing_rules }} {{ routing_rules|length }} / {{ routing_rule_total_count }}
+                        </p>
+                    </form>
+
+                    <div class="overflow-x-auto">
                     <table class="w-full min-w-[650px] text-left text-[11px]">
                         <thead class="border-b border-slate-800 text-slate-500">
                             <tr>
@@ -199,6 +222,7 @@
                             {% endfor %}
                         </tbody>
                     </table>
+                    </div>
                 </div>
             </div>
         </div>
@@ -555,7 +579,10 @@
 
         let initialTab = 'routing';
         const emailTimerRoot = document.getElementById('email-timer-root');
-        if (emailTimerRoot?.dataset.editingRule !== 'true') {
+        if (
+            emailTimerRoot?.dataset.editingRule !== 'true'
+            && emailTimerRoot?.dataset.routingFilterActive !== 'true'
+        ) {
             try {
                 initialTab = localStorage.getItem('email_timer_log_tab') || 'routing';
             } catch (error) {

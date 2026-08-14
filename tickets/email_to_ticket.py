@@ -369,11 +369,20 @@ def _resolve_ticket_route(config, message):
 
 
 def _is_approved_sender(config, sender_email):
-    """An address-book entry alone must never bypass the approval queue."""
+    """Return whether this mailbox contact was approved by an import decision."""
+    normalized_email = (sender_email or '').strip().casefold()
+    if not normalized_email:
+        return False
+    if not InboundEmailContact.objects.filter(
+        smtp_configuration=config,
+        email=normalized_email,
+    ).exists():
+        return False
     return InboundEmailReceipt.objects.filter(
         smtp_configuration=config,
-        sender_email__iexact=(sender_email or '').strip().casefold(),
+        sender_email__iexact=normalized_email,
         status=InboundEmailReceipt.STATUS_IMPORTED,
+        decided_by__isnull=False,
     ).exists()
 
 
@@ -674,21 +683,13 @@ def import_email_to_tickets(config, max_count=None):
 
                 _record_contact(config, message)
                 sender_email_clean = (message.sender_email or '').strip().casefold()
-                has_routing_rule = config.inbound_routing_rules.filter(
-                    is_active=True,
-                    sender_email__iexact=sender_email_clean,
-                    assignee__is_active=True,
-                ).exists()
-                # Merely appearing in the address book is not approval. A
-                # sender becomes trusted only after one of their messages was
-                # imported (manually or by an explicit routing/user rule).
+                # Contact discovery, a routing rule, and a matching system
+                # account do not grant import permission. A sender becomes
+                # trusted only after an administrator approved one of their
+                # messages and the sender remains in this mailbox's contacts.
                 is_approved_contact = _is_approved_sender(config, sender_email_clean)
-                from .models import CustomUser
-                is_registered_user = CustomUser.objects.filter(
-                    email__iexact=sender_email_clean
-                ).exists()
 
-                if has_routing_rule or is_approved_contact or is_registered_user:
+                if is_approved_contact:
                     ticket, skipped_attachments = _create_ticket(
                         config,
                         message,
@@ -696,7 +697,7 @@ def import_email_to_tickets(config, max_count=None):
                     )
                     result['imported'] += 1
                     logger.info(
-                        "Auto-imported IMAP message %s directly as Ticket #%s (approved sender/rule)",
+                        "Auto-imported IMAP message %s directly as Ticket #%s (approved contact)",
                         message.message_id,
                         ticket.pk,
                     )
@@ -708,7 +709,7 @@ def import_email_to_tickets(config, max_count=None):
                     )
                     result['pending'] += 1
                     logger.info(
-                        "Queued IMAP message %s for approval as receipt #%s (new contact)",
+                        "Queued IMAP message %s for approval as receipt #%s (sender is not approved)",
                         message.message_id,
                         receipt.pk,
                     )

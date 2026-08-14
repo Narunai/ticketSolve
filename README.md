@@ -108,7 +108,7 @@ Backup archive เก็บที่ `/var/backups/ticketsolve` บน AWS VPS �
 * หน้า Backup Management แสดง Download เฉพาะ archive ที่มีข้อมูล; รายการขนาด 0 หรือไฟล์หายสามารถลบรายรายการด้วย **Delete empty record** หรือลบรายการ 0 MB ทั้งหมดด้วย **Delete all 0 MB**
 * **System Data (No Tickets)** สร้างตามรอบที่ตั้งไว้: เก็บ Users, Companies, roles, SMTP/IMAP, routing, schedules, categories และค่าระบบจาก PostgreSQL/SQLite โดยไม่รวม Ticket/`media/` พร้อม snapshot ของ Chatbot config/knowledge/audit log; ไม่รวม runtime secrets และ System Admin สั่งทันทีได้โดยไม่กระทบรอบอัตโนมัติ
 * Chatbot API ต้อง login, หน้าและ API Admin จำกัดเฉพาะ System Admin/Sub Admin, CORS ใช้ explicit origins, มี request/rate limits และไม่ส่ง API key ที่ถอดรหัสกลับ browser
-* Email Approval Queue ถือว่า Address Book เป็นเพียงประวัติผู้ส่ง ไม่ใช่สิทธิ์ auto-import; อนุญาตอัตโนมัติเฉพาะ sender ที่เคย import สำเร็จ, ผู้ใช้ในระบบ หรือ routing rule ที่ active
+* Email Approval Queue ถือว่า Address Book เป็นเพียงประวัติผู้ส่ง ไม่ใช่สิทธิ์ auto-import; อนุญาตอัตโนมัติเฉพาะ sender ที่ยังอยู่ในรายชื่อของ mailbox นั้นและมีประวัติผู้ดูแลกด Approve จน import สำเร็จ โดยบัญชีผู้ใช้, ประวัติ auto-import รุ่นเก่า หรือ routing rule เพียงอย่างเดียวข้าม Approval ไม่ได้
 * SMTP Configuration แยกขอบเขตการใช้งานเป็นส่งอีเมล, Email → Ticket หรือทั้งสองฟังก์ชัน โดยมี active configuration แยกตาม feature
 * อีเมลแจ้งเตือนใช้แม่แบบทางการแบบ multipart (HTML + plain text) ร่วมกันทั้ง Ticket, Status, Deployment Approval, Comment, Account, Company และ Monthly Report พร้อมลิงก์ production ที่กำหนดผ่าน `PUBLIC_BASE_URL`
 * Monthly PDF Report ใช้รูปแบบเอกสารผู้บริหาร มีเลขอ้างอิง ขอบเขตและช่วงเวลารายงาน Executive Summary, Status/Priority Breakdown, Ticket Register และข้อความกำกับความลับ โดยลดไอคอนและสีที่ไม่จำเป็น
@@ -119,7 +119,7 @@ Backup archive เก็บที่ `/var/backups/ticketsolve` บน AWS VPS �
 * รองรับ Gmail/Google Workspace และ Outlook ที่เปิด IMAP SSL
 * หน้า **Email Timer** แยกสำหรับเปิด/ปิดและเลือกรอบ 10, 20, 30 นาที (ครึ่งชั่วโมง) หรือ 1 ชั่วโมง
 * กด **Scan now** หรือ **Import Now** เพื่อสแกนทันทีโดยไม่รอรอบ
-* อีเมลที่ผ่านตัวกรองจะเข้า **Approval queue** ก่อนและยังไม่ปรากฏใน Dashboard/รายงาน ผู้มีสิทธิ์จึงกด Approve เพื่อสร้าง Ticket หรือ Reject พร้อมเหตุผลได้
+* อีเมลที่ผ่านตัวกรองจาก sender ที่ยังไม่เคยได้รับอนุมัติจะเข้า **Approval queue** ก่อนและยังไม่ปรากฏใน Dashboard/รายงาน ผู้มีสิทธิ์จึงกด Approve เพื่อสร้าง Ticket หรือ Reject พร้อมเหตุผลได้; sender ที่ยังอยู่ในรายชื่อและเคยอนุมัติแล้วจึงนำเข้าตรงได้
 * ไฟล์แนบระหว่างรอถูกเก็บใน private media และดาวน์โหลดผ่าน authenticated view เท่านั้น; เมื่ออนุมัติจะย้ายเข้า Ticket และเมื่อปฏิเสธจะลบออก
 * เก็บ run log 50 รอบล่าสุด พร้อม trigger/ผู้สั่งรัน, สถานะ, จำนวน mailbox,
   found/pending/imported/skipped/duplicate/failed, ระยะเวลา และรายละเอียดข้อผิดพลาด
@@ -127,7 +127,7 @@ Backup archive เก็บที่ `/var/backups/ticketsolve` บน AWS VPS �
 * หน้า Email Timer รวม Approval queue, log รายอีเมล, execution log และสมุดรายชื่อผู้ส่งไว้ใน container เดียว โดยสลับดูผ่านแท็บและจำแท็บล่าสุดใน browser
 * สมุดรายชื่อบันทึกชื่อและอีเมลผู้ส่งอัตโนมัติแยกตาม mailbox ค้นหาด้วยชื่อ/อีเมล/subject ได้ และ Message-ID ที่สแกนซ้ำไม่เพิ่มจำนวนข้อความ
 * Ticket ที่สร้างจากอีเมลจะแสดงการ์ด **Email sender** แยกจาก internal creator เพื่อให้ติดตามผู้แจ้งตัวจริงได้
-* Sender → Assignee routing กำหนดผู้ดูแลตามอีเมลผู้ส่งได้ทุกบริษัท โดย Ticket จะอยู่ในบริษัทของผู้ดูแลเพื่อรักษา tenant isolation; หากไม่มีกฎหรือผู้ดูแลในกฎไม่ active จะใช้ค่า Company/Creator/Default Assignee จาก SMTP
+* Sender → Assignee routing กำหนดผู้ดูแลตามอีเมลผู้ส่งได้ทุกบริษัท ค้นหาจาก sender/mailbox/ผู้ดูแล/บริษัทและกรองตามบริษัทได้ โดย Ticket จะอยู่ในบริษัทของผู้ดูแลเพื่อรักษา tenant isolation; routing ไม่ใช่สิทธิ์ข้าม Approval และหากไม่มีกฎหรือผู้ดูแลในกฎไม่ active จะใช้ค่า Company/Creator/Default Assignee จาก SMTP
 * Custom subject keywords เป็นคำเพิ่มเติมจากคำมาตรฐาน เช่น `ปัญหา` และ `issue` ไม่ได้แทนที่คำมาตรฐาน
 * Ignore Subject Keywords ตั้งค่าแยกต่อ mailbox หรือพร้อมกันทุก mailbox ได้ โดยมีลำดับสูงกว่า issue keywords; รายการที่ตรงจะเป็น `Skipped` พร้อมคำที่ตรงและเหตุผลใน Email import details โดยไม่สร้าง Contact, Approval หรือ Ticket
 * อ่านเฉพาะข้อความ `UNSEEN` ย้อนหลังตามจำนวนวันที่กำหนด และจำกัดจำนวนต่อรอบ

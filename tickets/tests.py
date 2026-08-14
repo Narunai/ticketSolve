@@ -136,12 +136,34 @@ class MultiTenantTicketTests(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_data_isolation_regular_user_a_can_see_own_data(self):
+        from bs4 import BeautifulSoup
+
         # Log in as user_a
         self.client.login(username="user_a", password="password123")
         
         response = self.client.get(reverse('ticket_detail', args=[self.ticket_a.id]))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, self.ticket_a.title)
+
+        # Regression: malformed file-input markup previously broke the grid,
+        # pushed Ticket Info below the comment form, and detached form controls.
+        page = BeautifulSoup(response.content, 'html.parser')
+        layout = page.find(id='ticket-detail-layout')
+        main_column = page.find(id='ticket-detail-main')
+        sidebar = page.find(id='ticket-detail-sidebar')
+        uploader = page.find(id='comment-file-uploader-container')
+        file_input = page.find(id='comment-real-file-input')
+        file_controls = page.find(id='comment-file-controls')
+        self.assertIsNotNone(layout)
+        self.assertIsNotNone(main_column)
+        self.assertIsNotNone(sidebar)
+        self.assertEqual(main_column.parent, layout)
+        self.assertEqual(sidebar.parent, layout)
+        self.assertEqual(file_input.parent, uploader)
+        self.assertEqual(file_controls.parent, uploader)
+        self.assertEqual(file_input.get('type'), 'file')
+        self.assertIn('xl:col-span-8', main_column.get('class', []))
+        self.assertIn('xl:col-span-4', sidebar.get('class', []))
 
     def test_custom_user_list_view_filtering(self):
         # Log in as Client Admin of Company A
@@ -929,15 +951,18 @@ class MultiTenantTicketTests(TestCase):
                 mock.patch('tickets.backup_service.BACKUP_DIR', backup_dir), \
                 mock.patch('tickets.email_to_ticket.imaplib.IMAP4_SSL', return_value=imap_client):
             first = import_email_to_tickets(config)
-            second = import_email_to_tickets(config)
             pending_receipt = InboundEmailReceipt.objects.get(
                 smtp_configuration=config,
                 message_id='<email-to-ticket-1@example.com>',
             )
-            self.assertEqual(pending_receipt.status, InboundEmailReceipt.STATUS_IMPORTED)
-            self.assertIsNotNone(pending_receipt.ticket)
-            self.assertEqual(pending_receipt.attachments.count(), 0)
-            imported_ticket = pending_receipt.ticket
+            self.assertEqual(pending_receipt.status, InboundEmailReceipt.STATUS_PENDING)
+            self.assertIsNone(pending_receipt.ticket)
+            self.assertEqual(pending_receipt.attachments.count(), 1)
+            imported_ticket, _ = approve_inbound_email(
+                pending_receipt.pk,
+                self.system_admin,
+            )
+            second = import_email_to_tickets(config)
             fallback_ticket, _ = _create_ticket(
                 config,
                 InboundMessage(
@@ -950,8 +975,8 @@ class MultiTenantTicketTests(TestCase):
             )
 
         self.assertTrue(first['success'])
-        self.assertEqual(first['pending'], 0)
-        self.assertEqual(first['imported'], 1)
+        self.assertEqual(first['pending'], 1)
+        self.assertEqual(first['imported'], 0)
         self.assertEqual(second['duplicates'], 1)
         self.assertEqual(Ticket.objects.count(), ticket_count + 2)
         imported_ticket.refresh_from_db()
@@ -992,8 +1017,8 @@ class MultiTenantTicketTests(TestCase):
         )
         self.assertEqual(receipt.status, InboundEmailReceipt.STATUS_IMPORTED)
         self.assertEqual(receipt.ticket, imported_ticket)
-        self.assertIsNone(receipt.decided_by)
-        self.assertIsNone(receipt.decided_at)
+        self.assertEqual(receipt.decided_by, self.system_admin)
+        self.assertIsNotNone(receipt.decided_at)
         self.assertEqual(receipt.attachments.count(), 0)
         contact = InboundEmailContact.objects.get(
             smtp_configuration=config,
@@ -1047,7 +1072,18 @@ class MultiTenantTicketTests(TestCase):
 
         receipt.status = InboundEmailReceipt.STATUS_IMPORTED
         receipt.save(update_fields=['status'])
+        self.assertFalse(_is_approved_sender(config, sender))
+
+        receipt.decided_by = self.system_admin
+        receipt.decided_at = timezone.now()
+        receipt.save(update_fields=['decided_by', 'decided_at'])
         self.assertTrue(_is_approved_sender(config, sender))
+
+        InboundEmailContact.objects.filter(
+            smtp_configuration=config,
+            email=sender,
+        ).delete()
+        self.assertFalse(_is_approved_sender(config, sender))
 
     def test_email_to_ticket_manual_import_requires_system_admin(self):
         from unittest import mock
@@ -1190,6 +1226,33 @@ class MultiTenantTicketTests(TestCase):
         )
         self.assertEqual(rule.sender_email, 'customer@example.com')
         self.assertEqual(rule.assignee, self.user_b)
+
+        InboundEmailRoutingRule.objects.create(
+            smtp_configuration=config,
+            sender_email='alpha@example.com',
+            assignee=self.user_a,
+            is_active=True,
+        )
+        company_filtered = self.client.get(
+            url,
+            {'routing_company': str(self.company_b.pk)},
+        )
+        self.assertEqual(company_filtered.status_code, 200)
+        self.assertContains(company_filtered, 'customer@example.com')
+        self.assertNotContains(company_filtered, 'alpha@example.com')
+        self.assertContains(
+            company_filtered,
+            'data-routing-filter-active="true"',
+        )
+
+        search_filtered = self.client.get(url, {'routing_q': 'alpha@'})
+        self.assertEqual(search_filtered.status_code, 200)
+        self.assertContains(search_filtered, 'alpha@example.com')
+        self.assertNotContains(search_filtered, 'customer@example.com')
+        self.assertContains(
+            search_filtered,
+            'Search sender, mailbox, assignee or company',
+        )
 
     def test_pending_email_approval_rejection_and_attachment_rbac(self):
         import tempfile

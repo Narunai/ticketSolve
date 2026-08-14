@@ -52,13 +52,13 @@
 * ป้องกันการสร้างซ้ำด้วย Message-ID และมี import receipts สำหรับ Pending/Imported/Rejected/Skipped/Failed
 * System Admin ตรวจเนื้อหาและไฟล์แนบผ่าน authenticated download แล้ว Approve เพื่อสร้าง Ticket ทันที หรือ Reject พร้อมเหตุผล; อีเมล Pending ไม่อยู่ใน Dashboard/รายงาน
 * เก็บสมุดรายชื่อผู้ส่งอัตโนมัติแยก mailbox พร้อม display name, จำนวนข้อความ, first/last seen และ subject ล่าสุด; การอยู่ในสมุดรายชื่อเพียงอย่างเดียวไม่ถือว่าได้รับอนุมัติ
-* Auto-import เฉพาะ sender ที่เคย Imported สำเร็จ, email ของ user ในระบบ หรือมี Sender routing rule ที่ active; sender ใหม่/เคย Rejected ยังเข้า Approval queue
+* Auto-import เฉพาะ sender ที่ยังอยู่ในสมุดรายชื่อของ mailbox นั้นและมีประวัติผู้ดูแลกด Approve จน Imported สำเร็จ; email ของ user ในระบบ, ประวัติ auto-import รุ่นเก่าหรือ Sender routing rule เพียงอย่างเดียวข้าม Approval ไม่ได้ และ sender ใหม่/เคย Rejected ยังเข้า Approval queue
 * แสดงชื่อ/อีเมลผู้ส่งจริงบน Ticket และมีตาราง receipt รายอีเมล 100 รายการล่าสุดพร้อมเหตุผลที่นำเข้าหรือคัดออก
 * Approval queue, Email import details, Execution logs และ Email contacts อยู่ในการ์ดเดียวกันและเลือกดูผ่านแท็บที่รองรับคีย์บอร์ด
 * รองรับไฟล์แนบภายใต้ขีดจำกัด 10 MB ต่อไฟล์, 10 ไฟล์ และรวม 50 MB
 * หน้า Email Timer แยกสำหรับเปิด/ปิดและเลือกรอบ 10, 20, 30 นาที (ครึ่งชั่วโมง) หรือ 1 ชั่วโมง
 * กด **Scan now** หรือ **Import Now** เพื่อสแกนทันที พร้อมเก็บ execution log ของทุกครั้งที่ทำงานจริง
-* กำหนด Sender → Assignee routing ต่อ mailbox ได้ทุกบริษัท; Ticket จะอยู่ในบริษัทของผู้ดูแล และ fallback ไปค่า SMTP เมื่อไม่พบกฎ
+* กำหนด Sender → Assignee routing ต่อ mailbox ได้ทุกบริษัท พร้อมค้นหา sender/mailbox/ผู้ดูแล/บริษัทและกรองตารางตามบริษัท; Ticket จะอยู่ในบริษัทของผู้ดูแล และ fallback ไปค่า SMTP เมื่อไม่พบกฎ
 * รองรับ Gmail และ Outlook ที่เปิด IMAP; Microsoft Graph/OAuth ยังไม่รวมใน integration นี้
 * กระดิ่ง in-app แจ้ง Ticket ใหม่/เปลี่ยนสถานะ/ความคิดเห็นใหม่ พร้อมรายการส่วนตัวและ Mark all read
 * หน้า Ticket แสดง username, อีเมล, บทบาทและบริษัทของ Reporter/Assignee โดยซ่อน metadata เทคนิคของ Email-to-Ticket จาก Custom Fields

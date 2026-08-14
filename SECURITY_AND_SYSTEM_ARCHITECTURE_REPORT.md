@@ -22,7 +22,7 @@
 - เพิ่ม security headers, HSTS preload, authenticated-page no-store และ hardening ของ Nginx/Gunicorn service
 - ปิด unauthenticated Chatbot Admin/API โดยใช้ Nginx `auth_request` ผูก Django session/RBAC, จำกัด CORS/origin/rate/body, ไม่ส่ง Gemini API key กลับ browser และย้าย DB/key ออกจาก Git checkout
 - แยก Chatbot Fernet key ไป dedicated `/etc/ticketsolve-chatbot` boundary และใช้ `ticketsolve-backup` group สำหรับอ่าน DB เท่านั้น ทำให้ Chatbot อ่าน Django secrets ไม่ได้และ Gunicorn อ่าน Chatbot key ไม่ได้
-- แก้ Email Approval regression: Address Book ไม่เท่ากับการอนุมัติ ผู้ส่งจะ auto-import ได้เมื่อเคย import สำเร็จ, เป็น user ในระบบ หรือมี routing rule เท่านั้น
+- แก้ Email Approval regression: Address Book ไม่เท่ากับการอนุมัติ ผู้ส่งจะ auto-import ได้ต่อเมื่อยังอยู่ในรายชื่อ mailbox เดิมและมีประวัติผู้ดูแลกด Approve จน import สำเร็จ; user, routing rule หรือประวัติ auto-import รุ่นเก่าไม่สามารถข้าม Approval ได้
 - ปิด tenant enumeration และ stored-XSS ใน Email Recipient Preview พร้อมตรวจ email override, จำกัด 20 รายการ และไม่ให้ Client User ส่ง ticket content ไป arbitrary email
 - ตรึงเวอร์ชัน production dependencies, อัปเดต `cryptography` จาก 49.0.0 ไป 50.0.0 ตาม advisory และตรวจพบ **0 known vulnerabilities** ด้วย `pip-audit` ณ วันที่รายงาน
 - เพิ่ม security regression tests, Simple Password, Email approval/RBAC, bounded Ignore Keyword Filter, PDF ภาษาไทย และ Chatbot security; Django 108 tests + FastAPI 10 tests
