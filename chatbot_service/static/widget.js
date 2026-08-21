@@ -5,11 +5,11 @@
     // Determine base paths based on script location
     let cssUrl, apiBaseUrl;
     if (scriptSrc.includes('/chatbot-static/')) {
-        cssUrl = '/chatbot-static/widget.css?v=3';
+        cssUrl = '/chatbot-static/widget.css?v=4';
         apiBaseUrl = '/api';
     } else {
         const origin = new URL(scriptSrc).origin;
-        cssUrl = `${origin}/static/widget.css?v=3`;
+        cssUrl = `${origin}/static/widget.css?v=4`;
         apiBaseUrl = `${origin}/api`;
     }
 
@@ -62,6 +62,7 @@
 
     let isChatActive = true;
     let isExpanded = false;
+    let messageCounter = 0;
 
     // Check system status from Microservice
     async function checkStatus() {
@@ -124,6 +125,17 @@
         return escaped;
     }
 
+    function appendMessage(text, type) {
+        const msgDiv = document.createElement('div');
+        msgDiv.className = `message ${type}`;
+        msgDiv.innerText = text;
+        messageCounter++;
+        msgDiv.id = `msg-${Date.now()}-${messageCounter}`;
+        messagesContainer.appendChild(msgDiv);
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        return msgDiv;
+    }
+
     async function sendMessage() {
         const text = inputField.value.trim();
         if (!text || !isChatActive) return;
@@ -132,8 +144,8 @@
         appendMessage(text, 'user');
         inputField.value = '';
 
-        // Bot thinking placeholder
-        const botLoadingId = appendMessage('Searching answer from Gemini AI...', 'bot loading');
+        // Bot thinking placeholder - directly reference the created element
+        const botMsgElem = appendMessage('Searching answer from Gemini AI...', 'bot loading');
 
         try {
             const res = await fetch(`${apiBaseUrl}/chat`, {
@@ -144,7 +156,6 @@
             });
             const data = await res.json();
             
-            const botMsgElem = document.getElementById(botLoadingId);
             if (res.ok && data.status === 'success') {
                 botMsgElem.innerHTML = formatMarkdown(data.response);
                 botMsgElem.classList.remove('loading');
@@ -154,7 +165,6 @@
                 botMsgElem.classList.add('error');
             }
         } catch (err) {
-            const botMsgElem = document.getElementById(botLoadingId);
             if (botMsgElem) {
                 botMsgElem.innerText = 'Error connecting to chatbot server.';
                 botMsgElem.classList.remove('loading');
@@ -169,15 +179,4 @@
     inputField.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') sendMessage();
     });
-
-    function appendMessage(text, type) {
-        const msgDiv = document.createElement('div');
-        msgDiv.className = `message ${type}`;
-        msgDiv.innerText = text;
-        const msgId = 'msg-' + Date.now();
-        msgDiv.id = msgId;
-        messagesContainer.appendChild(msgDiv);
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        return msgId;
-    }
 })();

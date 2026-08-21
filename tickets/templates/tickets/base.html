@@ -102,47 +102,47 @@
             --theme-accent-glow: rgba(139, 92, 246, 0.35);
         }
 
-        /* Binance Dark preset: flat near-black surfaces with one yellow accent. */
+        /* Binance Dark preset: refined obsidian surfaces with calibrated gold accents (Borderless). */
         [data-theme-style="binance"] {
             --bg-body: #0b0e11;
-            --glass-panel-bg: rgba(24, 26, 32, 0.96);
-            --glass-panel-border: #2b3139;
-            --glass-card-bg: rgba(30, 35, 41, 0.94);
-            --glass-card-border: #2b3139;
+            --glass-panel-bg: rgba(24, 26, 32, 0.98);
+            --glass-panel-border: transparent;
+            --glass-card-bg: rgba(30, 35, 41, 0.96);
+            --glass-card-border: transparent;
             --text-main: #eaecef;
-            --text-muted: #929aa5;
-            --text-subtle: #707a8a;
+            --text-muted: #848e9c;
+            --text-subtle: #5e6673;
             --theme-gradient-from: #fcd535;
-            --theme-gradient-to: #fcd535;
-            --theme-accent: #fcd535;
-            --theme-accent-bg: rgba(252, 213, 53, 0.10);
-            --theme-accent-border: rgba(252, 213, 53, 0.34);
-            --theme-accent-glow: rgba(252, 213, 53, 0.18);
+            --theme-gradient-to: #f0b90b;
+            --theme-accent: #f0b90b;
+            --theme-accent-bg: rgba(240, 185, 11, 0.12);
+            --theme-accent-border: transparent;
+            --theme-accent-glow: rgba(240, 185, 11, 0.22);
             --theme-on-primary: #181a20;
-            --theme-selection-ring: #fcd535;
+            --theme-selection-ring: #f0b90b;
             --app-font-family: 'Inter', 'Prompt', -apple-system, BlinkMacSystemFont, sans-serif;
             color-scheme: dark;
         }
 
-        /* Taste Light preset: cool neutral surfaces and a single cobalt accent. */
+        /* Taste Light preset: clean editorial surfaces and sharp sapphire accents (Borderless). */
         [data-theme-style="taste"] {
-            --bg-body: #f3f6fa;
-            --glass-panel-bg: rgba(251, 252, 254, 0.96);
-            --glass-panel-border: #d7dfeb;
-            --glass-card-bg: rgba(247, 249, 252, 0.96);
-            --glass-card-border: #dfe6ef;
-            --text-main: #172033;
-            --text-muted: #526078;
-            --text-subtle: #6b7890;
+            --bg-body: #f8fafc;
+            --glass-panel-bg: rgba(255, 255, 255, 0.96);
+            --glass-panel-border: transparent;
+            --glass-card-bg: rgba(255, 255, 255, 0.98);
+            --glass-card-border: transparent;
+            --text-main: #0f172a;
+            --text-muted: #475569;
+            --text-subtle: #64748b;
             --theme-gradient-from: #1d4ed8;
-            --theme-gradient-to: #1d4ed8;
-            --theme-accent: #1d4ed8;
-            --theme-accent-bg: rgba(29, 78, 216, 0.09);
-            --theme-accent-border: rgba(29, 78, 216, 0.28);
-            --theme-accent-glow: rgba(29, 78, 216, 0.18);
-            --theme-on-primary: #f8fafc;
-            --theme-selection-ring: #172033;
-            --app-font-family: 'Prompt', 'Segoe UI Variable', 'Segoe UI', sans-serif;
+            --theme-gradient-to: #2563eb;
+            --theme-accent: #2563eb;
+            --theme-accent-bg: rgba(37, 99, 235, 0.08);
+            --theme-accent-border: transparent;
+            --theme-accent-glow: rgba(37, 99, 235, 0.18);
+            --theme-on-primary: #ffffff;
+            --theme-selection-ring: #2563eb;
+            --app-font-family: 'Inter', 'Prompt', 'Segoe UI Variable', 'Segoe UI', sans-serif;
             color-scheme: light;
         }
 
@@ -317,12 +317,41 @@
         [data-theme-style="binance"] .bg-slate-700\/80 {
             background-color: #1e2329 !important;
         }
-        [data-theme-style="binance"] .border-slate-800,
-        [data-theme-style="binance"] .border-slate-800\/80,
-        [data-theme-style="binance"] .border-slate-700,
-        [data-theme-style="binance"] .border-slate-700\/80,
-        [data-theme-style="binance"] .border-slate-600 {
-            border-color: #2b3139 !important;
+        /* Binance Dark: 100% Borderless Experience */
+        [data-theme-style="binance"] *,
+        [data-theme-style="binance"] *::before,
+        [data-theme-style="binance"] *::after {
+            --tw-border-opacity: 0 !important;
+            --tw-ring-opacity: 0 !important;
+            --tw-ring-color: transparent !important;
+            --tw-ring-offset-shadow: 0 0 #0000 !important;
+            --tw-ring-shadow: 0 0 #0000 !important;
+            --theme-accent-border: transparent !important;
+            --glass-panel-border: transparent !important;
+            --glass-card-border: transparent !important;
+            border-color: transparent !important;
+        }
+        [data-theme-style="binance"] .border,
+        [data-theme-style="binance"] .border-t,
+        [data-theme-style="binance"] .border-b,
+        [data-theme-style="binance"] .border-l,
+        [data-theme-style="binance"] .border-r,
+        [data-theme-style="binance"] [class*="border"],
+        [data-theme-style="binance"] [class*="ring-"],
+        [data-theme-style="binance"] [class*="divide-"],
+        [data-theme-style="binance"] #sidebarIdentityCard,
+        [data-theme-style="binance"] aside,
+        [data-theme-style="binance"] aside *,
+        [data-theme-style="binance"] header,
+        [data-theme-style="binance"] header *,
+        [data-theme-style="binance"] nav a,
+        [data-theme-style="binance"] .glass-panel,
+        [data-theme-style="binance"] .glass-card {
+            border: none !important;
+            border-width: 0 !important;
+            border-color: transparent !important;
+            box-shadow: none !important;
+            outline: none !important;
         }
         [data-theme-style="binance"] .text-white,
         [data-theme-style="binance"] .text-slate-100,
@@ -331,11 +360,11 @@
             color: #eaecef !important;
         }
         [data-theme-style="binance"] .text-slate-400 {
-            color: #929aa5 !important;
+            color: #848e9c !important;
         }
         [data-theme-style="binance"] .text-slate-500,
         [data-theme-style="binance"] .text-slate-600 {
-            color: #707a8a !important;
+            color: #5e6673 !important;
         }
         [data-theme-style="binance"] input:not([type="submit"]):not([type="checkbox"]):not([type="radio"]),
         [data-theme-style="binance"] select,
@@ -343,36 +372,46 @@
         [data-theme-style="binance"] option {
             background-color: #181a20 !important;
             color: #eaecef !important;
-            border-color: #2b3139 !important;
+            border: none !important;
+            border-color: transparent !important;
         }
         [data-theme-style="binance"] th,
         [data-theme-style="binance"] thead tr {
-            background-color: #181a20 !important;
-            color: #929aa5 !important;
+            background-color: #14171d !important;
+            color: #848e9c !important;
+            border: none !important;
+            border-color: transparent !important;
         }
         [data-theme-style="binance"] .hover\:bg-slate-800\/30:hover,
         [data-theme-style="binance"] .hover\:bg-slate-800\/50:hover,
         [data-theme-style="binance"] .hover\:bg-slate-900\/50:hover,
         [data-theme-style="binance"] .hover\:bg-slate-900\/30:hover {
-            background-color: #2b3139 !important;
+            background-color: #23272e !important;
         }
         [data-theme-style="binance"] .bg-indigo-600,
         [data-theme-style="binance"] .bg-indigo-500 {
-            background-color: #fcd535 !important;
+            background-color: #f0b90b !important;
             color: #181a20 !important;
+            font-weight: 600 !important;
+            border: none !important;
+            border-color: transparent !important;
+        }
+        [data-theme-style="binance"] .bg-indigo-600:hover,
+        [data-theme-style="binance"] .bg-indigo-500:hover {
+            background-color: #fcd535 !important;
         }
         [data-theme-style="binance"] .bg-indigo-600\/30 {
-            background-color: rgba(252, 213, 53, 0.18) !important;
+            background-color: rgba(240, 185, 11, 0.20) !important;
         }
         [data-theme-style="binance"] .bg-indigo-500\/20 {
-            background-color: rgba(252, 213, 53, 0.12) !important;
+            background-color: rgba(240, 185, 11, 0.14) !important;
         }
         [data-theme-style="binance"] .bg-indigo-500\/10,
         [data-theme-style="binance"] .bg-indigo-500\/5,
         [data-theme-style="binance"] .bg-purple-500\/10,
         [data-theme-style="binance"] .bg-purple-500\/15,
         [data-theme-style="binance"] .bg-purple-500\/20 {
-            background-color: rgba(252, 213, 53, 0.08) !important;
+            background-color: rgba(240, 185, 11, 0.10) !important;
         }
         [data-theme-style="binance"] .text-indigo-300,
         [data-theme-style="binance"] .text-indigo-400,
@@ -382,123 +421,122 @@
         [data-theme-style="binance"] .text-purple-400,
         [data-theme-style="binance"] .text-violet-300,
         [data-theme-style="binance"] .text-violet-400 {
-            color: #fcd535 !important;
-        }
-        [data-theme-style="binance"] .border-indigo-500,
-        [data-theme-style="binance"] .border-indigo-500\/20,
-        [data-theme-style="binance"] .border-indigo-500\/30,
-        [data-theme-style="binance"] .border-purple-500\/20,
-        [data-theme-style="binance"] .border-violet-500\/20 {
-            border-color: rgba(252, 213, 53, 0.34) !important;
+            color: #f0b90b !important;
         }
         [data-theme-style="binance"] .from-indigo-500,
         [data-theme-style="binance"] .from-indigo-600,
         [data-theme-style="binance"] .from-purple-500,
         [data-theme-style="binance"] .from-purple-600 {
             --tw-gradient-from: #fcd535 var(--tw-gradient-from-position) !important;
-            --tw-gradient-to: rgba(252, 213, 53, 0) var(--tw-gradient-to-position) !important;
+            --tw-gradient-to: rgba(240, 185, 11, 0) var(--tw-gradient-to-position) !important;
         }
         [data-theme-style="binance"] .to-indigo-500,
         [data-theme-style="binance"] .to-indigo-600,
         [data-theme-style="binance"] .to-purple-500,
         [data-theme-style="binance"] .to-purple-600 {
-            --tw-gradient-to: #fcd535 var(--tw-gradient-to-position) !important;
+            --tw-gradient-to: #f0b90b var(--tw-gradient-to-position) !important;
         }
-        [data-theme-style="binance"] .bg-theme-gradient,
-        [data-theme-style="binance"] .from-indigo-500,
-        [data-theme-style="binance"] .from-indigo-600,
-        [data-theme-style="binance"] .from-purple-500,
-        [data-theme-style="binance"] .from-purple-600 {
+        [data-theme-style="binance"] .bg-theme-gradient {
             color: #181a20 !important;
         }
 
-        /* Taste Light refines the existing light-mode mappings without pure-white panels. */
-        [data-theme-style="taste"] .bg-slate-950,
-        [data-theme-style="taste"] .bg-slate-900 {
-            background-color: #f3f6fa !important;
+        /* Taste Light: 100% Borderless Experience */
+        [data-theme-style="taste"] *,
+        [data-theme-style="taste"] *::before,
+        [data-theme-style="taste"] *::after {
+            --tw-border-opacity: 0 !important;
+            --tw-ring-opacity: 0 !important;
+            --tw-ring-color: transparent !important;
+            --tw-ring-offset-shadow: 0 0 #0000 !important;
+            --tw-ring-shadow: 0 0 #0000 !important;
+            --theme-accent-border: transparent !important;
+            --glass-panel-border: transparent !important;
+            --glass-card-border: transparent !important;
+            border-color: transparent !important;
         }
-        [data-theme-style="taste"] .bg-slate-900\/10,
-        [data-theme-style="taste"] .bg-slate-900\/20,
-        [data-theme-style="taste"] .bg-slate-900\/30,
-        [data-theme-style="taste"] .bg-slate-900\/40,
-        [data-theme-style="taste"] .bg-slate-900\/50,
-        [data-theme-style="taste"] .bg-slate-900\/60,
-        [data-theme-style="taste"] .bg-slate-900\/80,
-        [data-theme-style="taste"] .bg-slate-950\/60,
-        [data-theme-style="taste"] .bg-slate-950\/80 {
-            background-color: #fbfcfe !important;
-        }
-        [data-theme-style="taste"] .bg-slate-800,
-        [data-theme-style="taste"] .bg-slate-800\/30,
-        [data-theme-style="taste"] .bg-slate-800\/40,
-        [data-theme-style="taste"] .bg-slate-800\/50,
-        [data-theme-style="taste"] .bg-slate-800\/60,
-        [data-theme-style="taste"] .bg-slate-800\/80,
-        [data-theme-style="taste"] .bg-slate-700,
-        [data-theme-style="taste"] .bg-slate-700\/30,
-        [data-theme-style="taste"] .bg-slate-700\/40,
-        [data-theme-style="taste"] .bg-slate-700\/50,
-        [data-theme-style="taste"] .bg-slate-700\/80 {
-            background-color: #edf2f7 !important;
-        }
-        [data-theme-style="taste"] .border-slate-800,
-        [data-theme-style="taste"] .border-slate-800\/80,
-        [data-theme-style="taste"] .border-slate-700,
-        [data-theme-style="taste"] .border-slate-700\/80,
-        [data-theme-style="taste"] .border-slate-600 {
-            border-color: #d7dfeb !important;
+        [data-theme-style="taste"] .border,
+        [data-theme-style="taste"] .border-t,
+        [data-theme-style="taste"] .border-b,
+        [data-theme-style="taste"] .border-l,
+        [data-theme-style="taste"] .border-r,
+        [data-theme-style="taste"] [class*="border"],
+        [data-theme-style="taste"] [class*="ring-"],
+        [data-theme-style="taste"] [class*="divide-"],
+        [data-theme-style="taste"] #sidebarIdentityCard,
+        [data-theme-style="taste"] aside,
+        [data-theme-style="taste"] aside *,
+        [data-theme-style="taste"] header,
+        [data-theme-style="taste"] header *,
+        [data-theme-style="taste"] nav a,
+        [data-theme-style="taste"] .glass-panel,
+        [data-theme-style="taste"] .glass-card {
+            border: none !important;
+            border-width: 0 !important;
+            border-color: transparent !important;
+            box-shadow: none !important;
+            outline: none !important;
         }
         [data-theme-style="taste"] .text-white,
         [data-theme-style="taste"] .text-slate-100,
         [data-theme-style="taste"] .text-slate-200 {
-            color: #172033 !important;
+            color: #0f172a !important;
         }
         [data-theme-style="taste"] .text-slate-300 {
-            color: #26334a !important;
+            color: #1e293b !important;
         }
         [data-theme-style="taste"] .text-slate-400 {
-            color: #526078 !important;
+            color: #475569 !important;
         }
         [data-theme-style="taste"] .text-slate-500,
         [data-theme-style="taste"] .text-slate-600 {
-            color: #6b7890 !important;
+            color: #64748b !important;
         }
         [data-theme-style="taste"] input:not([type="submit"]):not([type="checkbox"]):not([type="radio"]),
         [data-theme-style="taste"] select,
         [data-theme-style="taste"] textarea,
         [data-theme-style="taste"] option {
-            background-color: #fbfcfe !important;
-            color: #172033 !important;
-            border-color: #c8d3e1 !important;
+            background-color: #ffffff !important;
+            color: #0f172a !important;
+            border: none !important;
+            border-color: transparent !important;
         }
         [data-theme-style="taste"] th,
         [data-theme-style="taste"] thead tr {
-            background-color: #e8eef6 !important;
-            color: #26334a !important;
+            background-color: #f1f5f9 !important;
+            color: #475569 !important;
+            border: none !important;
+            border-color: transparent !important;
         }
         [data-theme-style="taste"] .hover\:bg-slate-800\/30:hover,
         [data-theme-style="taste"] .hover\:bg-slate-800\/50:hover,
         [data-theme-style="taste"] .hover\:bg-slate-900\/50:hover,
         [data-theme-style="taste"] .hover\:bg-slate-900\/30:hover {
-            background-color: #e4eaf2 !important;
+            background-color: #f1f5f9 !important;
         }
         [data-theme-style="taste"] .bg-indigo-600,
         [data-theme-style="taste"] .bg-indigo-500 {
+            background-color: #2563eb !important;
+            color: #ffffff !important;
+            font-weight: 600 !important;
+            border: none !important;
+            border-color: transparent !important;
+        }
+        [data-theme-style="taste"] .bg-indigo-600:hover,
+        [data-theme-style="taste"] .bg-indigo-500:hover {
             background-color: #1d4ed8 !important;
-            color: #f8fafc !important;
         }
         [data-theme-style="taste"] .bg-indigo-600\/30 {
-            background-color: rgba(29, 78, 216, 0.18) !important;
+            background-color: rgba(37, 99, 235, 0.18) !important;
         }
         [data-theme-style="taste"] .bg-indigo-500\/20 {
-            background-color: rgba(29, 78, 216, 0.12) !important;
+            background-color: rgba(37, 99, 235, 0.12) !important;
         }
         [data-theme-style="taste"] .bg-indigo-500\/10,
         [data-theme-style="taste"] .bg-indigo-500\/5,
         [data-theme-style="taste"] .bg-purple-500\/10,
         [data-theme-style="taste"] .bg-purple-500\/15,
         [data-theme-style="taste"] .bg-purple-500\/20 {
-            background-color: rgba(29, 78, 216, 0.08) !important;
+            background-color: rgba(37, 99, 235, 0.08) !important;
         }
         [data-theme-style="taste"] .text-indigo-300,
         [data-theme-style="taste"] .text-indigo-400,
@@ -508,21 +546,40 @@
         [data-theme-style="taste"] .text-purple-400,
         [data-theme-style="taste"] .text-violet-300,
         [data-theme-style="taste"] .text-violet-400 {
-            color: #1d4ed8 !important;
-        }
-        [data-theme-style="taste"] .border-indigo-500,
-        [data-theme-style="taste"] .border-indigo-500\/20,
-        [data-theme-style="taste"] .border-indigo-500\/30,
-        [data-theme-style="taste"] .border-purple-500\/20,
-        [data-theme-style="taste"] .border-violet-500\/20 {
-            border-color: rgba(29, 78, 216, 0.28) !important;
+            color: #2563eb !important;
         }
         [data-theme-style="taste"] .bg-theme-gradient {
-            color: #f8fafc !important;
+            color: #ffffff !important;
         }
         [data-mode="light"][data-theme-style="classic"] .bg-indigo-600,
         [data-mode="light"][data-theme-style="classic"] .bg-indigo-500 {
             color: #f8fafc !important;
+        }
+
+        /* Preset Card Styles */
+        .preset-active-card {
+            background-color: rgba(255, 255, 255, 0.08) !important;
+            box-shadow: 0 4px 14px -3px var(--theme-accent-glow) !important;
+        }
+        [data-theme-style="classic"] .preset-active-card {
+            border-color: var(--theme-accent) !important;
+            box-shadow: 0 0 0 1px var(--theme-accent), 0 4px 14px -3px var(--theme-accent-glow) !important;
+        }
+        [data-theme-style="binance"] .preset-active-card,
+        [data-theme-style="taste"] .preset-active-card {
+            border-color: transparent !important;
+            box-shadow: 0 4px 12px -2px var(--theme-accent-glow) !important;
+        }
+        .preset-active-card .preset-label {
+            color: #ffffff !important;
+            font-weight: 700 !important;
+        }
+        [data-mode="light"] .preset-active-card {
+            background-color: rgba(0, 0, 0, 0.04) !important;
+        }
+        [data-mode="light"] .preset-active-card .preset-label {
+            color: #0f172a !important;
+            font-weight: 700 !important;
         }
 
         .theme-tone-active {
@@ -683,15 +740,16 @@
 
         function updatePresetActiveUI(presetName) {
             document.querySelectorAll('.theme-preset-btn').forEach(btn => {
-                const isActive = btn.getAttribute('data-theme-preset-name') === presetName;
-                btn.classList.toggle('bg-theme-gradient', isActive);
-                btn.classList.toggle('text-theme-on-primary', isActive);
-                btn.classList.toggle('shadow-theme-glow', isActive);
-                btn.classList.toggle('border-theme-border', isActive);
-                btn.classList.toggle('text-slate-400', !isActive);
-                btn.classList.toggle('hover:text-slate-200', !isActive);
-                btn.classList.toggle('border-transparent', !isActive);
-                btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+                const isTarget = btn.getAttribute('data-theme-preset-name') === presetName;
+                btn.setAttribute('aria-pressed', isTarget ? 'true' : 'false');
+                btn.classList.toggle('preset-active-card', isTarget);
+                btn.classList.toggle('border-transparent', !isTarget);
+                
+                const checkIcon = btn.querySelector('.active-check');
+                if (checkIcon) {
+                    checkIcon.classList.toggle('hidden', !isTarget);
+                    checkIcon.classList.toggle('flex', isTarget);
+                }
             });
 
             const preset = APP_THEME_PRESETS[presetName] || APP_THEME_PRESETS['classic-dark'];
@@ -955,23 +1013,38 @@
                     <div id="themeMenuDropdown" class="hidden absolute right-0 mt-3 w-80 max-w-[calc(100vw-2rem)] glass-panel rounded-2xl p-4 shadow-2xl z-50 space-y-4 border border-slate-800">
                         <!-- Theme presets -->
                         <div>
-                            <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2">{{ t.theme_preset }}</span>
-                            <div class="grid grid-cols-2 gap-2 p-1 bg-slate-900/60 rounded-xl border border-slate-800">
-                                <button type="button" onclick="setAppPreset('classic-dark')" id="btnPresetClassicDark" data-theme-preset-name="classic-dark" aria-pressed="false" class="theme-preset-btn flex min-h-10 items-center gap-2 rounded-lg border border-transparent px-2.5 py-2 text-left text-xs font-semibold text-slate-400 transition-all cursor-pointer hover:text-slate-200">
-                                    <span class="h-4 w-4 shrink-0 rounded border border-slate-600 bg-slate-950" aria-hidden="true"></span>
-                                    <span>{{ t.classic_dark }}</span>
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{{ t.theme_preset }}</span>
+                                <span class="text-[10px] text-slate-500 font-medium">4 themes</span>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2 p-1.5 bg-slate-900/60 rounded-xl border border-slate-800">
+                                <button type="button" onclick="setAppPreset('classic-dark')" id="btnPresetClassicDark" data-theme-preset-name="classic-dark" aria-pressed="false" class="theme-preset-btn group relative flex items-center justify-between rounded-xl border border-transparent p-2.5 text-left text-xs font-semibold text-slate-400 transition-all duration-200 cursor-pointer hover:text-slate-100 hover:bg-slate-800/50">
+                                    <div class="flex items-center gap-2 min-w-0">
+                                        <span class="h-3.5 w-3.5 shrink-0 rounded-full border border-slate-600 bg-slate-950 shadow-sm ring-1 ring-white/10" aria-hidden="true"></span>
+                                        <span class="preset-label truncate">{{ t.classic_dark }}</span>
+                                    </div>
+                                    <span class="active-check hidden w-3.5 h-3.5 shrink-0 rounded-full bg-theme-accent text-slate-950 items-center justify-center text-[9px] font-bold">✓</span>
                                 </button>
-                                <button type="button" onclick="setAppPreset('classic-light')" id="btnPresetClassicLight" data-theme-preset-name="classic-light" aria-pressed="false" class="theme-preset-btn flex min-h-10 items-center gap-2 rounded-lg border border-transparent px-2.5 py-2 text-left text-xs font-semibold text-slate-400 transition-all cursor-pointer hover:text-slate-200">
-                                    <span class="h-4 w-4 shrink-0 rounded border border-slate-400 bg-slate-100" aria-hidden="true"></span>
-                                    <span>{{ t.classic_light }}</span>
+                                <button type="button" onclick="setAppPreset('classic-light')" id="btnPresetClassicLight" data-theme-preset-name="classic-light" aria-pressed="false" class="theme-preset-btn group relative flex items-center justify-between rounded-xl border border-transparent p-2.5 text-left text-xs font-semibold text-slate-400 transition-all duration-200 cursor-pointer hover:text-slate-100 hover:bg-slate-800/50">
+                                    <div class="flex items-center gap-2 min-w-0">
+                                        <span class="h-3.5 w-3.5 shrink-0 rounded-full border border-slate-300 bg-slate-100 shadow-sm ring-1 ring-black/5" aria-hidden="true"></span>
+                                        <span class="preset-label truncate">{{ t.classic_light }}</span>
+                                    </div>
+                                    <span class="active-check hidden w-3.5 h-3.5 shrink-0 rounded-full bg-theme-accent text-slate-950 items-center justify-center text-[9px] font-bold">✓</span>
                                 </button>
-                                <button type="button" onclick="setAppPreset('binance-dark')" id="btnPresetBinanceDark" data-theme-preset-name="binance-dark" aria-pressed="false" class="theme-preset-btn flex min-h-10 items-center gap-2 rounded-lg border border-transparent px-2.5 py-2 text-left text-xs font-semibold text-slate-400 transition-all cursor-pointer hover:text-slate-200">
-                                    <span class="h-4 w-4 shrink-0 rounded border border-[#fcd535] bg-[#181a20] shadow-[inset_0_-4px_0_#fcd535]" aria-hidden="true"></span>
-                                    <span>{{ t.binance_dark }}</span>
+                                <button type="button" onclick="setAppPreset('binance-dark')" id="btnPresetBinanceDark" data-theme-preset-name="binance-dark" aria-pressed="false" class="theme-preset-btn group relative flex items-center justify-between rounded-xl border border-transparent p-2.5 text-left text-xs font-semibold text-slate-400 transition-all duration-200 cursor-pointer hover:text-slate-100 hover:bg-slate-800/50">
+                                    <div class="flex items-center gap-2 min-w-0">
+                                        <span class="h-3.5 w-3.5 shrink-0 rounded-full border border-[#f0b90b]/80 bg-[#181a20] shadow-sm ring-1 ring-[#f0b90b]/30" aria-hidden="true"></span>
+                                        <span class="preset-label truncate">{{ t.binance_dark }}</span>
+                                    </div>
+                                    <span class="active-check hidden w-3.5 h-3.5 shrink-0 rounded-full bg-[#f0b90b] text-[#181a20] items-center justify-center text-[9px] font-bold">✓</span>
                                 </button>
-                                <button type="button" onclick="setAppPreset('taste-light')" id="btnPresetTasteLight" data-theme-preset-name="taste-light" aria-pressed="false" class="theme-preset-btn flex min-h-10 items-center gap-2 rounded-lg border border-transparent px-2.5 py-2 text-left text-xs font-semibold text-slate-400 transition-all cursor-pointer hover:text-slate-200">
-                                    <span class="h-4 w-4 shrink-0 rounded border border-[#1d4ed8] bg-[#f3f6fa] shadow-[inset_0_-4px_0_#1d4ed8]" aria-hidden="true"></span>
-                                    <span>{{ t.taste_light }}</span>
+                                <button type="button" onclick="setAppPreset('taste-light')" id="btnPresetTasteLight" data-theme-preset-name="taste-light" aria-pressed="false" class="theme-preset-btn group relative flex items-center justify-between rounded-xl border border-transparent p-2.5 text-left text-xs font-semibold text-slate-400 transition-all duration-200 cursor-pointer hover:text-slate-100 hover:bg-slate-800/50">
+                                    <div class="flex items-center gap-2 min-w-0">
+                                        <span class="h-3.5 w-3.5 shrink-0 rounded-full border border-[#2563eb]/70 bg-[#f8fafc] shadow-sm ring-1 ring-[#2563eb]/30" aria-hidden="true"></span>
+                                        <span class="preset-label truncate">{{ t.taste_light }}</span>
+                                    </div>
+                                    <span class="active-check hidden w-3.5 h-3.5 shrink-0 rounded-full bg-[#2563eb] text-white items-center justify-center text-[9px] font-bold">✓</span>
                                 </button>
                             </div>
                         </div>
@@ -1061,7 +1134,7 @@
 
     {% if user.is_authenticated %}
     <!-- Gemini Chatbot Floating Widget (Only loaded for authenticated users) -->
-    <script src="/chatbot-static/widget.js?v=3"></script>
+    <script src="/chatbot-static/widget.js?v=4"></script>
     {% endif %}
 </body>
 </html>
