@@ -1337,6 +1337,10 @@
     </main>
 
     {% if user.is_authenticated %}
+    <!-- Live Real-Time Notifications & Push Stream -->
+    <div id="liveToastContainer" class="fixed top-4 right-4 z-50 flex flex-col gap-2.5 max-w-sm w-full pointer-events-none p-2"></div>
+    <script src="{% static 'js/live_stream.js' %}?v=1"></script>
+
     <!-- Gemini Chatbot Floating Widget (Only loaded for authenticated users) -->
     <script src="/chatbot-static/widget.js?v=4"></script>
     {% endif %}

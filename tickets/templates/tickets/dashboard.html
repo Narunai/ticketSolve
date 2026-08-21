@@ -266,9 +266,9 @@
                         <th class="px-4 py-2 text-center">{{ t.actions }}</th>
                     </tr>
                 </thead>
-                <tbody class="text-xs divide-y divide-slate-800/40">
+                <tbody id="ticketTableBody" class="text-xs divide-y divide-slate-800/40">
                     {% for ticket in tickets %}
-                    <tr class="hover:bg-slate-800/30 transition-colors">
+                    <tr id="ticket-row-{{ ticket.id }}" class="hover:bg-slate-800/30 transition-colors">
                         <!-- ID -->
                         <td class="px-4 py-2 font-mono text-[11px] font-bold text-theme-accent whitespace-nowrap">#{{ ticket.id }}</td>
 

@@ -3941,6 +3941,75 @@ class MaintenanceBackupRestoreTests(TestCase):
                 restored.close()
 
 
+class RealTimeEventStreamTests(TestCase):
+    def setUp(self):
+        self.company1 = Company.objects.create(name='Company Alpha')
+        self.company2 = Company.objects.create(name='Company Beta')
+        self.admin_user = CustomUser.objects.create_user(
+            username='sysadmin_sse',
+            email='sysadmin@example.com',
+            password='Password123!',
+            role=CustomUser.SYSTEM_ADMIN
+        )
+        self.client_user1 = CustomUser.objects.create_user(
+            username='client_alpha',
+            email='alpha@example.com',
+            password='Password123!',
+            role=CustomUser.CLIENT_USER,
+            company=self.company1
+        )
+        self.client_user2 = CustomUser.objects.create_user(
+            username='client_beta',
+            email='beta@example.com',
+            password='Password123!',
+            role=CustomUser.CLIENT_USER,
+            company=self.company2
+        )
+
+    def test_event_stream_requires_login(self):
+        response = self.client.get('/events/stream/')
+        self.assertEqual(response.status_code, 302)
+
+    def test_event_stream_connects_for_logged_in_user(self):
+        self.client.force_login(self.admin_user)
+        response = self.client.get('/events/stream/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'text/event-stream')
+
+    def test_broadcast_event_reaches_authorized_listeners(self):
+        from tickets.events import register_listener, unregister_listener, broadcast_event
+        q_admin = register_listener(self.admin_user)
+        q_alpha = register_listener(self.client_user1)
+        q_beta = register_listener(self.client_user2)
+
+        try:
+            # Broadcast event for Company Alpha
+            broadcast_event('ticket_created', {
+                'id': 999,
+                'title': 'Alpha Network Issue',
+                'company_id': self.company1.id,
+                'priority': 'HIGH'
+            })
+
+            # Admin must receive it (global visibility)
+            self.assertFalse(q_admin.empty())
+            admin_msg = q_admin.get_nowait()
+            self.assertIn('Alpha Network Issue', admin_msg)
+
+            # Alpha user must receive it (matching company)
+            self.assertFalse(q_alpha.empty())
+            alpha_msg = q_alpha.get_nowait()
+            self.assertIn('Alpha Network Issue', alpha_msg)
+
+            # Beta user must NOT receive it (tenant isolation)
+            self.assertTrue(q_beta.empty())
+        finally:
+            unregister_listener(q_admin)
+            unregister_listener(q_alpha)
+            unregister_listener(q_beta)
+
+
+
 
 
 

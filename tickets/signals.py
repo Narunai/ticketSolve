@@ -255,6 +255,28 @@ def send_ticket_notifications(sender, instance, created, **kwargs):
             instance,
         )
 
+        # Broadcast SSE Real-time event for Live Table updates & Push Toast
+        try:
+            from .events import broadcast_event
+            broadcast_event('ticket_created', {
+                'id': instance.id,
+                'title': instance.title,
+                'priority': instance.priority,
+                'priority_display': instance.get_priority_display(),
+                'status': instance.status,
+                'status_display': instance.get_status_display(),
+                'category': instance.category.name if instance.category else 'General',
+                'company_id': instance.company_id,
+                'company_name': instance.company.name if instance.company else 'Central Administration',
+                'created_by': instance.created_by.username if instance.created_by else 'System',
+                'assigned_to': instance.assigned_to.username if instance.assigned_to else None,
+                'created_at': instance.created_at.strftime('%d %b %Y, %H:%M') if instance.created_at else timezone.now().strftime('%d %b %Y, %H:%M'),
+                'url': f'/ticket/{instance.id}/',
+                'edit_url': f'/ticket/{instance.id}/edit/',
+            })
+        except Exception as e:
+            print(f"[SSE Error] Failed to broadcast ticket_created: {e}")
+
         subject = f"[TicketSolve] Ticket Created | #{instance.id} - {instance.title}"
         details_list = [
             ('Ticket reference', f'#{instance.id}'),
@@ -327,6 +349,22 @@ def send_ticket_notifications(sender, instance, created, **kwargs):
             instance,
         )
 
+        # Broadcast SSE Real-time event for Ticket Status Change
+        try:
+            from .events import broadcast_event
+            broadcast_event('ticket_status_updated', {
+                'id': instance.id,
+                'title': instance.title,
+                'old_status': previous_status,
+                'new_status': instance.status,
+                'new_status_display': instance.get_status_display(),
+                'company_id': instance.company_id,
+                'company_name': instance.company.name if instance.company else 'Central Administration',
+                'url': f'/ticket/{instance.id}/',
+            })
+        except Exception as e:
+            print(f"[SSE Error] Failed to broadcast ticket_status_updated: {e}")
+
         # Keep the status clock correct when save(update_fields=['status']) is used.
         Ticket.objects.filter(pk=instance.pk).update(status_changed_at=instance.status_changed_at)
 
@@ -392,6 +430,21 @@ def notify_ticket_comment(sender, instance, created, **kwargs):
         instance.ticket,
         actor=instance.author,
     )
+
+    # Broadcast SSE Real-time event for Comment
+    try:
+        from .events import broadcast_event
+        broadcast_event('comment_created', {
+            'ticket_id': instance.ticket_id,
+            'comment_id': instance.id,
+            'author': instance.author.username if instance.author else 'System',
+            'content': instance.content[:200],
+            'is_internal': instance.is_internal,
+            'created_at': instance.created_at.strftime('%d %b %Y, %H:%M') if instance.created_at else timezone.now().strftime('%d %b %Y, %H:%M'),
+            'company_id': instance.ticket.company_id if instance.ticket else None,
+        })
+    except Exception as e:
+        print(f"[SSE Error] Failed to broadcast comment_created: {e}")
 
 
 @receiver(post_migrate)

@@ -1,9 +1,11 @@
 from django.urls import path
 from django.views.generic import RedirectView
 from . import views
+from . import views_stream
 
 urlpatterns = [
     path('', RedirectView.as_view(url='dashboard/', permanent=False)),
+    path('events/stream/', views_stream.event_stream_view, name='event_stream'),
     path('login/', views.CustomLoginView.as_view(), name='login'),
     path('logout/', views.custom_logout, name='logout'),
     path('health/', views.healthcheck, name='healthcheck'),
