@@ -95,21 +95,21 @@
                 <a href="{% if selected_priority == 'HIGH' %}{% url 'dashboard' %}{% else %}{% url 'dashboard' %}?priority=HIGH{% endif %}" class="flex items-center gap-2.5 group">
                     <span class="w-14 text-[11px] font-medium text-rose-400 shrink-0 group-hover:underline truncate">{{ t.priority_high }}</span>
                     <div class="flex-1 bg-slate-800/80 h-1.5 rounded-full overflow-hidden">
-                        <div class="bg-rose-500 h-full rounded-full transition-all duration-300" style="width: {% if tickets_count > 0 %}{% widthratio high_priority_count tickets_count 100 %}{% else %}0{% endif %}%;"></div>
+                        <div class="bg-rose-500 h-full rounded-full transition-all duration-300 progress-bar-fill" data-progress="{% if tickets_count > 0 %}{% widthratio high_priority_count tickets_count 100 %}{% else %}0{% endif %}%"></div>
                     </div>
                     <span class="text-[11px] font-bold text-slate-300 w-7 text-right tabular-nums">{{ high_priority_count }}</span>
                 </a>
                 <a href="{% if selected_priority == 'MEDIUM' %}{% url 'dashboard' %}{% else %}{% url 'dashboard' %}?priority=MEDIUM{% endif %}" class="flex items-center gap-2.5 group">
                     <span class="w-14 text-[11px] font-medium text-amber-400 shrink-0 group-hover:underline truncate">{{ t.priority_medium }}</span>
                     <div class="flex-1 bg-slate-800/80 h-1.5 rounded-full overflow-hidden">
-                        <div class="bg-amber-500 h-full rounded-full transition-all duration-300" style="width: {% if tickets_count > 0 %}{% widthratio medium_priority_count tickets_count 100 %}{% else %}0{% endif %}%;"></div>
+                        <div class="bg-amber-500 h-full rounded-full transition-all duration-300 progress-bar-fill" data-progress="{% if tickets_count > 0 %}{% widthratio medium_priority_count tickets_count 100 %}{% else %}0{% endif %}%"></div>
                     </div>
                     <span class="text-[11px] font-bold text-slate-300 w-7 text-right tabular-nums">{{ medium_priority_count }}</span>
                 </a>
                 <a href="{% if selected_priority == 'LOW' %}{% url 'dashboard' %}{% else %}{% url 'dashboard' %}?priority=LOW{% endif %}" class="flex items-center gap-2.5 group">
                     <span class="w-14 text-[11px] font-medium text-sky-400 shrink-0 group-hover:underline truncate">{{ t.priority_low }}</span>
                     <div class="flex-1 bg-slate-800/80 h-1.5 rounded-full overflow-hidden">
-                        <div class="bg-sky-500 h-full rounded-full transition-all duration-300" style="width: {% if tickets_count > 0 %}{% widthratio low_priority_count tickets_count 100 %}{% else %}0{% endif %}%;"></div>
+                        <div class="bg-sky-500 h-full rounded-full transition-all duration-300 progress-bar-fill" data-progress="{% if tickets_count > 0 %}{% widthratio low_priority_count tickets_count 100 %}{% else %}0{% endif %}%"></div>
                     </div>
                     <span class="text-[11px] font-bold text-slate-300 w-7 text-right tabular-nums">{{ low_priority_count }}</span>
                 </a>
@@ -369,4 +369,12 @@
         </div>
     </div>
 </div>
+
+<script>
+    document.querySelectorAll('.progress-bar-fill').forEach(function(bar) {
+        if (bar.dataset && bar.dataset.progress) {
+            bar.style.width = bar.dataset.progress;
+        }
+    });
+</script>
 {% endblock %}

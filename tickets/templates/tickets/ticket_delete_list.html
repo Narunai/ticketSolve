@@ -32,7 +32,7 @@
             </span>
         </div>
         <div class="h-2.5 rounded-full bg-slate-900 overflow-hidden border border-slate-800">
-            <div class="h-full {% if disk_usage.used_percent >= 90 %}bg-rose-500{% elif disk_usage.used_percent >= 75 %}bg-amber-500{% else %}bg-emerald-500{% endif %}" style="width: {{ disk_usage.used_percent|floatformat:1 }}%"></div>
+            <div class="h-full progress-bar-fill {% if disk_usage.used_percent >= 90 %}bg-rose-500{% elif disk_usage.used_percent >= 75 %}bg-amber-500{% else %}bg-emerald-500{% endif %}" data-progress="{{ disk_usage.used_percent|floatformat:1 }}%"></div>
         </div>
         <div class="grid grid-cols-2 md:grid-cols-5 gap-3 text-center">
             <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-3"><p class="text-[10px] text-slate-500 uppercase">Total</p><p class="font-bold text-white mt-1">{{ disk_usage.total_gb|floatformat:2 }} GB</p></div>
@@ -245,6 +245,12 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!this.checked && selectAll) selectAll.checked = false;
             updateCount();
         });
+    });
+
+    document.querySelectorAll('.progress-bar-fill').forEach(function(bar) {
+        if (bar.dataset && bar.dataset.progress) {
+            bar.style.width = bar.dataset.progress;
+        }
     });
 });
 
