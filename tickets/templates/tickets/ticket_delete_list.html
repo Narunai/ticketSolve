@@ -193,7 +193,7 @@
 
                             </td>
                             <td class="p-4 text-center">
-                                <button type="button" onclick="confirmSingleDelete({{ ticket.id }}, '{{ ticket.title|escapejs }}')" class="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-all">
+                                <button type="button" data-ticket-id="{{ ticket.id }}" data-ticket-title="{{ ticket.title|default:'' }}" class="btn-single-delete px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-all">
                                     🗑️ {{ t.delete }}
                                 </button>
                             </td>
@@ -251,6 +251,12 @@ document.addEventListener('DOMContentLoaded', function() {
         if (bar.dataset && bar.dataset.progress) {
             bar.style.width = bar.dataset.progress;
         }
+    });
+
+    document.querySelectorAll('.btn-single-delete').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            confirmSingleDelete(this.dataset.ticketId, this.dataset.ticketTitle);
+        });
     });
 });
 
