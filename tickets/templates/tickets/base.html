@@ -1,9 +1,15 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en" class="h-full bg-slate-950 text-slate-100" data-mode="dark" data-theme="indigo" data-theme-style="classic" data-theme-preset="classic-dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}TicketSolve - Multi-Tenant Ticket Management System{% endblock %}</title>
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" sizes="32x32" href="{% static 'img/favicon.png' %}?v=1">
+    <link rel="icon" type="image/png" sizes="16x16" href="{% static 'img/favicon.png' %}?v=1">
+    <link rel="shortcut icon" href="{% static 'img/favicon.png' %}?v=1">
+    <link rel="apple-touch-icon" sizes="180x180" href="{% static 'img/favicon.png' %}?v=1">
     <!-- Google Fonts: Inter & Prompt -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1029,8 +1035,8 @@
         <!-- Logo Header -->
         <div class="h-14 px-5 border-b border-slate-800/80 flex items-center justify-between gap-3 shrink-0">
             <div class="flex items-center gap-3">
-                <div class="w-8 h-8 rounded-lg bg-theme-gradient flex items-center justify-center font-bold text-white shadow-theme-glow">
-                    T
+                <div class="w-8 h-8 rounded-lg bg-theme-gradient flex items-center justify-center shadow-theme-glow p-1 shrink-0 overflow-hidden">
+                    <img src="{% static 'img/favicon.png' %}" alt="TicketSolve Logo" class="w-full h-full object-contain filter invert drop-shadow">
                 </div>
                 <div>
                     <span class="app-wordmark font-bold text-base tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-slate-100 to-slate-400">TicketSolve</span>
