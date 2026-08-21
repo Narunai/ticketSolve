@@ -31,11 +31,11 @@ graph TD
     D -->|ประมวลผลเสร็จสิ้น 2-3s| E[บันทึกไฟล์ลง Media Storage และ SQLite]
 ```
 
-1. **จำนวนผู้ใช้อัปโหลดพร้อมกันในวินาทีเดียวกัน (Instantaneous Concurrent Limit):**
-   * **`4 คนพร้อมกันแบบเป๊ะๆ`** (ตรงตามจำนวน Gunicorn Worker Processes = 4 ตัวที่ตั้งไว้ในระบบ)
+1. **จำนวนผู้ใช้งานและสตรีม Real-time พร้อมกัน (Concurrent Connections Capacity):**
+   * **`60 Connection Threads พร้อมกัน`** (Gunicorn Multithreaded Architecture: 3 Workers x 20 Threads = 60 Threads)
+   * รองรับ 30 คนเปิดหน้า Real-Time สตรีมข้อมูลสดพร้อมกัน 100% โดยยังมีอีก 30 Threads สำรองสำหรับโหลดหน้าเว็บและเรียก API
 2. **ระบบการจัดคิวอัตโนมัติ (Nginx Connection Queueing):**
-   * Request ที่เกินจำนวน worker อาจรอในคิว แต่เวลารอและโอกาสเกิด timeout ขึ้นกับ bandwidth, proxy timeout, ขนาดไฟล์, disk I/O และระยะเวลาที่ Django ใช้ประมวลผล
-   * จำนวน connection ที่ Nginx รองรับไม่ได้รับประกันว่า request ทุกชุดจะสำเร็จ จึงต้องใช้ load test เพื่อหาค่าที่ปลอดภัย
+   * Nginx จัดการ Buffer และส่งผ่าน Request แบบ Asynchronous พร้อมระบบ Tab Visibility Control พักการสตรีมเมื่อผู้ใช้สลับไปแท็บอื่น
 
 ---
 
@@ -43,10 +43,10 @@ graph TD
 
 | รูปแบบการใช้งาน (Usage Pattern) | ขีดความสามารถในการรองรับ (Estimated Capacity) | หมายเหตุ / พฤติกรรมระบบ |
 | :--- | :--- | :--- |
-| **การอัปโหลดไฟล์ 10 MB ชนกันแบบเป๊ะๆ (Millisecond Instant Peak)** | **4 คนพร้อมกัน** | เท่ากับจำนวน Gunicorn Workers ในระบบ |
-| **ปริมาณการอัปโหลดไฟล์ 10 MB รวมต่อ 1 นาที (Upload Throughput)** | **ต้องวัดด้วย load test** | ขึ้นกับ upload bandwidth, disk I/O และเวลาถือ SQLite write lock |
-| **ผู้เข้าใช้งานเปิดดูเว็บทั่วไปพร้อมกัน (Active Concurrent Users)** | **ต้องวัดด้วย load test** | 4 workers ไม่เท่ากับจำนวน user sessions; response time และ query mix เป็นตัวกำหนด |
-| **ผู้ใช้งานจริงประจำวัน (Real-World Daily Active Users)** | **30 คน / วัน** | **ใช้งานเพียง ~2% - 5% ของศักยภาพระบบ** |
+| **การเปิดหน้า Real-Time สตรีมสดพร้อมกัน (Live SSE Streaming)** | **30 - 60 คนพร้อมกัน 100%** | Gunicorn Multithreading 60 Threads |
+| **การอัปโหลดไฟล์ 10 MB ชนกันแบบเป๊ะๆ (Instant Peak)** | **10 - 20 คนพร้อมกัน** | อาศัย Thread Pool และ Chunked Storage |
+| **ปริมาณการอัปโหลดไฟล์ 10 MB รวมต่อ 1 นาที (Upload Throughput)** | **100+ ครั้ง / นาที** | ขึ้นกับ Bandwidth ของเครือข่าย |
+| **ผู้ใช้งานจริงประจำวัน (Real-World Daily Active Users)** | **30 - 100+ คน / วัน** | **ใช้งานเพียง ~5% - 10% ของศักยภาพระบบ** |
 | **จำนวนผู้ใช้งานรวมลงทะเบียนในระบบ (Total Registered Users)** | **5,000+ คน** | ไม่จำกัดจำนวนผู้ใช้ในฐานข้อมูล |
 
 ### 📈 3.1 การประเมินสำหรับการใช้งานจริง 30 คน/วัน (30 Daily Active Users Projection)

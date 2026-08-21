@@ -83,6 +83,13 @@ Instead, pass values through `data-*` attributes on HTML elements and read them 
 
 For full details, read: `references/coding-patterns.md`
 
+### Zero IDE Diagnostics Rule (MANDATORY POST-EDIT CHECK)
+
+**ALWAYS** verify the IDE Problems / Diagnostics panel after editing any files:
+- Ensure the Problems panel displays **`No problem` (0 errors, 0 lint warnings)**.
+- Clean up any temporary scratch files or test scripts immediately after use so they don't introduce module import warnings.
+- If any diagnostic issue appears in `@[current_problems]`, fix it immediately before declaring task completion.
+
 ## References
 
 When working on this project, consult these reference documents as needed:
@@ -91,14 +98,15 @@ When working on this project, consult these reference documents as needed:
 |----------|-------------|
 | `references/architecture.md` | Understanding system components, services, and how they connect |
 | `references/deployment.md` | Deploying changes to the VPS, service management |
-| `references/coding-patterns.md` | Writing templates, handling forms, i18n, permissions |
+| `references/coding-patterns.md` | Writing templates, handling forms, i18n, permissions, error verification |
 | `references/database-schema.md` | Understanding models, relationships, field choices |
 | `references/risk-analysis.md` | Security risk factors, controls, and mitigation roadmap |
 
 ## Common Mistakes
 
 1. **Putting Django template tags in `<script>`** — causes IDE errors and confuses JS parsers. Always use `data-*` attributes.
-2. **Using a single SCP for files in different remote directories** — SCP fails silently. Use separate commands per target directory.
-3. **Forgetting to restart both services** — Django changes need `gunicorn` restart; chatbot changes need `ticket-chatbot` restart.
-4. **Hardcoding URLs in JavaScript** — Always use `data-*` attributes populated by `{% url 'name' %}` in the HTML, then read via `element.dataset.*` in JS.
-5. **Mixing Thai and English** — The system UI is English-only. All user-facing strings go through `context_processors.language_processor` as `t.*` variables.
+2. **Leaving unresolved IDE Diagnostics/Problems** — Always verify that the Problems panel is clean (`No problem`) before finishing.
+3. **Using a single SCP for files in different remote directories** — SCP fails silently. Use separate commands per target directory.
+4. **Forgetting to restart both services** — Django changes need `gunicorn` restart; chatbot changes need `ticket-chatbot` restart.
+5. **Hardcoding URLs in JavaScript** — Always use `data-*` attributes populated by `{% url 'name' %}` in the HTML, then read via `element.dataset.*` in JS.
+6. **Mixing Thai and English** — The system UI is English-only. All user-facing strings go through `context_processors.language_processor` as `t.*` variables.

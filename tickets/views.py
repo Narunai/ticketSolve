@@ -1768,7 +1768,7 @@ class TicketDetailView(LoginRequiredMixin, DetailView):
             recipients = set([e for e in custom_recipients if e])
         else:
             recipients = set()
-            if ticket.created_by.email and ticket.created_by != comment.author:
+            if ticket.created_by and ticket.created_by.email and ticket.created_by != comment.author:
                 recipients.add(ticket.created_by.email)
             if ticket.assigned_to and ticket.assigned_to.email and ticket.assigned_to != comment.author:
                 recipients.add(ticket.assigned_to.email)

@@ -121,6 +121,21 @@ class CustomUser(AbstractUser):
     )
     simple_password_approved_at = models.DateTimeField(null=True, blank=True)
 
+    @classmethod
+    def get_system_admins_qs(cls):
+        """Returns queryset of all active System Admins, Sub-Admins, and Superusers."""
+        return cls.objects.filter(
+            models.Q(role__in=[cls.SYSTEM_ADMIN, cls.SYSTEM_SUB_ADMIN]) |
+            models.Q(is_superuser=True) |
+            models.Q(is_staff=True, company__isnull=True),
+            is_active=True
+        )
+
+    def save(self, *args, **kwargs):
+        if self.is_superuser and self.role == self.CLIENT_USER:
+            self.role = self.SYSTEM_ADMIN
+        super().save(*args, **kwargs)
+
     @property
     def effective_role_display(self):
         """Return the security-effective role for account identity displays.

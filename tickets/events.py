@@ -36,6 +36,13 @@ def unregister_listener(q: queue.Queue):
 
 def is_user_authorized_for_event(listener: Dict[str, Any], event_type: str, payload: Dict[str, Any]) -> bool:
     """Multi-tenant security check for SSE events."""
+    # Private in-app notifications must ONLY go to their intended recipient
+    if event_type == 'notification_created':
+        target_recipient_id = payload.get('recipient_id')
+        if target_recipient_id is not None:
+            return listener['user_id'] == target_recipient_id
+        return False
+
     if listener['is_superuser'] or listener['role'] in ['SYSTEM_ADMIN', 'SYSTEM_SUB_ADMIN']:
         return True
 

@@ -28,7 +28,7 @@ def delete_inbound_email_attachment_file(sender, instance, **kwargs):
 
 
 def create_in_app_notifications(recipients, event_type, title, message, ticket, actor=None):
-    """Create one private notification per active recipient."""
+    """Create one private notification per active recipient and push real-time event."""
     recipient_ids = {
         user.pk
         for user in recipients
@@ -47,6 +47,24 @@ def create_in_app_notifications(recipients, event_type, title, message, ticket, 
         )
         for recipient_id in recipient_ids
     ])
+
+    # Broadcast real-time SSE event to each recipient with zero delay
+    try:
+        from .events import broadcast_event
+        for recipient_id in recipient_ids:
+            unread_count = InAppNotification.objects.filter(recipient_id=recipient_id, is_read=False).count()
+            broadcast_event('notification_created', {
+                'recipient_id': recipient_id,
+                'title': title[:255],
+                'message': message,
+                'unread_count': unread_count,
+                'created_at': timezone.now().strftime('%d %b %Y, %H:%M'),
+                'ticket_id': ticket.id if ticket else None,
+                'open_url': f'/ticket/{ticket.id}/' if ticket else '/notifications/',
+            })
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).debug(f"[SSE] Error broadcasting notification: {e}")
 
 def log_and_send_email(subject, message, recipient_list, action_type, ticket=None, new_status=None, html_message=None):
     """
@@ -226,12 +244,12 @@ def send_ticket_notifications(sender, instance, created, **kwargs):
         is_email_ticket = email_source.get('source') == 'EMAIL_TO_TICKET'
         in_app_recipients = set(
             CustomUser.objects.filter(
+                company=instance.company,
+                role__in=[CustomUser.CLIENT_ADMIN, CustomUser.CLIENT_STAFF],
                 is_active=True
-            ).filter(
-                models.Q(company=instance.company, role__in=[CustomUser.CLIENT_ADMIN, CustomUser.CLIENT_STAFF]) |
-                models.Q(role__in=[CustomUser.SYSTEM_ADMIN, CustomUser.SYSTEM_SUB_ADMIN])
             )
         )
+        in_app_recipients.update(CustomUser.get_system_admins_qs())
         if instance.assigned_to:
             in_app_recipients.add(instance.assigned_to)
         if not is_email_ticket and instance.created_by:
@@ -258,6 +276,7 @@ def send_ticket_notifications(sender, instance, created, **kwargs):
         # Broadcast SSE Real-time event for Live Table updates & Push Toast
         try:
             from .events import broadcast_event
+            cat_name = instance.ticket_category.name if instance.ticket_category else (instance.get_category_display() if hasattr(instance, 'get_category_display') else str(instance.category or 'General'))
             broadcast_event('ticket_created', {
                 'id': instance.id,
                 'title': instance.title,
@@ -265,11 +284,12 @@ def send_ticket_notifications(sender, instance, created, **kwargs):
                 'priority_display': instance.get_priority_display(),
                 'status': instance.status,
                 'status_display': instance.get_status_display(),
-                'category': instance.category.name if instance.category else 'General',
+                'category': cat_name,
+                'module_category': instance.module_category.name if instance.module_category else None,
                 'company_id': instance.company_id,
                 'company_name': instance.company.name if instance.company else 'Central Administration',
                 'created_by': instance.created_by.username if instance.created_by else 'System',
-                'assigned_to': instance.assigned_to.username if instance.assigned_to else None,
+                'assigned_to': instance.assigned_to.username if instance.assigned_to else 'Not Assigned',
                 'created_at': instance.created_at.strftime('%d %b %Y, %H:%M') if instance.created_at else timezone.now().strftime('%d %b %Y, %H:%M'),
                 'url': f'/ticket/{instance.id}/',
                 'edit_url': f'/ticket/{instance.id}/edit/',
@@ -307,7 +327,7 @@ def send_ticket_notifications(sender, instance, created, **kwargs):
         )
         
         recipients = set()
-        if instance.created_by.email:
+        if instance.created_by and instance.created_by.email:
             recipients.add(instance.created_by.email)
             
         if instance.assigned_to and instance.assigned_to.email:
@@ -316,10 +336,16 @@ def send_ticket_notifications(sender, instance, created, **kwargs):
         if is_email_ticket and email_source.get('sender_email'):
             recipients.add(email_source['sender_email'])
 
-        client_admins = CustomUser.objects.filter(company=instance.company, role=CustomUser.CLIENT_ADMIN)
+        client_admins = CustomUser.objects.filter(company=instance.company, role=CustomUser.CLIENT_ADMIN, is_active=True)
         for admin in client_admins:
             if admin.email:
                 recipients.add(admin.email)
+
+        # Notify System Administrators / IT Support via email
+        system_admins = CustomUser.get_system_admins_qs()
+        for s_admin in system_admins:
+            if s_admin.email and s_admin != instance.created_by:
+                recipients.add(s_admin.email)
                 
         log_and_send_email(
             subject, message, list(recipients), EmailLog.ACTION_TICKET_CREATED,
@@ -330,12 +356,7 @@ def send_ticket_notifications(sender, instance, created, **kwargs):
         if previous_status == instance.status:
             return
 
-        status_recipients = set(
-            CustomUser.objects.filter(
-                role__in=[CustomUser.SYSTEM_ADMIN, CustomUser.SYSTEM_SUB_ADMIN],
-                is_active=True
-            )
-        )
+        status_recipients = set(CustomUser.get_system_admins_qs())
         if instance.created_by:
             status_recipients.add(instance.created_by)
         if instance.assigned_to:
@@ -411,12 +432,7 @@ def send_ticket_notifications(sender, instance, created, **kwargs):
 def notify_ticket_comment(sender, instance, created, **kwargs):
     if not created:
         return
-    comment_recipients = set(
-        CustomUser.objects.filter(
-            role__in=[CustomUser.SYSTEM_ADMIN, CustomUser.SYSTEM_SUB_ADMIN],
-            is_active=True
-        )
-    )
+    comment_recipients = set(CustomUser.get_system_admins_qs())
     if instance.ticket.created_by:
         comment_recipients.add(instance.ticket.created_by)
     if instance.ticket.assigned_to:
@@ -439,7 +455,7 @@ def notify_ticket_comment(sender, instance, created, **kwargs):
             'comment_id': instance.id,
             'author': instance.author.username if instance.author else 'System',
             'content': instance.content[:200],
-            'is_internal': instance.is_internal,
+            'is_internal': getattr(instance, 'is_internal', False),
             'created_at': instance.created_at.strftime('%d %b %Y, %H:%M') if instance.created_at else timezone.now().strftime('%d %b %Y, %H:%M'),
             'company_id': instance.ticket.company_id if instance.ticket else None,
         })

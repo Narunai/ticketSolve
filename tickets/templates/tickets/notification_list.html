@@ -17,23 +17,23 @@
         {% endif %}
     </div>
 
-    <div class="overflow-hidden rounded-xl border border-slate-800 bg-slate-900/40 divide-y divide-slate-800/70">
+    <div class="overflow-hidden rounded-xl border border-slate-800 glass-panel divide-y divide-slate-800/70 shadow-lg">
         {% for notification in notifications %}
-        <a href="{% url 'notification_open' notification.pk %}" class="block px-4 py-4 hover:bg-slate-800/40 {% if not notification.is_read %}bg-theme-bg{% endif %}">
+        <a href="{% url 'notification_open' notification.pk %}" class="block px-4 py-4 hover:bg-slate-800/40 {% if not notification.is_read %}bg-theme-bg{% endif %} transition-colors">
             <div class="flex items-start gap-3">
-                <span class="mt-1.5 h-2 w-2 shrink-0 rounded-full {% if notification.is_read %}bg-slate-700{% else %}bg-violet-400{% endif %}"></span>
+                <span class="mt-1.5 h-2 w-2 shrink-0 rounded-full {% if notification.is_read %}bg-slate-500/50{% else %}bg-theme-accent shadow-sm{% endif %}"></span>
                 <div class="min-w-0 flex-1">
                     <div class="flex flex-wrap items-center justify-between gap-2">
                         <h2 class="text-sm font-semibold text-slate-100">{{ notification.title }}</h2>
-                        <time class="text-[10px] text-slate-600">{{ notification.created_at|date:"Y-m-d H:i:s" }}</time>
+                        <time class="text-[10px] text-slate-500">{{ notification.created_at|date:"Y-m-d H:i:s" }}</time>
                     </div>
                     {% if notification.message %}<p class="mt-1 text-xs text-slate-400">{{ notification.message }}</p>{% endif %}
-                    {% if notification.ticket %}<p class="mt-1 text-[10px] text-sky-500">Open Ticket #{{ notification.ticket.pk }}</p>{% endif %}
+                    {% if notification.ticket %}<p class="mt-1 text-[10px] text-theme-accent font-semibold">Open Ticket #{{ notification.ticket.pk }}</p>{% endif %}
                 </div>
             </div>
         </a>
         {% empty %}
-        <div class="px-4 py-12 text-center text-sm text-slate-500">No notifications yet</div>
+        <div class="px-4 py-12 text-center text-sm text-slate-400">No notifications yet</div>
         {% endfor %}
     </div>
 

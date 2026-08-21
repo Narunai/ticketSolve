@@ -108,46 +108,119 @@
             --theme-accent-glow: rgba(139, 92, 246, 0.35);
         }
 
-        /* Binance Dark preset: refined obsidian surfaces with calibrated gold accents (Borderless). */
+        /* Binance Gold / Amber Theme Tone */
+        [data-theme="gold"] {
+            --theme-gradient-from: #fcd535;
+            --theme-gradient-to: #f0b90b;
+            --theme-accent: #f0b90b;
+            --theme-accent-bg: rgba(240, 185, 11, 0.14);
+            --theme-accent-border: rgba(240, 185, 11, 0.30);
+            --theme-accent-glow: rgba(240, 185, 11, 0.35);
+            --theme-selection-ring: #f0b90b;
+            --theme-on-primary: #181a20;
+        }
+
+        /* =========================================================
+           Solid (Flat) Theme Accent Tones (6 Symmetrical Solid Tones)
+           ========================================================= */
+        /* Solid Indigo Tone */
+        [data-theme="solid-indigo"] {
+            --theme-gradient-from: #4f46e5;
+            --theme-gradient-to: #4f46e5;
+            --theme-accent: #6366f1;
+            --theme-accent-bg: rgba(99, 102, 241, 0.12);
+            --theme-accent-border: rgba(99, 102, 241, 0.25);
+            --theme-accent-glow: rgba(99, 102, 241, 0.35);
+            --theme-selection-ring: #6366f1;
+            --theme-on-primary: #ffffff;
+        }
+
+        /* Solid Emerald Tone */
+        [data-theme="solid-emerald"] {
+            --theme-gradient-from: #059669;
+            --theme-gradient-to: #059669;
+            --theme-accent: #10b981;
+            --theme-accent-bg: rgba(16, 185, 129, 0.12);
+            --theme-accent-border: rgba(16, 185, 129, 0.25);
+            --theme-accent-glow: rgba(16, 185, 129, 0.35);
+            --theme-selection-ring: #10b981;
+            --theme-on-primary: #ffffff;
+        }
+
+        /* Solid Rose Tone */
+        [data-theme="solid-rose"] {
+            --theme-gradient-from: #e11d48;
+            --theme-gradient-to: #e11d48;
+            --theme-accent: #f43f5e;
+            --theme-accent-bg: rgba(244, 63, 94, 0.12);
+            --theme-accent-border: rgba(244, 63, 94, 0.25);
+            --theme-accent-glow: rgba(244, 63, 94, 0.35);
+            --theme-selection-ring: #f43f5e;
+            --theme-on-primary: #ffffff;
+        }
+
+        /* Solid Royal Blue Tone */
+        [data-theme="solid-blue"] {
+            --theme-gradient-from: #2563eb;
+            --theme-gradient-to: #2563eb;
+            --theme-accent: #3b82f6;
+            --theme-accent-bg: rgba(59, 130, 246, 0.12);
+            --theme-accent-border: rgba(59, 130, 246, 0.25);
+            --theme-accent-glow: rgba(59, 130, 246, 0.35);
+            --theme-selection-ring: #3b82f6;
+            --theme-on-primary: #ffffff;
+        }
+
+        /* Solid Violet Tone */
+        [data-theme="solid-violet"] {
+            --theme-gradient-from: #7c3aed;
+            --theme-gradient-to: #7c3aed;
+            --theme-accent: #8b5cf6;
+            --theme-accent-bg: rgba(139, 92, 246, 0.12);
+            --theme-accent-border: rgba(139, 92, 246, 0.25);
+            --theme-accent-glow: rgba(139, 92, 246, 0.35);
+            --theme-selection-ring: #8b5cf6;
+            --theme-on-primary: #ffffff;
+        }
+
+        /* Solid Binance Gold Tone */
+        [data-theme="solid-gold"] {
+            --theme-gradient-from: #f0b90b;
+            --theme-gradient-to: #f0b90b;
+            --theme-accent: #f0b90b;
+            --theme-accent-bg: rgba(240, 185, 11, 0.14);
+            --theme-accent-border: rgba(240, 185, 11, 0.30);
+            --theme-accent-glow: rgba(240, 185, 11, 0.35);
+            --theme-selection-ring: #f0b90b;
+            --theme-on-primary: #181a20;
+        }
+
+        /* Binance Dark preset: refined obsidian surfaces (Borderless inner elements). */
         [data-theme-style="binance"] {
             --bg-body: #0b0e11;
             --glass-panel-bg: rgba(24, 26, 32, 0.98);
             --glass-panel-border: transparent;
             --glass-card-bg: rgba(30, 35, 41, 0.96);
             --glass-card-border: transparent;
+            --theme-accent-border: transparent;
             --text-main: #eaecef;
             --text-muted: #848e9c;
             --text-subtle: #5e6673;
-            --theme-gradient-from: #fcd535;
-            --theme-gradient-to: #f0b90b;
-            --theme-accent: #f0b90b;
-            --theme-accent-bg: rgba(240, 185, 11, 0.12);
-            --theme-accent-border: transparent;
-            --theme-accent-glow: rgba(240, 185, 11, 0.22);
-            --theme-on-primary: #181a20;
-            --theme-selection-ring: #f0b90b;
             --app-font-family: 'Inter', 'Prompt', -apple-system, BlinkMacSystemFont, sans-serif;
             color-scheme: dark;
         }
 
-        /* Taste Light preset: clean editorial surfaces and sharp sapphire accents (Borderless). */
+        /* Taste Light preset: clean editorial surfaces with defined background contrast. */
         [data-theme-style="taste"] {
-            --bg-body: #f8fafc;
-            --glass-panel-bg: rgba(255, 255, 255, 0.96);
+            --bg-body: #e5e9f0;
+            --glass-panel-bg: #ffffff;
             --glass-panel-border: transparent;
-            --glass-card-bg: rgba(255, 255, 255, 0.98);
+            --glass-card-bg: #ffffff;
             --glass-card-border: transparent;
+            --theme-accent-border: transparent;
             --text-main: #0f172a;
             --text-muted: #475569;
             --text-subtle: #64748b;
-            --theme-gradient-from: #1d4ed8;
-            --theme-gradient-to: #2563eb;
-            --theme-accent: #2563eb;
-            --theme-accent-bg: rgba(37, 99, 235, 0.08);
-            --theme-accent-border: transparent;
-            --theme-accent-glow: rgba(37, 99, 235, 0.18);
-            --theme-on-primary: #ffffff;
-            --theme-selection-ring: #2563eb;
             --app-font-family: 'Inter', 'Prompt', 'Segoe UI Variable', 'Segoe UI', sans-serif;
             color-scheme: light;
         }
@@ -202,9 +275,9 @@
             -webkit-text-fill-color: #172033;
         }
         [data-theme-style="binance"] .app-wordmark {
-            color: #fcd535 !important;
+            color: #eaecef !important;
             background-image: none !important;
-            -webkit-text-fill-color: #fcd535;
+            -webkit-text-fill-color: #eaecef;
         }
 
         /* Light Mode Adaptive Overrides */
@@ -308,11 +381,34 @@
         [data-mode="light"] textarea {
             background-color: #ffffff !important;
             color: #0f172a !important;
-            border-color: #cbd5e1 !important;
+            border: 1px solid #cbd5e1 !important;
+            border-radius: 0.5rem !important;
+        }
+        [data-mode="light"] input:not([type="submit"]):not([type="checkbox"]):not([type="radio"]):focus,
+        [data-mode="light"] select:focus,
+        [data-mode="light"] textarea:focus {
+            border-color: var(--theme-accent, #4f46e5) !important;
+            box-shadow: 0 0 0 2px var(--theme-accent-bg, rgba(99, 102, 241, 0.2)) !important;
         }
         [data-mode="light"] option {
             background-color: #ffffff !important;
             color: #0f172a !important;
+        }
+
+        /* Form Inputs & Select Controls in Standard Dark Mode */
+        [data-mode="dark"]:not([data-theme-style="binance"]) input:not([type="submit"]):not([type="checkbox"]):not([type="radio"]),
+        [data-mode="dark"]:not([data-theme-style="binance"]) select,
+        [data-mode="dark"]:not([data-theme-style="binance"]) textarea {
+            background-color: rgba(15, 23, 42, 0.85) !important;
+            color: #f8fafc !important;
+            border: 1px solid rgba(51, 65, 85, 0.85) !important;
+            border-radius: 0.5rem !important;
+        }
+        [data-mode="dark"]:not([data-theme-style="binance"]) input:not([type="submit"]):not([type="checkbox"]):not([type="radio"]):focus,
+        [data-mode="dark"]:not([data-theme-style="binance"]) select:focus,
+        [data-mode="dark"]:not([data-theme-style="binance"]) textarea:focus {
+            border-color: var(--theme-accent, #6366f1) !important;
+            box-shadow: 0 0 0 2px var(--theme-accent-bg, rgba(99, 102, 241, 0.25)) !important;
         }
 
         /* Table Headers in Light Mode */
@@ -528,36 +624,24 @@
         [data-theme-style="binance"] .bg-slate-700\/80 {
             background-color: #1e2329 !important;
         }
-        /* Binance Dark: 100% Borderless Experience */
-        [data-theme-style="binance"] *,
-        [data-theme-style="binance"] *::before,
-        [data-theme-style="binance"] *::after {
-            --tw-border-opacity: 0 !important;
-            --tw-ring-opacity: 0 !important;
-            --tw-ring-color: transparent !important;
-            --tw-ring-offset-shadow: 0 0 #0000 !important;
-            --tw-ring-shadow: 0 0 #0000 !important;
-            --theme-accent-border: transparent !important;
-            --glass-panel-border: transparent !important;
-            --glass-card-border: transparent !important;
-            border-color: transparent !important;
-        }
-        [data-theme-style="binance"] .border,
-        [data-theme-style="binance"] .border-t,
-        [data-theme-style="binance"] .border-b,
-        [data-theme-style="binance"] .border-l,
-        [data-theme-style="binance"] .border-r,
-        [data-theme-style="binance"] [class*="border"],
-        [data-theme-style="binance"] [class*="ring-"],
-        [data-theme-style="binance"] [class*="divide-"],
-        [data-theme-style="binance"] #sidebarIdentityCard,
-        [data-theme-style="binance"] aside,
-        [data-theme-style="binance"] aside *,
-        [data-theme-style="binance"] header,
-        [data-theme-style="binance"] header *,
-        [data-theme-style="binance"] nav a,
+        /* Binance Dark: Borderless Layout & Layered Surfaces for structural containers */
         [data-theme-style="binance"] .glass-panel,
-        [data-theme-style="binance"] .glass-card {
+        [data-theme-style="binance"] .glass-card,
+        [data-theme-style="binance"] #sidebarIdentityCard,
+        [data-theme-style="binance"] .theme-preset-btn,
+        [data-theme-style="binance"] #themeMenuDropdown,
+        [data-theme-style="binance"] #notificationMenuDropdown,
+        [data-theme-style="binance"] aside,
+        [data-theme-style="binance"] header,
+        [data-theme-style="binance"] main,
+        [data-theme-style="binance"] nav,
+        [data-theme-style="binance"] table,
+        [data-theme-style="binance"] thead,
+        [data-theme-style="binance"] thead tr,
+        [data-theme-style="binance"] tbody,
+        [data-theme-style="binance"] tr,
+        [data-theme-style="binance"] th,
+        [data-theme-style="binance"] td {
             border: none !important;
             border-width: 0 !important;
             border-color: transparent !important;
@@ -577,14 +661,32 @@
         [data-theme-style="binance"] .text-slate-600 {
             color: #5e6673 !important;
         }
+        /* Binance Dark: High-Contrast Accessible Inputs */
         [data-theme-style="binance"] input:not([type="submit"]):not([type="checkbox"]):not([type="radio"]),
         [data-theme-style="binance"] select,
-        [data-theme-style="binance"] textarea,
-        [data-theme-style="binance"] option {
-            background-color: #181a20 !important;
+        [data-theme-style="binance"] textarea {
+            background-color: #2b313a !important;
             color: #eaecef !important;
-            border: none !important;
-            border-color: transparent !important;
+            border: 1px solid #474f5d !important;
+            border-radius: 0.5rem !important;
+            box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.25) !important;
+        }
+        [data-theme-style="binance"] input:not([type="submit"]):not([type="checkbox"]):not([type="radio"])::placeholder,
+        [data-theme-style="binance"] textarea::placeholder {
+            color: #848e9c !important;
+            opacity: 1 !important;
+        }
+        [data-theme-style="binance"] input:not([type="submit"]):not([type="checkbox"]):not([type="radio"]):focus,
+        [data-theme-style="binance"] select:focus,
+        [data-theme-style="binance"] textarea:focus {
+            background-color: #2b313a !important;
+            border-color: var(--theme-accent, #f0b90b) !important;
+            box-shadow: 0 0 0 2px var(--theme-accent-bg, rgba(240, 185, 11, 0.25)), inset 0 1px 2px rgba(0, 0, 0, 0.25) !important;
+            outline: none !important;
+        }
+        [data-theme-style="binance"] option {
+            background-color: #1e2329 !important;
+            color: #eaecef !important;
         }
         [data-theme-style="binance"] th,
         [data-theme-style="binance"] thead tr {
@@ -599,30 +701,28 @@
         [data-theme-style="binance"] .hover\:bg-slate-900\/30:hover {
             background-color: #23272e !important;
         }
+        /* Binance Dark: Dynamic Theme Accent & Button Colors */
         [data-theme-style="binance"] .bg-indigo-600,
         [data-theme-style="binance"] .bg-indigo-500 {
-            background-color: #f0b90b !important;
-            color: #181a20 !important;
+            background: linear-gradient(to top right, var(--theme-gradient-from), var(--theme-gradient-to)) !important;
+            color: var(--theme-on-primary, #ffffff) !important;
             font-weight: 600 !important;
             border: none !important;
             border-color: transparent !important;
         }
         [data-theme-style="binance"] .bg-indigo-600:hover,
         [data-theme-style="binance"] .bg-indigo-500:hover {
-            background-color: #fcd535 !important;
+            opacity: 0.9 !important;
+            filter: brightness(1.08) !important;
         }
-        [data-theme-style="binance"] .bg-indigo-600\/30 {
-            background-color: rgba(240, 185, 11, 0.20) !important;
-        }
-        [data-theme-style="binance"] .bg-indigo-500\/20 {
-            background-color: rgba(240, 185, 11, 0.14) !important;
-        }
+        [data-theme-style="binance"] .bg-indigo-600\/30,
+        [data-theme-style="binance"] .bg-indigo-500\/20,
         [data-theme-style="binance"] .bg-indigo-500\/10,
         [data-theme-style="binance"] .bg-indigo-500\/5,
         [data-theme-style="binance"] .bg-purple-500\/10,
         [data-theme-style="binance"] .bg-purple-500\/15,
         [data-theme-style="binance"] .bg-purple-500\/20 {
-            background-color: rgba(240, 185, 11, 0.10) !important;
+            background-color: var(--theme-accent-bg) !important;
         }
         [data-theme-style="binance"] .text-indigo-300,
         [data-theme-style="binance"] .text-indigo-400,
@@ -632,60 +732,78 @@
         [data-theme-style="binance"] .text-purple-400,
         [data-theme-style="binance"] .text-violet-300,
         [data-theme-style="binance"] .text-violet-400 {
-            color: #f0b90b !important;
+            color: var(--theme-accent) !important;
         }
         [data-theme-style="binance"] .from-indigo-500,
         [data-theme-style="binance"] .from-indigo-600,
         [data-theme-style="binance"] .from-purple-500,
         [data-theme-style="binance"] .from-purple-600 {
-            --tw-gradient-from: #fcd535 var(--tw-gradient-from-position) !important;
-            --tw-gradient-to: rgba(240, 185, 11, 0) var(--tw-gradient-to-position) !important;
+            --tw-gradient-from: var(--theme-gradient-from) var(--tw-gradient-from-position) !important;
+            --tw-gradient-to: rgba(0, 0, 0, 0) var(--tw-gradient-to-position) !important;
         }
         [data-theme-style="binance"] .to-indigo-500,
         [data-theme-style="binance"] .to-indigo-600,
         [data-theme-style="binance"] .to-purple-500,
         [data-theme-style="binance"] .to-purple-600 {
-            --tw-gradient-to: #f0b90b var(--tw-gradient-to-position) !important;
+            --tw-gradient-to: var(--theme-gradient-to) var(--tw-gradient-to-position) !important;
         }
         [data-theme-style="binance"] .bg-theme-gradient {
-            color: #181a20 !important;
+            color: var(--theme-on-primary, #ffffff) !important;
         }
 
-        /* Taste Light: 100% Borderless Experience */
-        [data-theme-style="taste"] *,
-        [data-theme-style="taste"] *::before,
-        [data-theme-style="taste"] *::after {
-            --tw-border-opacity: 0 !important;
-            --tw-ring-opacity: 0 !important;
-            --tw-ring-color: transparent !important;
-            --tw-ring-offset-shadow: 0 0 #0000 !important;
-            --tw-ring-shadow: 0 0 #0000 !important;
-            --theme-accent-border: transparent !important;
-            --glass-panel-border: transparent !important;
-            --glass-card-border: transparent !important;
-            border-color: transparent !important;
-        }
-        [data-theme-style="taste"] .border,
-        [data-theme-style="taste"] .border-t,
-        [data-theme-style="taste"] .border-b,
-        [data-theme-style="taste"] .border-l,
-        [data-theme-style="taste"] .border-r,
-        [data-theme-style="taste"] [class*="border"],
-        [data-theme-style="taste"] [class*="ring-"],
-        [data-theme-style="taste"] [class*="divide-"],
-        [data-theme-style="taste"] #sidebarIdentityCard,
-        [data-theme-style="taste"] aside,
-        [data-theme-style="taste"] aside *,
-        [data-theme-style="taste"] header,
-        [data-theme-style="taste"] header *,
-        [data-theme-style="taste"] nav a,
+        /* Taste Light: Borderless Layout & Editorial Surfaces for structural containers */
         [data-theme-style="taste"] .glass-panel,
-        [data-theme-style="taste"] .glass-card {
+        [data-theme-style="taste"] .glass-card,
+        [data-theme-style="taste"] #sidebarIdentityCard,
+        [data-theme-style="taste"] .theme-preset-btn,
+        [data-theme-style="taste"] #themeMenuDropdown,
+        [data-theme-style="taste"] #notificationMenuDropdown,
+        [data-theme-style="taste"] aside,
+        [data-theme-style="taste"] header,
+        [data-theme-style="taste"] main,
+        [data-theme-style="taste"] nav,
+        [data-theme-style="taste"] table,
+        [data-theme-style="taste"] thead,
+        [data-theme-style="taste"] thead tr,
+        [data-theme-style="taste"] tbody,
+        [data-theme-style="taste"] tr,
+        [data-theme-style="taste"] th,
+        [data-theme-style="taste"] td {
             border: none !important;
             border-width: 0 !important;
             border-color: transparent !important;
             box-shadow: none !important;
             outline: none !important;
+        }
+        /* Taste Light: Clear Layer Hierarchy on Rich Neutral Canvas */
+        [data-theme-style="taste"] .glass-panel,
+        [data-theme-style="taste"] .glass-card,
+        [data-theme-style="taste"] .bg-slate-950,
+        [data-theme-style="taste"] .bg-slate-900,
+        [data-theme-style="taste"] .bg-slate-900\/20,
+        [data-theme-style="taste"] .bg-slate-900\/30,
+        [data-theme-style="taste"] .bg-slate-900\/40,
+        [data-theme-style="taste"] .bg-slate-900\/50,
+        [data-theme-style="taste"] .bg-slate-900\/60,
+        [data-theme-style="taste"] .bg-slate-900\/80 {
+            background-color: #ffffff !important;
+            box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.06), 0 1px 2px -1px rgba(15, 23, 42, 0.03) !important;
+        }
+        [data-theme-style="taste"] .bg-slate-800,
+        [data-theme-style="taste"] .bg-slate-800\/30,
+        [data-theme-style="taste"] .bg-slate-800\/40,
+        [data-theme-style="taste"] .bg-slate-800\/50,
+        [data-theme-style="taste"] .bg-slate-800\/60,
+        [data-theme-style="taste"] .bg-slate-800\/80,
+        [data-theme-style="taste"] .bg-slate-700,
+        [data-theme-style="taste"] .bg-slate-700\/30,
+        [data-theme-style="taste"] .bg-slate-700\/40,
+        [data-theme-style="taste"] .bg-slate-700\/50,
+        [data-theme-style="taste"] .bg-slate-700\/80 {
+            background-color: #f1f5f9 !important;
+        }
+        [data-theme-style="taste"] #sidebarIdentityCard {
+            background-color: #f1f5f9 !important;
         }
         [data-theme-style="taste"] .text-white,
         [data-theme-style="taste"] .text-slate-100,
@@ -702,14 +820,32 @@
         [data-theme-style="taste"] .text-slate-600 {
             color: #64748b !important;
         }
+        /* Taste Light: High-Contrast Accessible Inputs */
         [data-theme-style="taste"] input:not([type="submit"]):not([type="checkbox"]):not([type="radio"]),
         [data-theme-style="taste"] select,
-        [data-theme-style="taste"] textarea,
+        [data-theme-style="taste"] textarea {
+            background-color: #f8fafc !important;
+            color: #0f172a !important;
+            border: 1px solid #cbd5e1 !important;
+            border-radius: 0.5rem !important;
+            box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+        }
+        [data-theme-style="taste"] input:not([type="submit"]):not([type="checkbox"]):not([type="radio"])::placeholder,
+        [data-theme-style="taste"] textarea::placeholder {
+            color: #94a3b8 !important;
+            opacity: 1 !important;
+        }
+        [data-theme-style="taste"] input:not([type="submit"]):not([type="checkbox"]):not([type="radio"]):focus,
+        [data-theme-style="taste"] select:focus,
+        [data-theme-style="taste"] textarea:focus {
+            background-color: #ffffff !important;
+            border-color: var(--theme-accent, #4f46e5) !important;
+            box-shadow: 0 0 0 2px var(--theme-accent-bg, rgba(99, 102, 241, 0.2)) !important;
+            outline: none !important;
+        }
         [data-theme-style="taste"] option {
             background-color: #ffffff !important;
             color: #0f172a !important;
-            border: none !important;
-            border-color: transparent !important;
         }
         [data-theme-style="taste"] th,
         [data-theme-style="taste"] thead tr {
@@ -722,38 +858,36 @@
         [data-theme-style="taste"] .hover\:bg-slate-800\/50:hover,
         [data-theme-style="taste"] .hover\:bg-slate-900\/50:hover,
         [data-theme-style="taste"] .hover\:bg-slate-900\/30:hover {
-            background-color: #f1f5f9 !important;
+            background-color: #e2e8f0 !important;
         }
+        /* Taste Light: Dynamic Theme Accent & Button Colors */
         [data-theme-style="taste"] .bg-indigo-600,
         [data-theme-style="taste"] .bg-indigo-500 {
-            background-color: #2563eb !important;
-            color: #ffffff !important;
+            background: linear-gradient(to top right, var(--theme-gradient-from), var(--theme-gradient-to)) !important;
+            color: var(--theme-on-primary, #ffffff) !important;
             font-weight: 600 !important;
             border: none !important;
             border-color: transparent !important;
         }
         [data-theme-style="taste"] .bg-indigo-600:hover,
         [data-theme-style="taste"] .bg-indigo-500:hover {
-            background-color: #1d4ed8 !important;
+            opacity: 0.9 !important;
+            filter: brightness(1.08) !important;
         }
-        [data-theme-style="taste"] .bg-indigo-600\/30 {
-            background-color: rgba(37, 99, 235, 0.18) !important;
-        }
-        [data-theme-style="taste"] .bg-indigo-500\/20 {
-            background-color: rgba(37, 99, 235, 0.12) !important;
-        }
+        [data-theme-style="taste"] .bg-indigo-600\/30,
+        [data-theme-style="taste"] .bg-indigo-500\/20,
         [data-theme-style="taste"] .bg-indigo-500\/10,
         [data-theme-style="taste"] .bg-indigo-500\/5 {
-            background-color: rgba(37, 99, 235, 0.08) !important;
+            background-color: var(--theme-accent-bg) !important;
         }
         [data-theme-style="taste"] .text-indigo-300,
         [data-theme-style="taste"] .text-indigo-400,
         [data-theme-style="taste"] .text-indigo-500,
         [data-theme-style="taste"] .text-indigo-600 {
-            color: #2563eb !important;
+            color: var(--theme-accent) !important;
         }
         [data-theme-style="taste"] .bg-theme-gradient {
-            color: #ffffff !important;
+            color: var(--theme-on-primary, #ffffff) !important;
         }
         [data-mode="light"][data-theme-style="classic"] .bg-indigo-600,
         [data-mode="light"][data-theme-style="classic"] .bg-indigo-500 {
@@ -887,7 +1021,10 @@
             'binance-dark': { mode: 'dark', style: 'binance' },
             'taste-light': { mode: 'light', style: 'taste' },
         });
-        const APP_ACCENT_TONES = Object.freeze(['indigo', 'emerald', 'rose', 'blue', 'violet']);
+        const APP_ACCENT_TONES = Object.freeze([
+            'solid-indigo', 'solid-emerald', 'solid-rose', 'solid-blue', 'solid-violet', 'solid-gold',
+            'indigo', 'emerald', 'rose', 'blue', 'violet', 'gold'
+        ]);
 
         function readThemePreference(key) {
             try {
@@ -915,6 +1052,13 @@
                 saveThemePreference('ticket_theme_preset', safePreset);
                 saveThemePreference('ticket_mode', preset.mode);
             }
+            // Load preset-specific tone so each preset maintains its own color tone independently
+            const storedPresetTone = readThemePreference('ticket_theme_tone_' + safePreset);
+            const fallbackTone = (safePreset === 'binance-dark') ? 'gold' : ((safePreset === 'taste-light' || safePreset === 'classic-light') ? 'blue' : 'indigo');
+            const effectiveTone = APP_ACCENT_TONES.includes(storedPresetTone)
+                ? storedPresetTone
+                : (readThemePreference('ticket_theme_tone') || fallbackTone);
+            setAppTheme(effectiveTone, false);
             updatePresetActiveUI(safePreset);
         }
 
@@ -925,7 +1069,11 @@
         function setAppTheme(themeName, persist = true) {
             const safeTheme = APP_ACCENT_TONES.includes(themeName) ? themeName : 'indigo';
             document.documentElement.setAttribute('data-theme', safeTheme);
-            if (persist) saveThemePreference('ticket_theme_tone', safeTheme);
+            const currentPreset = document.documentElement.getAttribute('data-theme-preset') || 'classic-dark';
+            if (persist) {
+                saveThemePreference('ticket_theme_tone', safeTheme);
+                saveThemePreference('ticket_theme_tone_' + currentPreset, safeTheme);
+            }
             updateThemeActiveUI(safeTheme);
         }
 
@@ -935,8 +1083,12 @@
             const savedPreset = APP_THEME_PRESETS[storedPreset]
                 ? storedPreset
                 : (legacyMode === 'light' ? 'classic-light' : 'classic-dark');
-            const storedTheme = readThemePreference('ticket_theme_tone');
-            const savedTheme = APP_ACCENT_TONES.includes(storedTheme) ? storedTheme : 'indigo';
+            const storedPresetTone = readThemePreference('ticket_theme_tone_' + savedPreset);
+            const storedGlobalTone = readThemePreference('ticket_theme_tone');
+            const fallbackTone = (savedPreset === 'binance-dark') ? 'gold' : ((savedPreset === 'taste-light' || savedPreset === 'classic-light') ? 'blue' : 'indigo');
+            const savedTheme = APP_ACCENT_TONES.includes(storedPresetTone)
+                ? storedPresetTone
+                : (APP_ACCENT_TONES.includes(storedGlobalTone) ? storedGlobalTone : fallbackTone);
 
             setAppPreset(savedPreset, false);
             setAppTheme(savedTheme, false);
@@ -956,18 +1108,17 @@
                 }
             });
 
-            const preset = APP_THEME_PRESETS[presetName] || APP_THEME_PRESETS['classic-dark'];
-            const accentLocked = preset.style !== 'classic';
+            // Accent tone controls are fully interactive for all presets
             const toneControls = document.getElementById('accentToneControls');
             const toneNote = document.getElementById('accentPresetNote');
             if (toneControls) {
-                toneControls.classList.toggle('opacity-50', accentLocked);
-                toneControls.setAttribute('aria-disabled', accentLocked ? 'true' : 'false');
+                toneControls.classList.remove('opacity-50');
+                toneControls.setAttribute('aria-disabled', 'false');
             }
             document.querySelectorAll('.theme-btn').forEach(btn => {
-                btn.disabled = accentLocked;
+                btn.disabled = false;
             });
-            if (toneNote) toneNote.classList.toggle('hidden', !accentLocked);
+            if (toneNote) toneNote.classList.add('hidden');
         }
 
         function updateModeActiveUI(modeName) {
@@ -1238,30 +1389,53 @@
                                 </button>
                                 <button type="button" onclick="setAppPreset('binance-dark')" id="btnPresetBinanceDark" data-theme-preset-name="binance-dark" aria-pressed="false" class="theme-preset-btn group relative flex items-center justify-between rounded-xl border border-transparent p-2.5 text-left text-xs font-semibold text-slate-400 transition-all duration-200 cursor-pointer hover:text-slate-100 hover:bg-slate-800/50">
                                     <div class="flex items-center gap-2 min-w-0">
-                                        <span class="h-3.5 w-3.5 shrink-0 rounded-full border border-[#f0b90b]/80 bg-[#181a20] shadow-sm ring-1 ring-[#f0b90b]/30" aria-hidden="true"></span>
+                                        <span class="h-3.5 w-3.5 shrink-0 rounded-full border border-slate-700 bg-[#181a20] shadow-sm ring-1 ring-white/10" aria-hidden="true"></span>
                                         <span class="preset-label truncate">{{ t.binance_dark }}</span>
                                     </div>
-                                    <span class="active-check hidden w-3.5 h-3.5 shrink-0 rounded-full bg-[#f0b90b] text-[#181a20] items-center justify-center text-[9px] font-bold">✓</span>
+                                    <span class="active-check hidden w-3.5 h-3.5 shrink-0 rounded-full bg-theme-accent text-slate-950 items-center justify-center text-[9px] font-bold">✓</span>
                                 </button>
                                 <button type="button" onclick="setAppPreset('taste-light')" id="btnPresetTasteLight" data-theme-preset-name="taste-light" aria-pressed="false" class="theme-preset-btn group relative flex items-center justify-between rounded-xl border border-transparent p-2.5 text-left text-xs font-semibold text-slate-400 transition-all duration-200 cursor-pointer hover:text-slate-100 hover:bg-slate-800/50">
                                     <div class="flex items-center gap-2 min-w-0">
-                                        <span class="h-3.5 w-3.5 shrink-0 rounded-full border border-[#2563eb]/70 bg-[#f8fafc] shadow-sm ring-1 ring-[#2563eb]/30" aria-hidden="true"></span>
+                                        <span class="h-3.5 w-3.5 shrink-0 rounded-full border border-slate-300 bg-white shadow-sm ring-1 ring-black/5" aria-hidden="true"></span>
                                         <span class="preset-label truncate">{{ t.taste_light }}</span>
                                     </div>
-                                    <span class="active-check hidden w-3.5 h-3.5 shrink-0 rounded-full bg-[#2563eb] text-white items-center justify-center text-[9px] font-bold">✓</span>
+                                    <span class="active-check hidden w-3.5 h-3.5 shrink-0 rounded-full bg-theme-accent text-slate-950 items-center justify-center text-[9px] font-bold">✓</span>
                                 </button>
                             </div>
                         </div>
 
-                        <!-- Color Tone Switcher -->
-                        <div>
-                            <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2">{{ t.accent_tone }}</span>
-                            <div id="accentToneControls" class="flex items-center justify-between p-2 bg-slate-900/60 rounded-xl border border-slate-800 transition-opacity" aria-disabled="false">
-                                <button type="button" onclick="setAppTheme('indigo')" data-theme-name="indigo" aria-label="Indigo and purple" aria-pressed="false" class="theme-btn w-6 h-6 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 transition-all hover:scale-125 cursor-pointer" title="Indigo & Purple"></button>
-                                <button type="button" onclick="setAppTheme('emerald')" data-theme-name="emerald" aria-label="Emerald and cyan" aria-pressed="false" class="theme-btn w-6 h-6 rounded-full bg-gradient-to-tr from-emerald-500 to-cyan-500 transition-all hover:scale-125 cursor-pointer" title="Emerald & Cyan"></button>
-                                <button type="button" onclick="setAppTheme('rose')" data-theme-name="rose" aria-label="Rose and amber" aria-pressed="false" class="theme-btn w-6 h-6 rounded-full bg-gradient-to-tr from-rose-500 to-amber-500 transition-all hover:scale-125 cursor-pointer" title="Rose & Amber"></button>
-                                <button type="button" onclick="setAppTheme('blue')" data-theme-name="blue" aria-label="Royal blue and sky" aria-pressed="false" class="theme-btn w-6 h-6 rounded-full bg-gradient-to-tr from-blue-500 to-sky-500 transition-all hover:scale-125 cursor-pointer" title="Royal Blue & Sky"></button>
-                                <button type="button" onclick="setAppTheme('violet')" data-theme-name="violet" aria-label="Violet and fuchsia" aria-pressed="false" class="theme-btn w-6 h-6 rounded-full bg-gradient-to-tr from-violet-500 to-fuchsia-500 transition-all hover:scale-125 cursor-pointer" title="Violet & Fuchsia"></button>
+                        <!-- Color Tone Switcher (Categorized: Solid Colors & Gradient Colors) -->
+                        <div id="accentToneControls" class="space-y-3 pt-2 border-t border-slate-800 transition-opacity" aria-disabled="false">
+                            <!-- Category 1: Solid Colors (6 Symmetrical Choices) -->
+                            <div>
+                                <div class="flex items-center justify-between mb-1.5">
+                                    <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{{ t.solid_tones }}</span>
+                                    <span class="text-[9px] text-slate-500 font-medium tracking-wide">6 Solid Tones</span>
+                                </div>
+                                <div class="grid grid-cols-6 gap-2 p-2 bg-slate-900/60 rounded-xl border border-slate-800">
+                                    <button type="button" onclick="setAppTheme('solid-indigo')" data-theme-name="solid-indigo" aria-label="Solid Indigo" aria-pressed="false" class="theme-btn w-6 h-6 mx-auto rounded-full bg-indigo-600 transition-all hover:scale-125 cursor-pointer shadow-sm" title="Solid Indigo"></button>
+                                    <button type="button" onclick="setAppTheme('solid-emerald')" data-theme-name="solid-emerald" aria-label="Solid Emerald" aria-pressed="false" class="theme-btn w-6 h-6 mx-auto rounded-full bg-emerald-500 transition-all hover:scale-125 cursor-pointer shadow-sm" title="Solid Emerald"></button>
+                                    <button type="button" onclick="setAppTheme('solid-rose')" data-theme-name="solid-rose" aria-label="Solid Rose" aria-pressed="false" class="theme-btn w-6 h-6 mx-auto rounded-full bg-rose-500 transition-all hover:scale-125 cursor-pointer shadow-sm" title="Solid Rose"></button>
+                                    <button type="button" onclick="setAppTheme('solid-blue')" data-theme-name="solid-blue" aria-label="Solid Blue" aria-pressed="false" class="theme-btn w-6 h-6 mx-auto rounded-full bg-blue-600 transition-all hover:scale-125 cursor-pointer shadow-sm" title="Solid Royal Blue"></button>
+                                    <button type="button" onclick="setAppTheme('solid-violet')" data-theme-name="solid-violet" aria-label="Solid Violet" aria-pressed="false" class="theme-btn w-6 h-6 mx-auto rounded-full bg-violet-500 transition-all hover:scale-125 cursor-pointer shadow-sm" title="Solid Violet"></button>
+                                    <button type="button" onclick="setAppTheme('solid-gold')" data-theme-name="solid-gold" aria-label="Solid Gold" aria-pressed="false" class="theme-btn w-6 h-6 mx-auto rounded-full bg-[#f0b90b] transition-all hover:scale-125 cursor-pointer shadow-sm" title="Solid Binance Gold"></button>
+                                </div>
+                            </div>
+
+                            <!-- Category 2: Gradient Colors (6 Symmetrical Choices) -->
+                            <div>
+                                <div class="flex items-center justify-between mb-1.5">
+                                    <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{{ t.gradient_tones }}</span>
+                                    <span class="text-[9px] text-slate-500 font-medium tracking-wide">6 Gradient Tones</span>
+                                </div>
+                                <div class="grid grid-cols-6 gap-2 p-2 bg-slate-900/60 rounded-xl border border-slate-800">
+                                    <button type="button" onclick="setAppTheme('indigo')" data-theme-name="indigo" aria-label="Gradient Indigo and purple" aria-pressed="false" class="theme-btn w-6 h-6 mx-auto rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 transition-all hover:scale-125 cursor-pointer shadow-sm" title="Gradient Indigo & Purple"></button>
+                                    <button type="button" onclick="setAppTheme('emerald')" data-theme-name="emerald" aria-label="Gradient Emerald and cyan" aria-pressed="false" class="theme-btn w-6 h-6 mx-auto rounded-full bg-gradient-to-tr from-emerald-500 to-cyan-500 transition-all hover:scale-125 cursor-pointer shadow-sm" title="Gradient Emerald & Cyan"></button>
+                                    <button type="button" onclick="setAppTheme('rose')" data-theme-name="rose" aria-label="Gradient Rose and amber" aria-pressed="false" class="theme-btn w-6 h-6 mx-auto rounded-full bg-gradient-to-tr from-rose-500 to-amber-500 transition-all hover:scale-125 cursor-pointer shadow-sm" title="Gradient Rose & Amber"></button>
+                                    <button type="button" onclick="setAppTheme('blue')" data-theme-name="blue" aria-label="Gradient Royal blue and sky" aria-pressed="false" class="theme-btn w-6 h-6 mx-auto rounded-full bg-gradient-to-tr from-blue-500 to-sky-500 transition-all hover:scale-125 cursor-pointer shadow-sm" title="Gradient Royal Blue & Sky"></button>
+                                    <button type="button" onclick="setAppTheme('violet')" data-theme-name="violet" aria-label="Gradient Violet and fuchsia" aria-pressed="false" class="theme-btn w-6 h-6 mx-auto rounded-full bg-gradient-to-tr from-violet-500 to-fuchsia-500 transition-all hover:scale-125 cursor-pointer shadow-sm" title="Gradient Violet & Fuchsia"></button>
+                                    <button type="button" onclick="setAppTheme('gold')" data-theme-name="gold" aria-label="Gradient Binance gold and amber" aria-pressed="false" class="theme-btn w-6 h-6 mx-auto rounded-full bg-gradient-to-tr from-[#fcd535] to-[#f0b90b] transition-all hover:scale-125 cursor-pointer shadow-sm" title="Gradient Binance Gold"></button>
+                                </div>
                             </div>
                             <p id="accentPresetNote" class="hidden mt-2 text-[10px] leading-4 text-slate-500">{{ t.preset_accent_locked }}</p>
                         </div>
@@ -1270,42 +1444,42 @@
 
                 <!-- Private in-app notifications -->
                 <div class="relative">
-                    <button onclick="toggleNotificationMenu(event)" class="p-2 rounded-xl text-slate-400 hover:text-white bg-slate-900/50 border border-slate-800 hover:border-slate-700 transition-all relative" aria-label="Notifications" aria-haspopup="true" title="Notifications">
-                        {% if unread_notification_count %}
-                        <span class="absolute -right-1.5 -top-1.5 min-w-4 rounded-full bg-violet-500 px-1 text-center text-[9px] font-bold leading-4 text-white">{{ unread_notification_count }}</span>
-                        {% endif %}
+                    <button id="bellNotificationButton" onclick="toggleNotificationMenu(event)" class="p-2 rounded-xl glass-card border transition-all relative cursor-pointer" style="border-color: var(--glass-panel-border, rgba(255,255,255,0.1)); color: var(--text-main, #f8fafc);" aria-label="Notifications" aria-haspopup="true" title="Notifications">
+                        <span id="bellNotificationBadge" class="{% if not unread_notification_count %}hidden {% endif %}absolute -right-1.5 -top-1.5 min-w-4 rounded-full bg-theme-gradient px-1 text-center text-[9px] font-bold leading-4 text-white shadow-sm">{{ unread_notification_count|default:0 }}</span>
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
                     </button>
-                    <div id="notificationMenuDropdown" class="hidden absolute right-0 z-50 mt-3 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/95 shadow-2xl backdrop-blur-xl">
-                        <div class="flex items-center justify-between border-b border-slate-800 px-4 py-3">
+                    <div id="notificationMenuDropdown" class="hidden absolute right-0 z-50 mt-3 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border glass-panel shadow-2xl backdrop-blur-xl" style="border-color: var(--glass-panel-border, rgba(255,255,255,0.12));">
+                        <div class="flex items-center justify-between border-b px-4 py-3" style="border-color: var(--glass-panel-border, rgba(255,255,255,0.1)); background: var(--glass-card-bg, rgba(15,23,42,0.6));">
                             <div>
-                                <div class="text-sm font-bold text-white">Notifications</div>
-                                <div class="text-[10px] text-slate-500">{{ unread_notification_count }} unread</div>
+                                <div class="text-sm font-bold" style="color: var(--text-main, #f8fafc);">Notifications</div>
+                                <div id="notificationUnreadSubtitle" class="text-[10px]" style="color: var(--text-muted, #94a3b8);">{{ unread_notification_count }} unread</div>
                             </div>
-                            {% if unread_notification_count %}
-                            <form method="post" action="{% url 'notification_read_all' %}">
-                                {% csrf_token %}
-                                <button type="submit" class="text-[10px] font-semibold text-sky-400 hover:underline">Mark all read</button>
-                            </form>
-                            {% endif %}
+                            <div id="notificationMarkAllContainer">
+                                {% if unread_notification_count %}
+                                <form method="post" action="{% url 'notification_read_all' %}">
+                                    {% csrf_token %}
+                                    <button type="submit" class="text-[10px] font-semibold text-theme-accent hover:underline cursor-pointer">Mark all read</button>
+                                </form>
+                                {% endif %}
+                            </div>
                         </div>
-                        <div class="max-h-80 overflow-y-auto divide-y divide-slate-800/70">
+                        <div id="notificationListContainer" class="max-h-80 overflow-y-auto divide-y" style="border-color: var(--glass-panel-border, rgba(255,255,255,0.08));">
                             {% for notification in header_notifications %}
-                            <a href="{% url 'notification_open' notification.pk %}" class="block px-4 py-3 hover:bg-slate-800/50 {% if not notification.is_read %}bg-theme-bg{% endif %}">
+                            <a href="{% url 'notification_open' notification.pk %}" class="block px-4 py-3 hover:opacity-90 transition-all {% if not notification.is_read %}bg-theme-bg{% endif %}" style="border-bottom: 1px solid var(--glass-panel-border, rgba(255,255,255,0.06));">
                                 <div class="flex items-start gap-2">
-                                    {% if not notification.is_read %}<span class="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-violet-400"></span>{% else %}<span class="w-1.5 shrink-0"></span>{% endif %}
+                                    {% if not notification.is_read %}<span class="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full shadow-sm" style="background: var(--theme-accent, #6366f1);"></span>{% else %}<span class="w-1.5 shrink-0"></span>{% endif %}
                                     <div class="min-w-0">
-                                        <div class="truncate text-xs font-semibold text-slate-200">{{ notification.title }}</div>
-                                        <div class="mt-0.5 line-clamp-2 text-[10px] text-slate-500">{{ notification.message }}</div>
-                                        <div class="mt-1 text-[9px] text-slate-600">{{ notification.created_at|timesince }} ago</div>
+                                        <div class="truncate text-xs font-semibold" style="color: var(--text-main, #f8fafc);">{{ notification.title }}</div>
+                                        <div class="mt-0.5 line-clamp-2 text-[10px]" style="color: var(--text-muted, #94a3b8);">{{ notification.message }}</div>
+                                        <div class="mt-1 text-[9px]" style="color: var(--text-subtle, #64748b);">{{ notification.created_at|timesince }} ago</div>
                                     </div>
                                 </div>
                             </a>
                             {% empty %}
-                            <div class="px-4 py-8 text-center text-xs text-slate-500">No notifications yet</div>
+                            <div id="notificationEmptyState" class="px-4 py-8 text-center text-xs" style="color: var(--text-muted, #94a3b8);">No notifications yet</div>
                             {% endfor %}
                         </div>
-                        <a href="{% url 'notification_list' %}" class="block border-t border-slate-800 px-4 py-2.5 text-center text-xs font-semibold text-sky-400 hover:bg-slate-800/40">View all notifications</a>
+                        <a href="{% url 'notification_list' %}" class="block border-t px-4 py-2.5 text-center text-xs font-semibold text-theme-accent hover:opacity-80 transition-opacity" style="border-color: var(--glass-panel-border, rgba(255,255,255,0.1));">View all notifications</a>
                     </div>
                 </div>
             </div>
@@ -1339,7 +1513,7 @@
     {% if user.is_authenticated %}
     <!-- Live Real-Time Notifications & Push Stream -->
     <div id="liveToastContainer" class="fixed top-4 right-4 z-50 flex flex-col gap-2.5 max-w-sm w-full pointer-events-none p-2"></div>
-    <script src="{% static 'js/live_stream.js' %}?v=1"></script>
+    <script src="{% static 'js/live_stream.js' %}?v=6"></script>
 
     <!-- Gemini Chatbot Floating Widget (Only loaded for authenticated users) -->
     <script src="/chatbot-static/widget.js?v=4"></script>

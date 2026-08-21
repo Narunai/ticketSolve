@@ -176,7 +176,7 @@
                     <div>
                         <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">📎 {{ t.attachment_label }}</label>
                         <div id="comment-file-uploader-container" class="space-y-3">
-                            <input type="file" id="comment-real-file-input" name="attachments" multiple class="hidden">
+                            <input type="file" id="comment-real-file-input" name="attachments" multiple accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.txt,.csv,.docx,.xlsx,.pptx" class="hidden">
                             <div id="comment-file-controls" class="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-3">
                                 <button type="button" id="btn-comment-add-file" onclick="const input = document.getElementById('comment-real-file-input'); input.value = ''; input.click();" class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold text-indigo-300 glass-panel border border-slate-700/60 hover:bg-indigo-500/10 hover:text-white transition-all cursor-pointer active:scale-95 shadow-md">
                                     <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
@@ -495,8 +495,31 @@ document.addEventListener('DOMContentLoaded', function() {
     const statusText = document.getElementById('comment-upload-status-text');
 
     const MAX_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+    const ALLOWED_EXTENSIONS = ['.pdf', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.txt', '.csv', '.docx', '.xlsx', '.pptx'];
+    const DANGEROUS_EXTENSIONS = ['.exe', '.bat', '.cmd', '.msi', '.dll', '.scr', '.vbs', '.js', '.sh', '.com', '.pif', '.jar', '.iso', '.bin', '.apk', '.ps1', '.vbe', '.wsf'];
     let accumulatedFiles = [];
     let isUploading = false;
+
+    function getFileExtension(filename) {
+        const lastDot = filename.lastIndexOf('.');
+        if (lastDot === -1) return '';
+        return filename.substring(lastDot).toLowerCase();
+    }
+
+    function validateFile(file) {
+        const ext = getFileExtension(file.name);
+        if (!ext || !ALLOWED_EXTENSIONS.includes(ext)) {
+            if (DANGEROUS_EXTENSIONS.includes(ext)) {
+                return { valid: false, reason: `ไม่อนุญาตไฟล์โปรแกรม (${ext.toUpperCase()})` };
+            }
+            return { valid: false, reason: `ประเภทไฟล์ (${ext.toUpperCase() || 'ไม่มีนามสกุล'}) ไม่รองรับ` };
+        }
+        if (file.size > MAX_SIZE_BYTES) {
+            const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+            return { valid: false, reason: `ขนาดไฟล์เกิน 10 MB (${sizeMB} MB)` };
+        }
+        return { valid: true };
+    }
 
     function renderFileList() {
         if (!itemsContainer) return;
@@ -514,11 +537,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
         accumulatedFiles.forEach((file, index) => {
             const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
-            const isOver = file.size > MAX_SIZE_BYTES;
+            const check = validateFile(file);
+            const isInvalid = !check.valid;
 
             const div = document.createElement('div');
             div.className = `flex items-center justify-between p-2 rounded-lg border text-xs transition-all ${
-                isOver ? 'bg-rose-500/10 border-rose-500/30 text-rose-300' : 'bg-slate-900/80 border-slate-700/80 text-slate-200'
+                isInvalid ? 'bg-rose-500/10 border-rose-500/30 text-rose-300' : 'bg-slate-900/80 border-slate-700/80 text-slate-200'
             }`;
 
             const ext = escapeDynamicHtml(file.name.split('.').pop() || 'FILE');
@@ -527,10 +551,11 @@ document.addEventListener('DOMContentLoaded', function() {
             div.innerHTML = `
                 <div class="flex items-center gap-2 min-w-0 pr-2">
                     <span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase ${
-                        isOver ? 'bg-rose-500/20 text-rose-400' : 'bg-indigo-500/20 text-indigo-300'
+                        isInvalid ? 'bg-rose-500/20 text-rose-400' : 'bg-indigo-500/20 text-indigo-300'
                     }">${ext}</span>
-                    <span class="truncate font-medium text-xs">${safeFileName}</span>
+                    <span class="truncate font-medium text-xs ${isInvalid ? 'text-rose-300 font-semibold' : ''}">${safeFileName}</span>
                     <span class="text-[10px] text-slate-400 shrink-0">(${sizeMB} MB)</span>
+                    ${isInvalid ? `<span class="text-[10px] text-rose-400 font-sans ml-1">${check.reason}</span>` : ''}
                 </div>
                 <button type="button" data-index="${index}" class="remove-comment-file-btn p-1 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded transition-colors cursor-pointer shrink-0 font-bold">
                     ✕
@@ -555,7 +580,11 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!realInput) return;
         try {
             const dt = new DataTransfer();
-            accumulatedFiles.forEach(file => dt.items.add(file));
+            accumulatedFiles.forEach(file => {
+                if (validateFile(file).valid) {
+                    dt.items.add(file);
+                }
+            });
             realInput.files = dt.files;
         } catch(e) {
             console.log("DataTransfer not fully supported", e);
@@ -576,18 +605,22 @@ document.addEventListener('DOMContentLoaded', function() {
     if (realInput) {
         realInput.addEventListener('change', function() {
             if (this.files && this.files.length > 0) {
-                let overFiles = [];
+                let rejectedFiles = [];
 
                 Array.from(this.files).forEach(file => {
-                    if (file.size > MAX_SIZE_BYTES) {
-                        overFiles.push(file.name);
+                    const check = validateFile(file);
+                    if (!check.valid) {
+                        rejectedFiles.push(`• ${file.name}: ${check.reason}`);
                     } else {
-                        accumulatedFiles.push(file);
+                        const isDup = accumulatedFiles.some(f => f.name === file.name && f.size === file.size);
+                        if (!isDup) {
+                            accumulatedFiles.push(file);
+                        }
                     }
                 });
 
-                if (overFiles.length > 0) {
-                    alert(`❌ The following files exceed 10 MB:\n${overFiles.join('\n')}\n\nFiles exceeding 10 MB will not be added.`);
+                if (rejectedFiles.length > 0) {
+                    alert(`❌ ตรวจพบไฟล์ที่ไม่อนุญาตให้อัปโหลด / Disallowed File Types:\n\n${rejectedFiles.join('\n')}\n\n* ระบบรองรับเฉพาะ: PDF, PNG, JPG, GIF, WEBP, TXT, CSV, DOCX, XLSX, PPTX ขนาดไม่เกิน 10 MB (ไม่อนุญาตไฟล์ .exe หรือไฟล์โปรแกรม)`);
                 }
 
                 renderFileList();
@@ -604,9 +637,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 return false;
             }
 
-            let hasOver = accumulatedFiles.some(f => f.size > MAX_SIZE_BYTES);
-            if (hasOver) {
-                alert('❌ Cannot submit comment because some attachments exceed 10 MB.');
+            let invalidFiles = accumulatedFiles.filter(f => !validateFile(f).valid);
+            if (invalidFiles.length > 0) {
+                alert('❌ กรุณาลบไฟล์ที่ผิดประเภทหรือไฟล์ที่เกิน 10 MB ออกก่อนส่งความคิดเห็น');
                 return false;
             }
 

@@ -371,12 +371,18 @@ class MultiTenantTicketTests(TestCase):
         self.assertIn("'binance-dark': { mode: 'dark', style: 'binance' }", page)
         self.assertIn("'taste-light': { mode: 'light', style: 'taste' }", page)
         self.assertIn("saveThemePreference('ticket_theme_preset', safePreset)", page)
+        self.assertIn("ticket_theme_tone_' + safePreset", page)
         self.assertIn('[data-theme-style="binance"]', page)
         self.assertIn('[data-theme-style="taste"]', page)
-        self.assertIn('--theme-gradient-from: #fcd535;', page)
-        self.assertIn('--theme-gradient-from: #1d4ed8;', page)
         self.assertIn('id="accentToneControls"', page)
-        self.assertIn('This preset uses its own accessible accent color.', page)
+        self.assertIn('Solid Colors', page)
+        self.assertIn('Gradient Colors', page)
+        for solid_tone in ['solid-indigo', 'solid-emerald', 'solid-rose', 'solid-blue', 'solid-violet', 'solid-gold']:
+            self.assertIn(f'data-theme-name="{solid_tone}"', page)
+            self.assertIn(f'[data-theme="{solid_tone}"]', page)
+        for gradient_tone in ['indigo', 'emerald', 'rose', 'blue', 'violet', 'gold']:
+            self.assertIn(f'data-theme-name="{gradient_tone}"', page)
+            self.assertIn(f'[data-theme="{gradient_tone}"]', page)
         self.assertIn('@media (max-width: 640px)', page)
         self.assertIn('aria-controls="themeMenuDropdown"', page)
         self.assertIn('.theme-preset-btn:focus-visible', page)
@@ -4008,8 +4014,37 @@ class RealTimeEventStreamTests(TestCase):
             unregister_listener(q_alpha)
             unregister_listener(q_beta)
 
+class AttachmentSecurityValidationTests(TestCase):
+    def setUp(self):
+        self.user = CustomUser.objects.create_user(
+            username='file_tester',
+            email='file@example.com',
+            password='Password123!',
+            role=CustomUser.SYSTEM_ADMIN
+        )
 
+    def test_validate_attachment_rejects_exe_and_dangerous_files(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from tickets.security import validate_attachment
 
+        exe_file = SimpleUploadedFile("malware.exe", b"MZ\x90\x00\x03\x00\x00\x00", content_type="application/x-msdownload")
+        error = validate_attachment(exe_file)
+        self.assertIsNotNone(error)
+        self.assertIn("blocked or unsupported", error)
 
+        bat_file = SimpleUploadedFile("script.bat", b"@echo off\r\ndir", content_type="text/plain")
+        error_bat = validate_attachment(bat_file)
+        self.assertIsNotNone(error_bat)
+        self.assertIn("blocked or unsupported", error_bat)
 
+    def test_validate_attachment_accepts_valid_files(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from tickets.security import validate_attachment
 
+        png_file = SimpleUploadedFile("screenshot.png", b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR", content_type="image/png")
+        error_png = validate_attachment(png_file)
+        self.assertIsNone(error_png)
+
+        txt_file = SimpleUploadedFile("notes.txt", b"Hello world text file", content_type="text/plain")
+        error_txt = validate_attachment(txt_file)
+        self.assertIsNone(error_txt)

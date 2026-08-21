@@ -234,3 +234,13 @@ base.html
 - New/unapproved mailbox contacts queue for manual approval even when a system user or active routing rule matches; only a contact that remains in the mailbox directory and has a successful imported receipt with an administrator decision may auto-import
 - Routing rules select the assignee/company after approval; they never grant permission to bypass the approval queue
 - Scheduled via `ticketsolve-email-to-ticket.timer`
+
+---
+
+## 9. IDE Diagnostics & Problems Detection Standard (Mandatory Verification)
+
+### Post-Modification Checklist:
+1. **Detect Problems**: Always inspect the IDE Problems panel / diagnostic notifications (`@[current_problems]`).
+2. **Target State**: The workspace must display **`No problem` (0 errors, 0 diagnostics)**.
+3. **Scratch/Temporary Code Isolation**: When executing scratch scripts, clean them up or ensure proper module imports (`sys.path.append(...)`) so the IDE linter never reports import errors.
+4. **Zero Unchecked Errors**: Never finish a task or prompt the user while any diagnostic error remains unresolved in the Problems panel.
